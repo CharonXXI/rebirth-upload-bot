@@ -1,0 +1,11 @@
+V1.env
+venv/
+__pycache__/
+*.pyc
+dist/
+build/
+*.nfo
+FILMS/
+.env
+.DS_Store
+NFO_CUSTOM/.DS_Store

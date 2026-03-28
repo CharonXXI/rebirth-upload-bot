@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<title>REBiRTH</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:          #0a0a0a;
+  --bg2:         #111111;
+  --bg3:         #161616;
+  --border:      #222222;
+  --border2:     #2a2a2a;
+  --orange:      #ff6b00;
+  --orange2:     #ff8c00;
+  --orange-dim:  rgba(255,107,0,0.12);
+  --orange-glow: rgba(255,107,0,0.25);
+  --green:       #39ff14;
+  --red:         #ff3333;
+  --yellow:      #ffd600;
+  --text:        #c8c8c8;
+  --text-dim:    #555555;
+  --text-bright: #f0f0f0;
+  --mono:        'Share Tech Mono', monospace;
+  --sans:        'Rajdhani', sans-serif;
+}
+html, body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:var(--sans); font-size:15px; overflow:hidden; }
+body::before {
+  content:''; position:fixed; inset:0; z-index:9999; pointer-events:none;
+  background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);
+}
+#app { display:flex; height:100vh; }
+#sidebar { width:220px; min-width:220px; background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+.logo-area { padding:28px 20px 20px; border-bottom:1px solid var(--border); }
+.logo-tag  { font-family:var(--mono); font-size:10px; color:var(--orange); letter-spacing:3px; margin-bottom:6px; }
+.logo-title { font-family:var(--sans); font-size:26px; font-weight:700; color:var(--text-bright); letter-spacing:4px; text-transform:uppercase; line-height:1; }
+.logo-sub  { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-top:4px; }
+.nav { padding:16px 12px; flex:1; }
+.nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:4px; cursor:pointer; font-family:var(--sans); font-size:13px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-dim); transition:all .15s; margin-bottom:2px; border:1px solid transparent; position:relative; }
+.nav-item:hover { color:var(--text); background:var(--bg3); }
+.nav-item.active { color:var(--orange); background:var(--orange-dim); border-color:rgba(255,107,0,0.2); }
+.nav-item.active::before { content:''; position:absolute; left:-12px; top:50%; transform:translateY(-50%); width:3px; height:60%; background:var(--orange); border-radius:0 2px 2px 0; }
+.sidebar-footer { padding:16px 20px; border-top:1px solid var(--border); font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:1px; }
+.status-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--green); margin-right:6px; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+#main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+#topbar { height:48px; min-height:48px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; gap:8px; }
+.topbar-title { font-family:var(--mono); font-size:11px; color:var(--orange); letter-spacing:2px; text-transform:uppercase; }
+.topbar-sep   { color:var(--border2); margin:0 4px; }
+.topbar-path  { font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+#content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+.page { display:none; flex:1; overflow:hidden; flex-direction:column; }
+.page.active { display:flex; }
+#page-upload { display:none; flex-direction:row; overflow:hidden; height:100%; }
+#page-upload.active { display:flex; }
+.upload-left { width:420px; min-width:420px; flex-shrink:0; border-right:1px solid var(--border); display:block; overflow-y:scroll; padding:24px; scroll-behavior:smooth; }
+.upload-right { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+.section-label { font-family:var(--mono); font-size:10px; color:var(--orange); letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+.section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+.file-drop { border:1px dashed var(--border2); border-radius:6px; padding:20px; text-align:center; cursor:pointer; transition:all .2s; margin-bottom:20px; background:var(--bg3); }
+.file-drop:hover { border-color:var(--orange); background:var(--orange-dim); }
+.file-drop.has-file { border-color:rgba(57,255,20,0.4); background:rgba(57,255,20,0.04); padding:10px; }
+.file-icon  { font-size:28px; margin-bottom:8px; }
+.file-label { font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:1px; }
+.file-name  { font-family:var(--mono); font-size:11px; color:var(--green); word-break:break-all; margin-top:4px; }
+.file-size  { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-top:2px; }
+.field-group { margin-bottom:14px; }
+.field-label { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:5px; display:block; }
+.field-input { width:100%; background:var(--bg3); border:1px solid var(--border2); border-radius:4px; color:var(--text-bright); font-family:var(--mono); font-size:12px; padding:8px 12px; outline:none; transition:border-color .15s; }
+.field-input:focus { border-color:var(--orange); }
+.field-input::placeholder { color:var(--text-dim); }
+.platform-toggle { display:flex; gap:8px; margin-bottom:20px; }
+.plat-btn { flex:1; padding:9px; border:1px solid var(--border2); border-radius:4px; background:var(--bg3); color:var(--text-dim); font-family:var(--sans); font-size:12px; font-weight:600; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all .15s; }
+.plat-btn:hover { border-color:var(--orange); color:var(--text); }
+.plat-btn.active { border-color:var(--orange); background:var(--orange-dim); color:var(--orange); }
+#btn-launch { width:100%; padding:13px; background:var(--orange); border:none; border-radius:4px; color:#000; font-family:var(--sans); font-size:14px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all .15s; }
+#btn-launch:hover { background:var(--orange2); transform:translateY(-1px); box-shadow:0 4px 20px var(--orange-glow); }
+#btn-launch:active { transform:translateY(0); }
+#btn-launch:disabled { background:#333; color:#666; cursor:not-allowed; transform:none; box-shadow:none; }
+.progress-wrap { margin-top:16px; display:none; }
+.progress-wrap.show { display:block; }
+.progress-label { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-bottom:6px; letter-spacing:1px; }
+.progress-bar   { height:3px; background:var(--border2); border-radius:2px; overflow:hidden; }
+.progress-fill  { height:100%; background:linear-gradient(90deg,var(--orange),var(--orange2)); width:0%; transition:width .3s; }
+#tmdb-card { display:none; margin-top:16px; border:1px solid var(--border2); border-radius:6px; overflow:hidden; background:var(--bg3); }
+#tmdb-card.show { display:flex; }
+#tmdb-poster { width:80px; min-width:80px; object-fit:cover; }
+.tmdb-info  { padding:10px 12px; flex:1; min-width:0; }
+.tmdb-title { font-family:var(--sans); font-size:13px; font-weight:700; color:var(--text-bright); margin-bottom:4px; }
+.tmdb-meta  { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.tmdb-badge { font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:3px; background:var(--bg2); border:1px solid var(--border2); color:var(--text-dim); white-space:nowrap; }
+.tmdb-badge.score { color:var(--orange); border-color:rgba(255,107,0,0.3); }
+.tmdb-synopsis { font-family:var(--mono); font-size:10px; color:var(--text-dim); line-height:1.5; margin-bottom:6px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.tmdb-links { display:flex; gap:8px; }
+.tmdb-link  { font-family:var(--mono); font-size:10px; color:var(--orange); text-decoration:none; }
+.tmdb-link:hover { text-decoration:underline; }
+#done-banner { display:none; margin-top:16px; padding:12px 16px; border:1px solid rgba(57,255,20,0.3); border-radius:4px; background:rgba(57,255,20,0.05); font-family:var(--mono); font-size:11px; color:var(--green); word-break:break-all; }
+.nfo-header { height:44px; min-height:44px; border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 20px; gap:8px; background:var(--bg2); }
+.nfo-dot    { width:8px; height:8px; border-radius:50%; }
+.nfo-dot.r  { background:#ff5f57; }
+.nfo-dot.y  { background:#ffbd2e; }
+.nfo-dot.g  { background:#28c840; }
+.nfo-title  { font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-left:8px; letter-spacing:1px; }
+#nfo-content { flex:1; overflow:auto; padding:16px 20px; font-family:'Courier New',monospace; font-size:10px; line-height:1.35; color:#d0d0d0; white-space:pre; background:var(--bg); direction:ltr; text-align:left; min-width:0; -webkit-font-smoothing:none; }
+#nfo-content:empty::before { content:'En attente de la génération NFO…'; color:var(--text-dim); font-style:italic; white-space:normal; }
+#log-panel { height:220px; min-height:220px; border-top:1px solid var(--border); background:var(--bg2); overflow-y:auto; padding:10px 20px; font-family:var(--mono); font-size:11px; line-height:1.7; }
+.log-line { display:flex; gap:10px; }
+.log-time { color:var(--text-dim); min-width:60px; }
+.log-msg  { color:var(--text); }
+.log-msg.success { color:var(--green); }
+.log-msg.error   { color:var(--red); }
+.log-msg.warn    { color:var(--yellow); }
+#page-config { padding:28px; overflow-y:auto; }
+.config-grid  { display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:800px; }
+.config-field { display:flex; flex-direction:column; gap:6px; }
+.config-label { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; }
+.config-input { background:var(--bg3); border:1px solid var(--border2); border-radius:4px; color:var(--text-bright); font-family:var(--mono); font-size:12px; padding:10px 12px; outline:none; transition:border-color .15s; }
+.config-input:focus { border-color:var(--orange); }
+#btn-save { margin-top:24px; padding:11px 28px; background:transparent; border:1px solid var(--orange); border-radius:4px; color:var(--orange); font-family:var(--sans); font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all .15s; }
+#btn-save:hover { background:var(--orange-dim); }
+
+/* TMDB confirm */
+#tmdb-confirm {
+  display:none;
+  margin-top:12px;
+  padding:12px;
+  border:1px solid rgba(255,107,0,0.4);
+  border-radius:6px;
+  background:rgba(255,107,0,0.06);
+}
+#tmdb-confirm.show { display:block; }
+.tc-label { font-family:var(--mono); font-size:10px; color:var(--orange); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px; }
+.tc-info  { font-family:var(--mono); font-size:11px; color:var(--text-bright); margin-bottom:8px; word-break:break-all; }
+.tc-row   { display:flex; gap:8px; margin-bottom:8px; }
+#tc-input {
+  flex:1; background:var(--bg3); border:1px solid var(--border2);
+  border-radius:4px; color:var(--text-bright); font-family:var(--mono);
+  font-size:11px; padding:6px 10px; outline:none;
+}
+#tc-input:focus { border-color:var(--orange); }
+.tc-btn { padding:7px 14px; border-radius:4px; font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer; border:1px solid; }
+.tc-btn-ok  { background:var(--orange); border-color:var(--orange); color:#000; }
+.tc-btn-ok:hover { background:var(--orange2); }
+.tc-btn-chg { background:transparent; border-color:var(--border2); color:var(--text-dim); }
+.tc-btn-chg:hover { border-color:var(--orange); color:var(--orange); }
+
+
+/* NFO type selector */
+.nfo-toggle { display:flex; gap:8px; margin-bottom:20px; }
+.nfo-btn { flex:1; padding:9px; border:1px solid var(--border2); border-radius:4px; background:var(--bg3); color:var(--text-dim); font-family:var(--mono); font-size:11px; letter-spacing:1px; cursor:pointer; transition:all .15s; }
+.nfo-btn:hover { border-color:var(--orange); color:var(--text); }
+.nfo-btn.active { border-color:var(--orange); background:var(--orange-dim); color:var(--orange); }
+
+
+/* Skip upload toggle */
+.skip-row { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+.skip-check { width:16px; height:16px; cursor:pointer; accent-color:var(--orange); }
+.skip-label { font-family:var(--mono); font-size:11px; color:var(--text-dim); cursor:pointer; letter-spacing:1px; }
+
+
+/* Trackers page */
+#page-trackers { padding:24px; overflow-y:auto; }
+.tracker-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; padding:12px; border:1px solid var(--border2); border-radius:6px; background:var(--bg3); }
+.tracker-name { font-family:var(--mono); font-size:12px; color:var(--orange); min-width:60px; letter-spacing:1px; }
+.tracker-input { flex:1; background:var(--bg); border:1px solid var(--border2); border-radius:4px; color:var(--text-bright); font-family:var(--mono); font-size:11px; padding:7px 10px; outline:none; }
+.tracker-input:focus { border-color:var(--orange); }
+.tracker-input::placeholder { color:var(--text-dim); }
+
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div class="logo-area">
+      <div class="logo-tag">● ACTIVE</div>
+      <div class="logo-title">REBiRTH</div>
+      <div class="logo-sub">UPLOAD BOT v2.0.6</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
+        <span class="nav-icon">⬆</span> Upload
+      </div>
+      <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
+        <span class="nav-icon">📡</span> Trackers
+      </div>
+      <div class="nav-item" data-page="config" onclick="showPage('config', this)">
+        <span class="nav-icon">⚙</span> Config
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="status-dot"></span>READY
+    </div>
+  </div>
+  <div id="main">
+    <div id="topbar">
+      <span class="topbar-title">REBiRTH</span>
+      <span class="topbar-sep">/</span>
+      <span class="topbar-path" id="topbar-path">upload</span>
+    </div>
+    <div id="content">
+      <div id="page-upload" class="page active">
+        <div class="upload-left">
+          <div class="section-label">Fichier source</div>
+          <div class="file-drop" id="file-drop" onclick="pickFile()">
+            <div class="file-icon">📦</div>
+            <div class="file-label">CLIQUER POUR SÉLECTIONNER</div>
+            <div class="file-name" id="file-display"></div>
+            <div class="file-size" id="file-size"></div>
+          </div>
+          <div class="section-label">Infos release</div>
+          <div class="field-group">
+            <label class="field-label">Source</label>
+            <input id="f-source" class="field-input" placeholder="ex: BluRay REMUX, WEB…" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Note</label>
+            <input id="f-note" class="field-input" placeholder="Note personnalisée…" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Trackers</label>
+            <input id="f-trackers" class="field-input" placeholder="ex: ToS ABN LaCale C411" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Autre info</label>
+            <input id="f-autre" class="field-input" placeholder="ex: Animé, Film d'animation…" />
+          </div>
+          <div class="section-label">Type NFO</div>
+          <div class="nfo-toggle">
+            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>LaCale · C411 · Torr9</small></button>
+            <button class="nfo-btn"        id="nfo-cp437" onclick="setNFO('cp437')">📄 CP437<br><small>TOS · ABN</small></button>
+          </div>
+          <div class="section-label">Plateforme</div>
+          <div class="platform-toggle">
+            <button class="plat-btn active" id="plat-b" onclick="setPlatform('b')">BuzzHeavier</button>
+            <button class="plat-btn"        id="plat-g" onclick="setPlatform('g')">Gofile</button>
+          </div>
+          <div class="skip-row">
+            <input type="checkbox" id="skip-upload" class="skip-check"/>
+            <label for="skip-upload" class="skip-label">IGNORER GOFILE / BUZZHEAVIER</label>
+          </div>
+          <button id="btn-launch" onclick="launch()">▶ &nbsp;LANCER</button>
+          <div class="progress-wrap" id="progress-wrap">
+            <div class="progress-label" id="progress-label">INITIALISATION…</div>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          </div>
+          <div id="tmdb-card">
+            <img id="tmdb-poster" src="" alt="poster"/>
+            <div class="tmdb-info">
+              <div class="tmdb-title" id="tmdb-title"></div>
+              <div class="tmdb-meta">
+                <span class="tmdb-badge score" id="tmdb-score"></span>
+                <span class="tmdb-badge" id="tmdb-year"></span>
+                <span class="tmdb-badge" id="tmdb-genres"></span>
+              </div>
+              <div class="tmdb-synopsis" id="tmdb-synopsis"></div>
+              <div class="tmdb-links">
+                <a class="tmdb-link" id="tmdb-lnk" href="#" target="_blank">TMDB →</a>
+                <a class="tmdb-link" id="imdb-lnk" href="#" target="_blank">IMDb →</a>
+              </div>
+            </div>
+          </div>
+          <div id="tmdb-confirm">
+            <div class="tc-label">Confirmer le résultat TMDB</div>
+            <div class="tc-info" id="tc-info"></div>
+            <div class="tc-row">
+              <input id="tc-input" placeholder="Nouvel ID TMDB (ex: 804370)"/>
+            </div>
+            <div class="tc-row">
+              <button class="tc-btn tc-btn-ok"  onclick="confirmTMDB(true)">✓ Confirmer</button>
+              <button class="tc-btn tc-btn-chg" onclick="confirmTMDB(false)">Changer l'ID</button>
+            </div>
+          </div>
+          <div id="done-banner"></div>
+        </div>
+        <div class="upload-right">
+          <div class="nfo-header">
+            <div class="nfo-dot r"></div>
+            <div class="nfo-dot y"></div>
+            <div class="nfo-dot g"></div>
+            <span class="nfo-title">NFO PREVIEW</span>
+          </div>
+          <pre id="nfo-content"></pre>
+          <div id="log-panel"></div>
+        </div>
+      </div>
+      <div id="page-trackers" class="page">
+        <div class="section-label">Announces URL des trackers</div>
+        <div class="tracker-row">
+          <span class="tracker-name">ABN</span>
+          <input id="tk-abn" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-name">TOS</span>
+          <input id="tk-tos" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-name">C411</span>
+          <input id="tk-c411" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-name">TORR9</span>
+          <input id="tk-torr9" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-name">LACALE</span>
+          <input id="tk-lacale" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <button id="btn-save-trackers" onclick="saveTrackers()" style="margin-top:16px;padding:11px 28px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">
+          💾 &nbsp;SAUVEGARDER
+        </button>
+      </div>
+
+      <div id="page-config" class="page">
+        <div class="section-label">Configuration</div>
+        <div class="config-grid" id="config-grid"></div>
+        <button id="btn-save" onclick="saveConfig()">💾 &nbsp;SAUVEGARDER</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+let currentFile = null;
+let platform    = 'b';
+let running     = false;
+let nfoType     = 'utf8';
+
+window._emit = function(event, data) {
+  if (event === 'log')             addLog(data.msg, data.level);
+  if (event === 'nfo_preview')     showNFO(data.content);
+  if (event === 'tmdb_result')     showTMDB(data);
+  if (event === 'tmdb_confirm')    showTMDBConfirm(data);
+  if (event === 'upload_progress') updateUploadProgress(data);
+  if (event === 'done')            onDone(data);
+  if (event === 'error')           onError(data);
+};
+
+function updateUploadProgress(d) {
+  var el = document.getElementById('upload-progress-line');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'upload-progress-line';
+    el.className = 'log-line';
+    document.getElementById('log-panel').appendChild(el);
+  }
+  el.innerHTML = '<span class="log-time">' + new Date().toTimeString().slice(0,8) + '</span><span class="log-msg">' + d.filename + ' — ' + d.elapsed + ' écoulé</span>';
+  document.getElementById('log-panel').scrollTop = document.getElementById('log-panel').scrollHeight;
+}
+
+function showTMDBConfirm(d) {
+  var box = document.getElementById('tmdb-confirm');
+  document.getElementById('tc-info').textContent = d.title + ' (' + d.year + ')';
+  document.getElementById('tc-input').value = '';
+  box._link = d.tmdb_link;
+  box.classList.add('show');
+}
+
+function confirmTMDB(ok) {
+  var box  = document.getElementById('tmdb-confirm');
+  var link = box._link;
+  if (!ok) {
+    var val = document.getElementById('tc-input').value.trim();
+    if (!val) return;
+    if (val.indexOf('http') === -1) {
+      link = 'https://www.themoviedb.org/movie/' + val;
+    } else {
+      link = val;
+    }
+  }
+  box.classList.remove('show');
+  window.pywebview.api.confirm_tmdb({"tmdb_link": link});
+}
+
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  el.classList.add('active');
+  document.getElementById('topbar-path').textContent = name;
+}
+
+async function pickFile() {
+  const path = await window.pywebview.api.pick_file();
+  if (!path) return;
+  currentFile = path;
+  const name  = path.replace(/\\/g, '/').split('/').pop();
+  document.getElementById('file-display').textContent = name;
+  document.getElementById('file-drop').classList.add('has-file');
+  document.getElementById('file-drop').querySelector('.file-label').textContent = 'FICHIER SÉLECTIONNÉ';
+  document.querySelector('.upload-left').scrollTop = 0;
+}
+
+function setNFO(type) {
+  nfoType = type;
+  document.getElementById('nfo-utf8').classList.toggle('active', type === 'utf8');
+  document.getElementById('nfo-cp437').classList.toggle('active', type === 'cp437');
+}
+
+function setPlatform(p) {
+  platform = p;
+  document.getElementById('plat-b').classList.toggle('active', p === 'b');
+  document.getElementById('plat-g').classList.toggle('active', p === 'g');
+}
+
+async function launch() {
+  if (!currentFile) { addLog('Sélectionne un fichier .mkv d\'abord !', 'error'); return; }
+  if (running) return;
+  running = true;
+  document.getElementById('btn-launch').disabled = true;
+  document.getElementById('done-banner').style.display = 'none';
+  document.getElementById('tmdb-card').classList.remove('show');
+  document.getElementById('nfo-content').textContent = '';
+  document.getElementById('log-panel').innerHTML = '';
+  document.getElementById('progress-wrap').classList.add('show');
+  setProgress(5, 'INITIALISATION…');
+  await window.pywebview.api.run_workflow({
+    file_path: currentFile,
+    source:    document.getElementById('f-source').value,
+    note:      document.getElementById('f-note').value,
+    trackers:  document.getElementById('f-trackers').value,
+    autre:     document.getElementById('f-autre').value,
+    platform:  platform,
+    nfo_type:   nfoType,
+    skip_upload: document.getElementById('skip-upload').checked,
+  });
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+function addLog(msg, level) {
+  const panel = document.getElementById('log-panel');
+  const now   = new Date().toTimeString().slice(0,8);
+  const line  = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = '<span class="log-time">' + now + '</span><span class="log-msg ' + (level||'') + '">' + msg + '</span>';
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+  if (msg.indexOf('mediainfo') !== -1)      setProgress(15, 'NFO MEDIAINFO…');
+  if (msg.indexOf('custom') !== -1)         setProgress(30, 'NFO CUSTOM…');
+  if (msg.indexOf('UTF-8') !== -1)          setProgress(45, 'ÉCRITURE NFO…');
+  if (msg.indexOf('TMDB') !== -1)           setProgress(55, 'RECHERCHE TMDB…');
+  if (msg.indexOf('Upload') !== -1)         setProgress(65, 'UPLOAD EN COURS…');
+  if (msg.indexOf('Discord') !== -1)        setProgress(90, 'ENVOI DISCORD…');
+  if (msg.indexOf('Discord envoyé') !== -1) setProgress(75, 'DISCORD OK…');
+  if (msg.indexOf('Seedbox OK') !== -1)      setProgress(88, 'SEEDBOX OK…');
+  if (msg.indexOf('Torrent envoye') !== -1)  setProgress(95, 'TORRENT OK…');
+}
+
+function showNFO(content) {
+  document.getElementById('nfo-content').textContent = content;
+}
+
+function showTMDB(d) {
+  document.getElementById('tmdb-card').classList.add('show');
+  document.getElementById('tmdb-poster').src = d.poster_url;
+  document.getElementById('tmdb-title').textContent = d.title;
+  document.getElementById('tmdb-lnk').href = d.tmdb_link;
+  document.getElementById('imdb-lnk').href = d.imdb_link || '#';
+  if (!d.imdb_link) document.getElementById('imdb-lnk').style.display = 'none';
+  if (d.score)  document.getElementById('tmdb-score').textContent  = '⭐ ' + d.score + '/10';
+  if (d.year)   document.getElementById('tmdb-year').textContent   = d.year;
+  if (d.genres && d.genres.length)
+    document.getElementById('tmdb-genres').textContent = d.genres.slice(0,3).join(' · ');
+  if (d.synopsis) document.getElementById('tmdb-synopsis').textContent = d.synopsis;
+}
+
+function onDone(d) {
+  running = false;
+  setProgress(100, 'TERMINE !');
+  document.getElementById('btn-launch').disabled = false;
+  var banner = document.getElementById('done-banner');
+  banner.style.display = 'block';
+  banner.textContent   = '✓ UPLOAD TERMINÉ → ' + d.url;
+}
+
+function onError(d) {
+  running = false;
+  document.getElementById('btn-launch').disabled = false;
+  document.getElementById('progress-label').textContent = 'ERREUR';
+  addLog(d.msg, 'error');
+}
+
+var CONFIG_FIELDS = [
+  { key:'GOFILE_TOKEN',       label:'Gofile Token',           secret:true  },
+  { key:'WEBHOOK_URL',        label:'Discord Webhook URL',    secret:true  },
+  { key:'API_KEY',            label:'TMDB API Key',           secret:true  },
+  { key:'LANGUAGE',           label:'Langue TMDB',            secret:false },
+  { key:'BUZZHEAVIER_ACC_ID', label:'BuzzHeavier Account ID', secret:true  },
+  { key:'SFTP_HOST',          label:'Filebrowser URL',        secret:false },
+  { key:'SFTP_HOST_FTP',      label:'Seedbox FTP Host',       secret:false },
+  { key:'SFTP_USER',          label:'Seedbox User',           secret:false },
+  { key:'SFTP_PASS',          label:'Seedbox Password',       secret:true  },
+  { key:'SFTP_PATH',          label:'Seedbox Path distant',   secret:false },
+  { key:'RUTORRENT_URL',      label:'ruTorrent URL',          secret:false },
+  { key:'RUTORRENT_USER',     label:'ruTorrent User',         secret:false },
+  { key:'RUTORRENT_PASS',     label:'ruTorrent Password',     secret:true  },
+];
+
+async function loadConfig() {
+  var cfg  = await window.pywebview.api.get_config();
+  var grid = document.getElementById('config-grid');
+  grid.innerHTML = '';
+  CONFIG_FIELDS.forEach(function(f) {
+    var div = document.createElement('div');
+    div.className = 'config-field';
+    var input = document.createElement('input');
+    input.className = 'config-input';
+    input.id = 'cfg-' + f.key;
+    input.type = f.secret ? 'password' : 'text';
+    input.value = cfg[f.key] || '';
+    input.autocomplete = 'off';
+    var label = document.createElement('label');
+    label.className = 'config-label';
+    label.textContent = f.label;
+    div.appendChild(label);
+    div.appendChild(input);
+    grid.appendChild(div);
+  });
+}
+
+async function saveConfig() {
+  var cfg = {};
+  CONFIG_FIELDS.forEach(function(f) {
+    cfg[f.key] = document.getElementById('cfg-' + f.key).value.trim();
+  });
+  await window.pywebview.api.save_config(cfg);
+  var btn = document.getElementById('btn-save');
+  btn.textContent = '✓  SAUVEGARDÉ';
+  setTimeout(function() { btn.textContent = '💾  SAUVEGARDER'; }, 2000);
+}
+
+var TRACKER_KEYS = ['abn','tos','c411','torr9','lacale'];
+
+async function saveTrackers() {
+  var cfg = {};
+  TRACKER_KEYS.forEach(function(k) {
+    var val = document.getElementById('tk-' + k).value.trim();
+    cfg['TRACKER_' + k.toUpperCase()] = val;
+  });
+  await window.pywebview.api.save_config(cfg);
+  var btn = document.getElementById('btn-save-trackers');
+  btn.textContent = 'OK SAUVEGARDE';
+  setTimeout(function() { btn.innerHTML = '&#128190; &nbsp;SAUVEGARDER'; }, 2000);
+}
+
+async function loadTrackers() {
+  var cfg = await window.pywebview.api.get_config();
+  TRACKER_KEYS.forEach(function(k) {
+    var el = document.getElementById('tk-' + k);
+    if (el && cfg['TRACKER_' + k.toUpperCase()]) {
+      el.value = cfg['TRACKER_' + k.toUpperCase()];
+    }
+  });
+}
+
+window.addEventListener('pywebviewready', function() {
+  loadConfig();
+  loadTrackers();
+  renderHistory();
+});
+</script>
+</body>
+</html>
