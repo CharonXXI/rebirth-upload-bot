@@ -54,7 +54,7 @@ body::before {
 .page.active { display:flex; }
 #page-upload { display:none; flex-direction:row; overflow:hidden; }
 #page-upload.active { display:flex; }
-.upload-left { width:420px; min-width:420px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; padding:24px; }
+.upload-left { width:420px; min-width:420px; flex-shrink:0; border-right:1px solid var(--border); display:block; overflow-y:scroll; padding:24px; scroll-behavior:smooth; }
 .upload-right { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
 .section-label { font-family:var(--mono); font-size:10px; color:var(--orange); letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
 .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
@@ -159,16 +159,12 @@ body::before {
 .skip-label { font-family:var(--mono); font-size:11px; color:var(--text-dim); cursor:pointer; letter-spacing:1px; }
 
 
-#page-login { position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:9999; flex-direction:column; }
-#page-login.hidden { display:none; }
-.login-box { border:1px solid var(--border2); border-radius:8px; background:var(--bg2); padding:48px 40px; width:340px; display:flex; flex-direction:column; align-items:center; gap:20px; }
-.login-logo { font-family:var(--mono); font-size:28px; font-weight:900; letter-spacing:4px; color:var(--orange); margin-bottom:8px; }
-.login-sub { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; margin-top:-16px; margin-bottom:8px; }
-.login-input { width:100%; background:var(--bg); border:1px solid var(--border2); border-radius:4px; color:var(--text-bright); font-family:var(--mono); font-size:13px; padding:10px 14px; outline:none; box-sizing:border-box; }
-.login-input:focus { border-color:var(--orange); }
-.login-btn { width:100%; padding:12px; background:var(--orange); border:none; border-radius:4px; color:#000; font-family:var(--sans); font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; }
-.login-btn:hover { background:var(--orange2); }
-.login-err { font-family:var(--mono); font-size:11px; color:#ff4444; min-height:16px; }
+#page-trackers { padding:24px; overflow-y:auto; }
+.tracker-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; padding:12px; border:1px solid var(--border2); border-radius:6px; background:var(--bg3); }
+.tracker-name { font-family:var(--mono); font-size:12px; color:var(--orange); min-width:60px; letter-spacing:1px; }
+.tracker-input { flex:1; background:var(--bg); border:1px solid var(--border2); border-radius:4px; color:var(--text-bright); font-family:var(--mono); font-size:11px; padding:7px 10px; outline:none; }
+.tracker-input:focus { border-color:var(--orange); }
+.tracker-input::placeholder { color:var(--text-dim); }
 
 ::-webkit-scrollbar { width:5px; height:5px; }
 ::-webkit-scrollbar-track { background:transparent; }
@@ -181,11 +177,14 @@ body::before {
     <div class="logo-area">
       <div class="logo-tag">● ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.0.4</div>
+      <div class="logo-sub">UPLOAD BOT v2.0.6</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
         <span class="nav-icon">⬆</span> Upload
+      </div>
+      <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
+        <span class="nav-icon">&#128225;</span> Trackers
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
@@ -287,6 +286,33 @@ body::before {
           <div id="log-panel"></div>
         </div>
       </div>
+      <div id="page-trackers" class="page">
+        <div class="section-label">Announces URL des trackers</div>
+        <div class="tracker-row">
+          <span class="tracker-name">ABN</span>
+          <input id="tk-abn" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-name">TOS</span>
+          <input id="tk-tos" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-name">C411</span>
+          <input id="tk-c411" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-name">TORR9</span>
+          <input id="tk-torr9" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-name">LACALE</span>
+          <input id="tk-lacale" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
+        <button id="btn-save-trackers" onclick="saveTrackers()" style="margin-top:16px;padding:11px 28px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">
+          &#128190; &nbsp;SAUVEGARDER
+        </button>
+      </div>
+
       <div id="page-config" class="page">
         <div class="section-label">Configuration</div>
         <div class="config-grid" id="config-grid"></div>
@@ -413,7 +439,9 @@ function addLog(msg, level) {
   if (msg.indexOf('TMDB') !== -1)           setProgress(55, 'RECHERCHE TMDB…');
   if (msg.indexOf('Upload') !== -1)         setProgress(65, 'UPLOAD EN COURS…');
   if (msg.indexOf('Discord') !== -1)        setProgress(90, 'ENVOI DISCORD…');
-  if (msg.indexOf('Discord envoyé') !== -1) setProgress(100, 'TERMINÉ !');
+  if (msg.indexOf('Discord') !== -1 && msg.indexOf('envoy') !== -1) setProgress(75, 'DISCORD OK…');
+  if (msg.indexOf('Seedbox OK') !== -1)      setProgress(88, 'SEEDBOX OK…');
+  if (msg.indexOf('Torrent envoye') !== -1)  setProgress(95, 'TORRENT OK…');
 }
 
 function showNFO(content) {
@@ -501,30 +529,6 @@ async function saveConfig() {
 
 var TRACKER_KEYS = ['abn','tos','c411','torr9','lacale'];
 
-function doLogin() {
-  var user = document.getElementById('login-user').value.trim();
-  var pass = document.getElementById('login-pass').value.trim();
-  if (!user || !pass) {
-    document.getElementById('login-err').textContent = 'Champs requis';
-    return;
-  }
-  window.pywebview.api.login(user, pass).then(function(result) {
-    if (result && result.ok) {
-      document.getElementById('page-login').classList.add('hidden');
-    } else {
-      document.getElementById('login-err').textContent = 'Identifiants incorrects';
-      document.getElementById('login-pass').value = '';
-    }
-  });
-}
-
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') {
-    var lp = document.getElementById('page-login');
-    if (lp && !lp.classList.contains('hidden')) doLogin();
-  }
-});
-
 function setNFO(type) {
   nfoType = type;
   document.getElementById('nfo-utf8').classList.toggle('active', type === 'utf8');
@@ -557,15 +561,5 @@ window.addEventListener('pywebviewready', function() {
   loadConfig();
 });
 </script>
-  <div id="page-login">
-    <div class="login-box">
-      <div class="login-logo">REBiRTH</div>
-      <div class="login-sub">UPLOAD BOT — ACCES PRIVE</div>
-      <input id="login-user" class="login-input" type="text" placeholder="Username" autocomplete="username"/>
-      <input id="login-pass" class="login-input" type="password" placeholder="Password" autocomplete="current-password"/>
-      <div class="login-err" id="login-err"></div>
-      <button class="login-btn" onclick="doLogin()">&#9654; &nbsp;CONNEXION</button>
-    </div>
-  </div>
 </body>
 </html>

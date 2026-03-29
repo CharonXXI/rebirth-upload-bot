@@ -29,26 +29,6 @@ class API:
         self._tmdb_event     = Event()
         self._tmdb_confirmed = None
 
-    def login(self, username, password):
-        # Support multi-users via REBIRTH_USER_XXX=password dans le .env
-        if not username or not password:
-            return {"ok": False}
-        env_key = "REBIRTH_USER_" + username
-        expected_pass = os.getenv(env_key, "")
-        if expected_pass and password == expected_pass:
-            self._session_user = username
-            return {"ok": True, "user": username}
-        return {"ok": False}
-
-    def check_session(self):
-        if getattr(self, '_session_user', None):
-            return {"ok": True, "user": self._session_user}
-        return {"ok": False}
-
-    def logout(self):
-        self._session_user = None
-        return {"ok": True}
-
     def get_config(self):
         return {
             "GOFILE_TOKEN":       os.getenv("GOFILE_TOKEN", ""),
