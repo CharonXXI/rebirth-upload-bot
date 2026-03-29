@@ -36,8 +36,8 @@ class API:
             "API_KEY":            os.getenv("API_KEY", ""),
             "LANGUAGE":           os.getenv("LANGUAGE", "fr-FR"),
             "BUZZHEAVIER_ACC_ID": os.getenv("BUZZHEAVIER_ACC_ID", ""),
-            "SFTP_HOST":          os.getenv("SFTP_HOST", "https://wydg-filebrowser.ae.seedbox.link"),
-            "SFTP_HOST_FTP":      os.getenv("SFTP_HOST_FTP", "ae.seedbox.link"),
+            "SFTP_HOST":          os.getenv("SFTP_HOST", ""),
+            "SFTP_HOST_FTP":      os.getenv("SFTP_HOST_FTP", ""),
             "SFTP_PORT":          os.getenv("SFTP_PORT", ""),
             "SFTP_USER":          os.getenv("SFTP_USER", ""),
             "SFTP_PASS":          os.getenv("SFTP_PASS", ""),
@@ -45,12 +45,18 @@ class API:
             "RUTORRENT_URL":      os.getenv("RUTORRENT_URL", ""),
             "RUTORRENT_USER":     os.getenv("RUTORRENT_USER", ""),
             "RUTORRENT_PASS":     os.getenv("RUTORRENT_PASS", ""),
+            "TRACKER_ABN":        os.getenv("TRACKER_ABN", ""),
+            "TRACKER_TOS":        os.getenv("TRACKER_TOS", ""),
+            "TRACKER_C411":       os.getenv("TRACKER_C411", ""),
+            "TRACKER_TORR9":      os.getenv("TRACKER_TORR9", ""),
+            "TRACKER_LACALE":     os.getenv("TRACKER_LACALE", ""),
         }
 
     def save_config(self, cfg: dict):
         for k, v in cfg.items():
-            set_key(str(ENV_FILE), k, v)
-            os.environ[k] = v
+            if v or k not in os.environ or not os.environ.get(k, ""):
+                set_key(str(ENV_FILE), k, v)
+                os.environ[k] = v
         return {"ok": True}
 
     def confirm_tmdb(self, data):
@@ -322,7 +328,7 @@ class API:
 
     def _ftp_upload(self, files, remote_path):
         import ftplib, time
-        host     = os.getenv("SFTP_HOST_FTP", "ae.seedbox.link")
+        host     = os.getenv("SFTP_HOST_FTP", "")
         port     = int(os.getenv("SFTP_PORT", "23421"))
         user     = os.getenv("SFTP_USER", "")
         password = os.getenv("SFTP_PASS", "")

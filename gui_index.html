@@ -183,7 +183,7 @@ body::before {
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
         <span class="nav-icon">⬆</span> Upload
       </div>
-      <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
+      <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this); loadTrackers();">
         <span class="nav-icon">&#128225;</span> Trackers
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
@@ -290,23 +290,23 @@ body::before {
         <div class="section-label">Announces URL des trackers</div>
         <div class="tracker-row">
           <span class="tracker-name">ABN</span>
-          <input id="tk-abn" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+          <input id="tk-abn" class="tracker-input" type="text" placeholder="https://..." autocomplete="off"/>
         </div>
         <div class="tracker-row">
           <span class="tracker-name">TOS</span>
-          <input id="tk-tos" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+          <input id="tk-tos" class="tracker-input" type="text" placeholder="https://..." autocomplete="off"/>
         </div>
         <div class="tracker-row">
           <span class="tracker-name">C411</span>
-          <input id="tk-c411" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+          <input id="tk-c411" class="tracker-input" type="text" placeholder="https://..." autocomplete="off"/>
         </div>
         <div class="tracker-row">
           <span class="tracker-name">TORR9</span>
-          <input id="tk-torr9" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+          <input id="tk-torr9" class="tracker-input" type="text" placeholder="https://..." autocomplete="off"/>
         </div>
         <div class="tracker-row">
           <span class="tracker-name">LACALE</span>
-          <input id="tk-lacale" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+          <input id="tk-lacale" class="tracker-input" type="text" placeholder="https://..." autocomplete="off"/>
         </div>
         <button id="btn-save-trackers" onclick="saveTrackers()" style="margin-top:16px;padding:11px 28px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">
           &#128190; &nbsp;SAUVEGARDER
