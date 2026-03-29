@@ -29,6 +29,26 @@ class API:
         self._tmdb_event     = Event()
         self._tmdb_confirmed = None
 
+    def login(self, username, password):
+        # Support multi-users via REBIRTH_USER_XXX=password dans le .env
+        if not username or not password:
+            return {"ok": False}
+        env_key = "REBIRTH_USER_" + username
+        expected_pass = os.getenv(env_key, "")
+        if expected_pass and password == expected_pass:
+            self._session_user = username
+            return {"ok": True, "user": username}
+        return {"ok": False}
+
+    def check_session(self):
+        if getattr(self, '_session_user', None):
+            return {"ok": True, "user": self._session_user}
+        return {"ok": False}
+
+    def logout(self):
+        self._session_user = None
+        return {"ok": True}
+
     def get_config(self):
         return {
             "GOFILE_TOKEN":       os.getenv("GOFILE_TOKEN", ""),
@@ -36,8 +56,8 @@ class API:
             "API_KEY":            os.getenv("API_KEY", ""),
             "LANGUAGE":           os.getenv("LANGUAGE", "fr-FR"),
             "BUZZHEAVIER_ACC_ID": os.getenv("BUZZHEAVIER_ACC_ID", ""),
-            "SFTP_HOST":          os.getenv("SFTP_HOST", ""),
-            "SFTP_HOST_FTP":      os.getenv("SFTP_HOST_FTP", ""),
+            "SFTP_HOST":          os.getenv("SFTP_HOST", "https://wydg-filebrowser.ae.seedbox.link"),
+            "SFTP_HOST_FTP":      os.getenv("SFTP_HOST_FTP", "ae.seedbox.link"),
             "SFTP_PORT":          os.getenv("SFTP_PORT", ""),
             "SFTP_USER":          os.getenv("SFTP_USER", ""),
             "SFTP_PASS":          os.getenv("SFTP_PASS", ""),
@@ -45,11 +65,6 @@ class API:
             "RUTORRENT_URL":      os.getenv("RUTORRENT_URL", ""),
             "RUTORRENT_USER":     os.getenv("RUTORRENT_USER", ""),
             "RUTORRENT_PASS":     os.getenv("RUTORRENT_PASS", ""),
-            "TRACKER_ABN":        os.getenv("TRACKER_ABN", ""),
-            "TRACKER_TOS":        os.getenv("TRACKER_TOS", ""),
-            "TRACKER_C411":       os.getenv("TRACKER_C411", ""),
-            "TRACKER_TORR9":      os.getenv("TRACKER_TORR9", ""),
-            "TRACKER_LACALE":     os.getenv("TRACKER_LACALE", ""),
         }
 
     def save_config(self, cfg: dict):
@@ -227,7 +242,13 @@ class API:
                     dl_url = self._upload_bzhv(files_up, bzhv_id)
                 self._log(f"URL : {dl_url}", "success")
 
-            # ── 4. DOSSIER FINAL + SEEDBOX ────────────────────────────────────
+            # ── 4. DISCORD ────────────────────────────────────────────────────
+            self._log("Envoi Discord…")
+            self._discord(dl_url, os.path.basename(fp), source, note,
+                          trackers, autre, tmdb_link, imdb_link, poster_url)
+            self._log("Message Discord envoyé !", "success")
+
+            # ── 5. DOSSIER FINAL + SEEDBOX ────────────────────────────────────
             fb_url      = os.getenv("SFTP_HOST", "")
             fb_user     = os.getenv("SFTP_USER", "")
             fb_pass     = os.getenv("SFTP_PASS", "")
@@ -256,36 +277,8 @@ class API:
                 self._log("Upload dossier FINAL sur la seedbox via FTP...")
                 self._ftp_upload([final_mkv, final_nfo], remote_path)
                 self._log("Seedbox OK : " + remote_path, "success")
-
-                # Creer les .torrent et envoyer a ruTorrent
-                announces = {
-                    "ABN":    os.getenv("TRACKER_ABN", ""),
-                    "TOS":    os.getenv("TRACKER_TOS", ""),
-                    "C411":   os.getenv("TRACKER_C411", ""),
-                    "TORR9":  os.getenv("TRACKER_TORR9", ""),
-                    "LACALE": os.getenv("TRACKER_LACALE", ""),
-                }
-                active = {k: v for k, v in announces.items() if v}
-                if active:
-                    self._log("Creation des .torrent...")
-                    self._create_and_send_torrent(final_dir, base, active, remote_path)
             else:
                 self._log("Seedbox non configuree - upload ignore.", "warn")
-
-            # ── 5. DISCORD (apres torrents pour les joindre) ──────────────────
-            self._log("Envoi Discord…")
-            torrent_dir = os.path.join(str(BASE_DIR), "TORRENT")
-            torrent_files = []
-            if os.path.isdir(torrent_dir):
-                torrent_files = [
-                    os.path.join(torrent_dir, f)
-                    for f in os.listdir(torrent_dir)
-                    if f.startswith(base) and f.endswith(".torrent")
-                ]
-            self._discord(dl_url, os.path.basename(fp), source, note,
-                          trackers, autre, tmdb_link, imdb_link, poster_url,
-                          torrent_paths=torrent_files if torrent_files else None)
-            self._log("Message Discord envoye !", "success")
 
             self._emit("done", {"url": dl_url})
 
@@ -349,7 +342,7 @@ class API:
 
     def _ftp_upload(self, files, remote_path):
         import ftplib, time
-        host     = os.getenv("SFTP_HOST_FTP", "")
+        host     = os.getenv("SFTP_HOST_FTP", "ae.seedbox.link")
         port     = int(os.getenv("SFTP_PORT", "23421"))
         user     = os.getenv("SFTP_USER", "")
         password = os.getenv("SFTP_PASS", "")
@@ -465,46 +458,6 @@ class API:
             else:
                 raise Exception("Upload Filebrowser échoué pour " + fname + " : " + str(r.status_code))
 
-    def _create_and_send_torrent(self, final_dir, base, announce_urls, remote_path):
-        import torf, ssl, xmlrpc.client
-        import time
-
-        torrent_dir = os.path.join(str(BASE_DIR), "TORRENT")
-        os.makedirs(torrent_dir, exist_ok=True)
-
-        rt_url  = os.getenv("RUTORRENT_URL", "")
-        rt_user = os.getenv("RUTORRENT_USER", "")
-        rt_pass = os.getenv("RUTORRENT_PASS", "")
-
-        for tk_name, announce in announce_urls.items():
-            if not announce:
-                continue
-            self._log("Creation torrent pour " + tk_name + "...")
-            t = torf.Torrent()
-            t.name       = base
-            t.private    = True
-            t.piece_size = 4 * 1024 * 1024
-            t.trackers   = [[announce]]
-            t.path       = final_dir
-
-            torrent_path = os.path.join(torrent_dir, base + "_" + tk_name + ".torrent")
-            t.generate()
-            t.write(torrent_path)
-            self._log("  .torrent cree : " + os.path.basename(torrent_path), "success")
-
-            # Envoyer a ruTorrent
-            if rt_url and rt_user and rt_pass:
-                with open(torrent_path, "rb") as f:
-                    torrent_data = f.read()
-                ctx = ssl.create_default_context()
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-                transport = xmlrpc.client.SafeTransport(context=ctx)
-                full_url = rt_url.replace("://", "://" + rt_user + ":" + rt_pass + "@") + "/plugins/httprpc/action.php"
-                server = xmlrpc.client.ServerProxy(full_url, transport=transport)
-                server.load.raw_start("", xmlrpc.client.Binary(torrent_data), "d.directory.set=" + remote_path)
-                self._log("  Torrent envoye a ruTorrent !", "success")
-
     def _get_movie_title(self, tid, key, lang):
         r = requests.get(f"https://api.themoviedb.org/3/movie/{tid}",
                          params={"api_key": key, "language": lang})
@@ -556,7 +509,7 @@ class API:
         return "https://buzzheavier.com/" + info["id"]
 
     def _discord(self, url, filename, source, note, trackers, autre,
-                 tmdb_link, imdb_link, poster_url, torrent_paths=None):
+                 tmdb_link, imdb_link, poster_url):
         wh = os.getenv("WEBHOOK_URL", "")
         fields = []
         if tmdb_link: fields.append({"name": "TMDB",     "value": tmdb_link, "inline": False})
@@ -565,9 +518,8 @@ class API:
         if note:      fields.append({"name": "Note",     "value": note,      "inline": False})
         if trackers:  fields.append({"name": "Trackers", "value": trackers,  "inline": False})
         if autre:     fields.append({"name": "Autre",    "value": autre,     "inline": False})
-        import json as _json
-        payload = {
-            "content": "### Nouveau fichier a uploader ! <@393798272495386636>",
+        requests.post(wh, json={
+            "content": "### Nouveau fichier à uploader ! <@393798272495386636>",
             "embeds": [{
                 "title":       os.path.splitext(filename)[0],
                 "description": url,
@@ -575,22 +527,7 @@ class API:
                 "color":       0xffa500,
                 "image":       {"url": poster_url},
             }]
-        }
-
-        # Si des .torrent sont disponibles, les joindre en pieces jointes
-        if torrent_paths:
-            files = {"payload_json": (None, _json.dumps(payload), "application/json")}
-            for i, tp in enumerate(torrent_paths):
-                if os.path.exists(tp):
-                    fname = os.path.basename(tp)
-                    files["file" + str(i)] = (fname, open(tp, "rb"), "application/octet-stream")
-            requests.post(wh, files=files)
-            # Fermer les fichiers ouverts
-            for k, v in files.items():
-                if k != "payload_json" and hasattr(v[1], 'close'):
-                    v[1].close()
-        else:
-            requests.post(wh, json=payload)
+        })
 
 
 if __name__ == "__main__":
