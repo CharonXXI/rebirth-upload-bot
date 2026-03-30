@@ -54,9 +54,8 @@ class API:
 
     def save_config(self, cfg: dict):
         for k, v in cfg.items():
-            if v or k not in os.environ or not os.environ.get(k, ""):
-                set_key(str(ENV_FILE), k, v)
-                os.environ[k] = v
+            set_key(str(ENV_FILE), k, v)
+            os.environ[k] = v
         return {"ok": True}
 
     def confirm_tmdb(self, data):
@@ -263,6 +262,19 @@ class API:
                 self._log("Upload dossier FINAL sur la seedbox via FTP...")
                 self._ftp_upload([final_mkv, final_nfo], remote_path)
                 self._log("Seedbox OK : " + remote_path, "success")
+
+                # Creer les .torrent et envoyer a ruTorrent
+                announces = {
+                    "ABN":    os.getenv("TRACKER_ABN", ""),
+                    "TOS":    os.getenv("TRACKER_TOS", ""),
+                    "C411":   os.getenv("TRACKER_C411", ""),
+                    "TORR9":  os.getenv("TRACKER_TORR9", ""),
+                    "LACALE": os.getenv("TRACKER_LACALE", ""),
+                }
+                active = {k: v for k, v in announces.items() if v}
+                if active:
+                    self._log("Creation des .torrent...")
+                    self._create_and_send_torrent(final_dir, base, active, remote_path)
             else:
                 self._log("Seedbox non configuree - upload ignore.", "warn")
 
@@ -443,6 +455,46 @@ class API:
                 self._log("  ✓ " + fname + " — " + e_str, "success")
             else:
                 raise Exception("Upload Filebrowser échoué pour " + fname + " : " + str(r.status_code))
+
+    def _create_and_send_torrent(self, final_dir, base, announce_urls, remote_path):
+        import torf, ssl, xmlrpc.client
+        import time
+
+        torrent_dir = os.path.join(str(BASE_DIR), "TORRENTS")
+        os.makedirs(torrent_dir, exist_ok=True)
+
+        rt_url  = os.getenv("RUTORRENT_URL", "")
+        rt_user = os.getenv("RUTORRENT_USER", "")
+        rt_pass = os.getenv("RUTORRENT_PASS", "")
+
+        for tk_name, announce in announce_urls.items():
+            if not announce:
+                continue
+            self._log("Creation torrent pour " + tk_name + "...")
+            t = torf.Torrent()
+            t.name       = base
+            t.private    = True
+            t.piece_size = 4 * 1024 * 1024
+            t.trackers   = [[announce]]
+            t.path       = final_dir
+
+            torrent_path = os.path.join(torrent_dir, base + "_" + tk_name + ".torrent")
+            t.generate()
+            t.write(torrent_path)
+            self._log("  .torrent cree : " + os.path.basename(torrent_path), "success")
+
+            # Envoyer a ruTorrent
+            if rt_url and rt_user and rt_pass:
+                with open(torrent_path, "rb") as f:
+                    torrent_data = f.read()
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                transport = xmlrpc.client.SafeTransport(context=ctx)
+                full_url = rt_url.replace("://", "://" + rt_user + ":" + rt_pass + "@") + "/plugins/httprpc/action.php"
+                server = xmlrpc.client.ServerProxy(full_url, transport=transport)
+                server.load.raw_start("", xmlrpc.client.Binary(torrent_data), "d.directory.set=" + remote_path)
+                self._log("  Torrent envoye a ruTorrent !", "success")
 
     def _get_movie_title(self, tid, key, lang):
         r = requests.get(f"https://api.themoviedb.org/3/movie/{tid}",
