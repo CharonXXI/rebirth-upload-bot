@@ -23,12 +23,10 @@ a = Analysis(
         'tqdm',
         # Config
         'dotenv',
-        'python_dotenv',
         # Media
         'pymediainfo',
         # NFO / parsing
         'PTN',
-        'parse_torrent_name',
         # Torrent
         'torf',
         # FTP / ruTorrent
