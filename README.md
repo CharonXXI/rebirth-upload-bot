@@ -15,7 +15,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=flat-square)
-![Version](https://img.shields.io/badge/Version-2.0.6-orange?style=flat-square)
+![Version](https://img.shields.io/badge/Version-2.0.7-orange?style=flat-square)
 
 </div>
 
@@ -58,12 +58,14 @@ cd rebirth-upload-bot
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-pip install pywebview python-dotenv parse-torrent-name paramiko torf
+pip install pywebview python-dotenv parse-torrent-name torf pymediainfo
 ```
 
 ### Windows
 
-Voir le fichier `INSTALL_WINDOWS.md` pour le guide detaille.
+Voir le fichier [`INSTALL_WINDOWS.md`](./INSTALL_WINDOWS.md) pour le guide détaillé.
+
+> **Note :** MediaInfo CLI n'est **pas** nécessaire sur Windows. Le bot utilise `pymediainfo` (Python) qui embarque MediaInfo.dll automatiquement.
 
 ---
 
@@ -213,11 +215,15 @@ rebirth-upload-bot/
 
 ### Discord
 - Embed avec poster TMDB, liens TMDB/IMDb, source, trackers, note
-- Fichiers `.torrent` joints en pieces jointes
-
 ---
 
 ## Changelog
+
+### v2.0.7
+- Compatibilite Windows complete : mediainfo via `pymediainfo` (plus besoin du CLI)
+- Build `.exe` corrige : mode onedir, hiddenimports complets, `V1.env` persistant
+- Discord ignore automatiquement quand l'upload est desactive
+- `INSTALL_WINDOWS.md` : guide d'installation Windows detaille
 
 ### v2.0.6
 - Creation automatique des `.torrent` (un par tracker) apres upload seedbox
@@ -254,7 +260,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.0.6** — macOS & Windows
+**REBiRTH Upload Bot v2.0.7** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

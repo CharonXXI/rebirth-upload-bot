@@ -175,14 +175,30 @@ class API:
 
             # ── 2. NFO APRÈS TMDB ─────────────────────────────────────────────
             self._log("Génération NFO mediainfo…")
-            mi_name = os.path.basename(fp) + "_mediainfo.nfo"
-            subprocess.run(
-                f"mediainfo --Output=NFO \"{os.path.basename(fp)}\" > \"{mi_name}\"",
-                shell=True, cwd=file_dir
-            )
-            mi_path = os.path.join(file_dir, mi_name)
-            with open(mi_path, "r", encoding="utf-8") as f:
-                content_mi = f.read()
+            mi_path = None
+            if sys.platform == "win32":
+                # Windows : pymediainfo (MediaInfo.dll embarqué, pas de CLI nécessaire)
+                from pymediainfo import MediaInfo as _MI
+                mi = _MI.parse(fp)
+                sections = []
+                for track in mi.tracks:
+                    lines = [track.track_type]
+                    for k, v in track.to_data().items():
+                        if k in ("xml_dom_fragment", "track_type") or v is None:
+                            continue
+                        lines.append(f"{k.replace('_', ' ').title():<40}: {v}")
+                    sections.append("\n".join(lines))
+                content_mi = "\n\n".join(sections)
+            else:
+                # macOS / Linux : CLI mediainfo (installé via brew)
+                mi_name = os.path.basename(fp) + "_mediainfo.nfo"
+                mi_path = os.path.join(file_dir, mi_name)
+                subprocess.run(
+                    f"mediainfo --Output=NFO \"{os.path.basename(fp)}\" > \"{mi_name}\"",
+                    shell=True, cwd=file_dir
+                )
+                with open(mi_path, "r", encoding="utf-8") as f:
+                    content_mi = f.read()
 
             self._log("Génération NFO custom…")
             orig_input = builtins.input
@@ -210,7 +226,8 @@ class API:
             self._log(f"NFO UTF-8 → {os.path.basename(out_utf8)}", "success")
             self._log(f"NFO CP437 → {os.path.basename(out_dos)}",  "success")
 
-            os.remove(mi_path)
+            if mi_path and os.path.exists(mi_path):
+                os.remove(mi_path)
             os.remove(nfo_custom_path)
 
             # ── 3. UPLOAD ─────────────────────────────────────────────────────
@@ -228,10 +245,13 @@ class API:
                 self._log(f"URL : {dl_url}", "success")
 
             # ── 4. DISCORD ────────────────────────────────────────────────────
-            self._log("Envoi Discord…")
-            self._discord(dl_url, os.path.basename(fp), source, note,
-                          trackers, autre, tmdb_link, imdb_link, poster_url)
-            self._log("Message Discord envoyé !", "success")
+            if skip_upload:
+                self._log("Discord ignoré (upload désactivé).", "warn")
+            else:
+                self._log("Envoi Discord…")
+                self._discord(dl_url, os.path.basename(fp), source, note,
+                              trackers, autre, tmdb_link, imdb_link, poster_url)
+                self._log("Message Discord envoyé !", "success")
 
             # ── 5. DOSSIER FINAL + SEEDBOX ────────────────────────────────────
             fb_url      = os.getenv("SFTP_HOST", "")
