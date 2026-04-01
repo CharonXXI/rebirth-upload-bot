@@ -5,7 +5,10 @@ __pycache__/
 dist/
 build/
 *.nfo
+*.torrent
 FILMS/
+FINAL/
+TORRENTS/
 .env
 .DS_Store
 NFO_CUSTOM/.DS_Store
