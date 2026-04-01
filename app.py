@@ -8,13 +8,15 @@ Lance avec : python3 app.py
 import os, sys, json, re, subprocess, threading, builtins
 from pathlib import Path
 from threading import Event
+from datetime import datetime
 
 import webview
 import requests
 from dotenv import load_dotenv, set_key
 
-BASE_DIR = Path(__file__).parent
-ENV_FILE  = BASE_DIR / "V1.env"
+BASE_DIR     = Path(__file__).parent
+ENV_FILE     = BASE_DIR / "V1.env"
+HISTORY_FILE = BASE_DIR / "history.json"
 sys.path.insert(0, str(BASE_DIR))
 
 from gofile import gofile_upload
@@ -56,6 +58,28 @@ class API:
         for k, v in cfg.items():
             set_key(str(ENV_FILE), k, v)
             os.environ[k] = v
+        return {"ok": True}
+
+    def load_history(self):
+        if not HISTORY_FILE.exists():
+            return []
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def save_history_entry(self, entry: dict):
+        history = self.load_history()
+        history.insert(0, entry)
+        history = history[:100]  # garder les 100 dernières entrées
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        return {"ok": True}
+
+    def clear_history(self):
+        if HISTORY_FILE.exists():
+            HISTORY_FILE.unlink()
         return {"ok": True}
 
     def confirm_tmdb(self, data):
@@ -297,6 +321,21 @@ class API:
                     self._create_and_send_torrent(final_dir, base, active, remote_path)
             else:
                 self._log("Seedbox non configuree - upload ignore.", "warn")
+
+            # ── 6. HISTORIQUE ─────────────────────────────────────────────────
+            self.save_history_entry({
+                "date":      datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "filename":  os.path.basename(fp),
+                "title":     ttitle or "",
+                "year":      year or "",
+                "poster_url": poster_url,
+                "tmdb_link": tmdb_link,
+                "imdb_link": imdb_link or "",
+                "source":    source,
+                "trackers":  trackers,
+                "url":       dl_url,
+                "platform":  "BuzzHeavier" if platform == "b" else "Gofile" if not skip_upload else "—",
+            })
 
             self._emit("done", {"url": dl_url})
 

@@ -170,6 +170,25 @@ body::before {
 ::-webkit-scrollbar { width:5px; height:5px; }
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
+
+/* Historique */
+#page-history { padding:24px; overflow-y:auto; }
+.history-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.history-count  { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; }
+.btn-clear { padding:7px 16px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--text-dim); font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer; transition:all .15s; }
+.btn-clear:hover { border-color:var(--red); color:var(--red); }
+.history-empty  { text-align:center; padding:60px 20px; font-family:var(--mono); font-size:12px; color:var(--text-dim); letter-spacing:2px; }
+.history-card   { display:flex; gap:14px; padding:14px; border:1px solid var(--border2); border-radius:6px; background:var(--bg3); margin-bottom:10px; transition:border-color .15s; }
+.history-card:hover { border-color:rgba(255,107,0,0.3); }
+.history-poster { width:54px; min-width:54px; height:80px; object-fit:cover; border-radius:3px; background:var(--bg2); }
+.history-body   { flex:1; min-width:0; }
+.history-title  { font-family:var(--sans); font-size:14px; font-weight:700; color:var(--text-bright); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px; }
+.history-meta   { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.history-badge  { font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:3px; background:var(--bg2); border:1px solid var(--border2); color:var(--text-dim); }
+.history-badge.orange { color:var(--orange); border-color:rgba(255,107,0,0.3); }
+.history-filename { font-family:var(--mono); font-size:10px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px; }
+.history-url    { font-family:var(--mono); font-size:10px; color:var(--orange); text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.history-url:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -186,6 +205,9 @@ body::before {
       </div>
       <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
         <span class="nav-icon">📡</span> Trackers
+      </div>
+      <div class="nav-item" data-page="history" onclick="showPage('history', this); renderHistory()">
+        <span class="nav-icon">🕘</span> Historique
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
@@ -312,6 +334,15 @@ body::before {
         <button id="btn-save-trackers" onclick="saveTrackers()" style="margin-top:16px;padding:11px 28px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">
           💾 &nbsp;SAUVEGARDER
         </button>
+      </div>
+
+      <div id="page-history" class="page">
+        <div class="history-header">
+          <div class="section-label" style="margin-bottom:0">Historique des releases</div>
+          <button class="btn-clear" onclick="clearHistory()">✕ VIDER</button>
+        </div>
+        <div class="history-count" id="history-count"></div>
+        <div id="history-list" style="margin-top:16px"></div>
       </div>
 
       <div id="page-config" class="page">
@@ -559,10 +590,46 @@ async function loadTrackers() {
   });
 }
 
+async function renderHistory() {
+  var list    = document.getElementById('history-list');
+  var count   = document.getElementById('history-count');
+  var entries = await window.pywebview.api.load_history();
+  if (!entries || entries.length === 0) {
+    list.innerHTML  = '<div class="history-empty">AUCUNE RELEASE POUR LE MOMENT</div>';
+    count.textContent = '';
+    return;
+  }
+  count.textContent = entries.length + ' RELEASE' + (entries.length > 1 ? 'S' : '');
+  list.innerHTML = entries.map(function(e) {
+    var poster = e.poster_url && e.poster_url.indexOf('Image-not-found') === -1
+      ? e.poster_url : '';
+    return '<div class="history-card">' +
+      (poster ? '<img class="history-poster" src="' + poster + '" alt=""/>' : '<div class="history-poster"></div>') +
+      '<div class="history-body">' +
+        '<div class="history-title">' + (e.title || e.filename) + '</div>' +
+        '<div class="history-meta">' +
+          (e.year     ? '<span class="history-badge">' + e.year + '</span>' : '') +
+          (e.source   ? '<span class="history-badge orange">' + e.source + '</span>' : '') +
+          (e.trackers ? '<span class="history-badge">' + e.trackers + '</span>' : '') +
+          (e.platform && e.platform !== '—' ? '<span class="history-badge">' + e.platform + '</span>' : '') +
+          '<span class="history-badge">' + e.date + '</span>' +
+        '</div>' +
+        '<div class="history-filename">' + e.filename + '</div>' +
+        (e.url ? '<a class="history-url" href="' + e.url + '" target="_blank">' + e.url + '</a>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function clearHistory() {
+  if (!confirm('Vider tout l\'historique ?')) return;
+  await window.pywebview.api.clear_history();
+  renderHistory();
+}
+
 window.addEventListener('pywebviewready', function() {
   loadConfig();
   loadTrackers();
-  renderHistory();
 });
 </script>
 </body>
