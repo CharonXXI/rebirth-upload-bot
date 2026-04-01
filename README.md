@@ -228,7 +228,6 @@ rebirth-upload-bot/
 ### v2.0.6
 - Creation automatique des `.torrent` (un par tracker) apres upload seedbox
 - Envoi automatique a ruTorrent via XML-RPC
-- Notification Discord avec les `.torrent` en pieces jointes
 - Page Trackers avec announces URL sauvegardees dans le `.env`
 - Scroll sur la colonne gauche pour voir la carte TMDB
 - Barre de progression complete jusqu'a 100%
