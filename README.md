@@ -158,26 +158,26 @@ venv\Scripts\activate && python app.py
 
 ```
 Selectionner le .mkv
-         │
-         ▼
+        │
+        ▼
 Remplir Source / Note / Trackers / Autre info
-         │
-         ▼
+        │
+        ▼
 Choisir type NFO : UTF-8 (LaCale, C411, Torr9) ou CP437 (TOS, ABN)
-         │
-         ▼
+        │
+        ▼
 Choisir plateforme : Gofile / BuzzHeavier / Ignorer
-         │
-         ▼
-        LANCER ─────────────────────────────────────────────┐
-         │                                                   │
-         ├─ [TMDB]     Recherche + confirmation              │
-         ├─ [NFO]      Generation UTF-8 + CP437             │
-         ├─ [UPLOAD]   Gofile ou BuzzHeavier (si actif)     │
-         ├─ [DISCORD]  Notification embed (si actif)        │
-         ├─ [FINAL]    Creation FINAL/nom_film/ (MKV + NFO) │
-         ├─ [FTP]      Upload seedbox via FTP TLS           │
-         └─ [TORRENT]  Creation + envoi ruTorrent           │
+        │
+        ▼
+      LANCER
+        │
+        ├─ [TMDB]     Recherche + confirmation
+        ├─ [NFO]      Generation UTF-8 + CP437
+        ├─ [UPLOAD]   Gofile ou BuzzHeavier (si actif)
+        ├─ [DISCORD]  Notification embed (si actif)
+        ├─ [FINAL]    Creation FINAL/nom_film/ (MKV + NFO)
+        ├─ [FTP]      Upload seedbox via FTP TLS
+        └─ [TORRENT]  Creation + envoi ruTorrent
 ```
 
 ---
