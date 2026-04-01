@@ -28,7 +28,7 @@
 - Generation automatique de fichiers **NFO** (UTF-8 + CP437)
 - Recherche **TMDB** avec confirmation interactive et possibilite de changer l'ID
 - Upload sur **Gofile** (failover automatique 7 serveurs) ou **BuzzHeavier**
-- Notification automatique sur **Discord** avec les `.torrent` en pieces jointes
+- Notification automatique sur **Discord** (embed TMDB, liens, source, trackers)
 - Creation automatique du dossier **FINAL/** avec le bon NFO selon le tracker
 - Upload automatique du dossier complet sur la **seedbox via FTP TLS**
 - Creation automatique des **.torrent** (un par tracker) et envoi a **ruTorrent** via XML-RPC
@@ -44,7 +44,6 @@
 ### Prerequis
 
 - Python 3.10+
-- MediaInfo CLI
 - Git
 
 ### macOS
@@ -162,7 +161,7 @@ rebirth-upload-bot/
 ├── INSTALL_WINDOWS.md      <- Guide installation Windows
 ├── FILMS/                  <- Dossier pour tes fichiers .mkv
 ├── FINAL/                  <- Dossier de sortie (MKV + bon NFO par tracker)
-├── TORRENT/                <- Dossier fichiers .torrent generes
+├── TORRENTS/               <- Dossier fichiers .torrent generes
 └── NFO_CUSTOM/
     ├── NFO_v1_7.py
     ├── source_detector.py
@@ -182,7 +181,7 @@ rebirth-upload-bot/
    - NFO genere avec le bon lien TMDB
    - Upload Gofile ou BuzzHeavier (si non ignore)
    - Creation `.torrent` par tracker + envoi ruTorrent
-   - Notification Discord avec les `.torrent` en pieces jointes
+   - Notification Discord (si upload non ignore)
    - Dossier `FINAL/nom_film/` cree avec MKV + bon NFO
    - Upload du dossier complet sur la seedbox via FTP TLS
 
