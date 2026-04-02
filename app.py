@@ -91,7 +91,7 @@ class API:
         films_dir = BASE_DIR / "FILMS"
         start_dir = str(films_dir) if films_dir.exists() else str(Path.home())
         result = self.window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.OPEN_DIALOG if not hasattr(webview, 'FileDialog') else webview.FileDialog.OPEN,
             directory=start_dir,
             file_types=("Vidéo (*.mkv;*.mp4)",)
         )
@@ -539,7 +539,7 @@ class API:
 
             torrent_path = os.path.join(torrent_dir, base + "_" + tk_name + ".torrent")
             t.generate()
-            t.write(torrent_path)
+            t.write(torrent_path, overwrite=True)
             self._log("  .torrent cree : " + os.path.basename(torrent_path), "success")
 
             # Envoyer a ruTorrent
