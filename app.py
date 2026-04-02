@@ -27,9 +27,11 @@ load_dotenv(ENV_FILE)
 
 class API:
     def __init__(self):
-        self.window          = None
-        self._tmdb_event     = Event()
-        self._tmdb_confirmed = None
+        self.window              = None
+        self._tmdb_event         = Event()
+        self._tmdb_confirmed     = None
+        self._torrent_event      = Event()
+        self._torrent_confirmed  = None
 
     def get_config(self):
         return {
@@ -80,6 +82,11 @@ class API:
     def clear_history(self):
         if HISTORY_FILE.exists():
             HISTORY_FILE.unlink()
+        return {"ok": True}
+
+    def confirm_torrents(self, data):
+        self._torrent_confirmed = data.get("selected", [])
+        self._torrent_event.set()
         return {"ok": True}
 
     def confirm_tmdb(self, data):
@@ -317,8 +324,21 @@ class API:
                 }
                 active = {k: v for k, v in announces.items() if v}
                 if active:
-                    self._log("Creation des .torrent...")
-                    self._create_and_send_torrent(final_dir, base, active, remote_path)
+                    # Demander à l'utilisateur quels trackers utiliser
+                    self._torrent_confirmed = None
+                    self._torrent_event.clear()
+                    self._emit("torrent_select", {"trackers": list(active.keys())})
+                    self._torrent_event.wait(timeout=120)
+
+                    # Filtrer selon la sélection
+                    selected = self._torrent_confirmed if self._torrent_confirmed else list(active.keys())
+                    active_selected = {k: v for k, v in active.items() if k in selected}
+
+                    if active_selected:
+                        self._log("Creation des .torrent...")
+                        self._create_and_send_torrent(final_dir, base, active_selected, remote_path)
+                    else:
+                        self._log("Aucun tracker sélectionné — torrents ignorés.", "warn")
             else:
                 self._log("Seedbox non configuree - upload ignore.", "warn")
 

@@ -171,6 +171,23 @@ body::before {
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
 
+/* Modal sélection trackers */
+#torrent-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; }
+#torrent-modal-overlay.show { display:flex; }
+#torrent-modal { background:var(--bg2); border:1px solid var(--orange); border-radius:8px; padding:24px; min-width:320px; max-width:420px; width:100%; }
+.tm-title   { font-family:var(--mono); font-size:11px; color:var(--orange); letter-spacing:3px; text-transform:uppercase; margin-bottom:16px; }
+.tm-sub     { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-bottom:16px; letter-spacing:1px; }
+.tm-checks  { display:flex; flex-direction:column; gap:10px; margin-bottom:20px; }
+.tm-check-row { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border2); border-radius:4px; background:var(--bg3); cursor:pointer; transition:border-color .15s; }
+.tm-check-row:hover { border-color:var(--orange); }
+.tm-check-row input[type=checkbox] { width:15px; height:15px; cursor:pointer; accent-color:var(--orange); }
+.tm-check-label { font-family:var(--mono); font-size:12px; color:var(--text-bright); letter-spacing:1px; cursor:pointer; flex:1; }
+.tm-btns { display:flex; gap:8px; }
+.tm-btn-confirm { flex:1; padding:10px; background:var(--orange); border:none; border-radius:4px; color:#000; font-family:var(--sans); font-size:13px; font-weight:700; letter-spacing:2px; cursor:pointer; }
+.tm-btn-confirm:hover { background:var(--orange2); }
+.tm-btn-all { padding:10px 14px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--text-dim); font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer; }
+.tm-btn-all:hover { border-color:var(--orange); color:var(--orange); }
+
 /* Historique */
 #page-history { padding:24px; overflow-y:auto; }
 .history-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
@@ -353,6 +370,20 @@ body::before {
     </div>
   </div>
 </div>
+
+<!-- Modal sélection trackers torrent -->
+<div id="torrent-modal-overlay">
+  <div id="torrent-modal">
+    <div class="tm-title">Sélection des trackers</div>
+    <div class="tm-sub">Choisir les trackers pour lesquels créer un .torrent</div>
+    <div class="tm-checks" id="tm-checks"></div>
+    <div class="tm-btns">
+      <button class="tm-btn-all" onclick="toggleAllTorrents()">TOUT COCHER / DÉCOCHER</button>
+      <button class="tm-btn-confirm" onclick="confirmTorrents()">▶ CRÉER</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let currentFile = null;
 let platform    = 'b';
@@ -364,6 +395,7 @@ window._emit = function(event, data) {
   if (event === 'nfo_preview')     showNFO(data.content);
   if (event === 'tmdb_result')     showTMDB(data);
   if (event === 'tmdb_confirm')    showTMDBConfirm(data);
+  if (event === 'torrent_select')  showTorrentSelect(data);
   if (event === 'upload_progress') updateUploadProgress(data);
   if (event === 'done')            onDone(data);
   if (event === 'error')           onError(data);
@@ -588,6 +620,30 @@ async function loadTrackers() {
       el.value = cfg['TRACKER_' + k.toUpperCase()];
     }
   });
+}
+
+function showTorrentSelect(d) {
+  var checks = document.getElementById('tm-checks');
+  checks.innerHTML = d.trackers.map(function(tk) {
+    return '<label class="tm-check-row">' +
+      '<input type="checkbox" id="tm-' + tk + '" checked/>' +
+      '<span class="tm-check-label">' + tk + '</span>' +
+    '</label>';
+  }).join('');
+  document.getElementById('torrent-modal-overlay').classList.add('show');
+}
+
+function toggleAllTorrents() {
+  var boxes = document.querySelectorAll('#tm-checks input[type=checkbox]');
+  var allChecked = Array.from(boxes).every(function(b) { return b.checked; });
+  boxes.forEach(function(b) { b.checked = !allChecked; });
+}
+
+async function confirmTorrents() {
+  var boxes    = document.querySelectorAll('#tm-checks input[type=checkbox]');
+  var selected = Array.from(boxes).filter(function(b) { return b.checked; }).map(function(b) { return b.id.replace('tm-', ''); });
+  document.getElementById('torrent-modal-overlay').classList.remove('show');
+  await window.pywebview.api.confirm_torrents({ selected: selected });
 }
 
 async function renderHistory() {
