@@ -107,7 +107,12 @@ dist\
 > **Important :** Ne pas déplacer `REBiRTH.exe` hors du dossier `dist\REBiRTH\`.
 > Toute la config et les dossiers de travail doivent rester au même niveau que l'exe.
 
-### 3. Distribution
+### 3. Mettre à jour la version du .exe
+
+La version affichée dans **Propriétés → Détails** du `.exe` est définie dans `version_win.txt`.
+À chaque nouvelle version, modifier les lignes `filevers`, `prodvers`, `FileVersion` et `ProductVersion` dans ce fichier.
+
+### 4. Distribution
 
 Pour partager le bot, zipper l'intégralité de `dist\REBiRTH\` (sans le `.env` qui contient tes tokens).
 

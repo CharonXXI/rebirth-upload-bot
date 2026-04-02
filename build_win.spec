@@ -12,6 +12,7 @@ a = Analysis(
         ('V1.env', '.'),
         ('gofile.py', '.'),
         ('auto-up-discord.py', '.'),
+        ('version_win.txt', '.'),
     ],
     hiddenimports=[
         # GUI
@@ -69,6 +70,7 @@ exe = EXE(
     upx=True,
     console=False,
     icon=None,
+    version='version_win.txt',
 )
 
 # Mode onedir : tous les fichiers dans dist\REBiRTH\
