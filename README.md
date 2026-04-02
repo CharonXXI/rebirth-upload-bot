@@ -245,7 +245,7 @@ rebirth-upload-bot/
 - **Mode NFO Batch** : traitement de plusieurs fichiers en file d'attente avec confirmation TMDB pour chacun
 - **Historique — Recherche** : filtrage temps réel par titre, fichier, tracker, plateforme
 - **Historique — Statistiques** : compteurs releases, top tracker, top plateforme, trackers uniques
-- **Torrent** : progression de génération affichée dans la barre (callback torf)
+- Fix : callback torf `generate()` supprimé — conflit `evaluate_js`/thread causant `Missing 'pieces'`
 
 ### v2.0.9
 - Mode **jour/nuit** : bouton ☀/🌙 dans la sidebar, thème clair complet
