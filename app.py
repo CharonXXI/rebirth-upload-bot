@@ -618,15 +618,7 @@ class API:
 
             torrent_path = os.path.join(torrent_dir, base + "_" + tk_name + ".torrent")
 
-            def _torrent_cb(torrent, path, hashed, total, _tk=tk_name):
-                try:
-                    pct = int(hashed * 100 / total) if total else 0
-                    self._emit("torrent_progress", {"tracker": _tk, "pct": pct})
-                except Exception:
-                    pass
-                return True
-
-            t.generate(callback=_torrent_cb)
+            t.generate()
             t.write(torrent_path, overwrite=True)
             self._log("  .torrent cree : " + os.path.basename(torrent_path), "success")
 
