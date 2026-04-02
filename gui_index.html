@@ -25,10 +25,30 @@
   --mono:        'Share Tech Mono', monospace;
   --sans:        'Rajdhani', sans-serif;
 }
+html.light {
+  --bg:          #f0f0f0;
+  --bg2:         #e4e4e4;
+  --bg3:         #d8d8d8;
+  --border:      #c0c0c0;
+  --border2:     #b0b0b0;
+  --orange:      #e05a00;
+  --orange2:     #cc5200;
+  --orange-dim:  rgba(224,90,0,0.10);
+  --orange-glow: rgba(224,90,0,0.20);
+  --green:       #1a8f00;
+  --red:         #cc0000;
+  --yellow:      #b38600;
+  --text:        #333333;
+  --text-dim:    #888888;
+  --text-bright: #111111;
+}
 html, body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:var(--sans); font-size:15px; overflow:hidden; }
 body::before {
   content:''; position:fixed; inset:0; z-index:9999; pointer-events:none;
   background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);
+}
+html.light body::before {
+  background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(0,0,0,0.02) 2px,rgba(0,0,0,0.02) 4px);
 }
 #app { display:flex; height:100vh; }
 #sidebar { width:220px; min-width:220px; background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
@@ -231,7 +251,10 @@ body::before {
       </div>
     </nav>
     <div class="sidebar-footer">
-      <span class="status-dot"></span>READY
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span><span class="status-dot"></span>READY</span>
+        <button id="theme-toggle" onclick="toggleTheme()" title="Mode jour / nuit" style="background:none;border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:11px;padding:3px 8px;cursor:pointer;transition:all .15s;letter-spacing:1px;">☀ JOUR</button>
+      </div>
     </div>
   </div>
   <div id="main">
@@ -683,9 +706,26 @@ async function clearHistory() {
   renderHistory();
 }
 
+function toggleTheme() {
+  const isLight = document.documentElement.classList.toggle('light');
+  const btn = document.getElementById('theme-toggle');
+  btn.textContent = isLight ? '🌙 NUIT' : '☀ JOUR';
+  try { window.pywebview.api.save_theme(isLight ? 'light' : 'dark'); } catch(e){}
+}
+
+function applyTheme(theme) {
+  const isLight = theme === 'light';
+  document.documentElement.classList.toggle('light', isLight);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = isLight ? '🌙 NUIT' : '☀ JOUR';
+}
+
 window.addEventListener('pywebviewready', function() {
   loadConfig();
   loadTrackers();
+  try {
+    window.pywebview.api.load_theme().then(function(t){ applyTheme(t); });
+  } catch(e){}
 });
 </script>
 </body>

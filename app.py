@@ -17,6 +17,7 @@ from dotenv import load_dotenv, set_key
 BASE_DIR     = Path(__file__).parent
 ENV_FILE     = BASE_DIR / "V1.env"
 HISTORY_FILE = BASE_DIR / "history.json"
+THEME_FILE   = BASE_DIR / "theme.txt"
 sys.path.insert(0, str(BASE_DIR))
 
 from gofile import gofile_upload
@@ -83,6 +84,15 @@ class API:
         if HISTORY_FILE.exists():
             HISTORY_FILE.unlink()
         return {"ok": True}
+
+    def save_theme(self, theme: str):
+        THEME_FILE.write_text(theme, encoding="utf-8")
+        return {"ok": True}
+
+    def load_theme(self):
+        if THEME_FILE.exists():
+            return THEME_FILE.read_text(encoding="utf-8").strip()
+        return "dark"
 
     def confirm_torrents(self, data):
         self._torrent_confirmed = data.get("selected", [])
