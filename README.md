@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.0.7-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.0.8-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -240,6 +240,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.0.8
+- Page **Historique** : historique des releases sauvegardé dans `history.json` avec poster, titre, trackers, URL upload
+- Sélection des trackers torrent par cases à cocher avant la création des `.torrent`
+- Fix : écrasement des `.torrent` existants sans erreur
+- Fix : deprecation `OPEN_DIALOG` pywebview
+
 ### v2.0.7
 - Compatibilité Windows complète : mediainfo via `pymediainfo` (plus besoin du CLI)
 - Build `.exe` corrigé : mode onedir, hiddenimports complets, `V1.env` persistant
@@ -280,7 +286,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.0.7** — macOS & Windows
+**REBiRTH Upload Bot v2.0.8** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
