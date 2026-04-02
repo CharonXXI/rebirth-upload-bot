@@ -226,6 +226,16 @@ html.light body::before {
 .history-filename { font-family:var(--mono); font-size:10px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px; }
 .history-url    { font-family:var(--mono); font-size:10px; color:var(--orange); text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
 .history-url:hover { text-decoration:underline; }
+.history-stat-card { background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:10px 16px; font-family:var(--mono); }
+.history-stat-val  { font-size:22px; font-weight:700; color:var(--orange); line-height:1; }
+.history-stat-lbl  { font-size:9px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; margin-top:3px; }
+.history-stat-sub  { font-size:10px; color:var(--text-dim); margin-top:4px; }
+.batch-file-row { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--bg3); border:1px solid var(--border); border-radius:4px; margin-bottom:6px; }
+.batch-file-name { font-family:var(--mono); font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+.batch-file-rm   { background:none; border:none; color:var(--text-dim); font-size:14px; cursor:pointer; padding:0 4px; flex-shrink:0; }
+.batch-file-rm:hover { color:var(--red); }
+.batch-progress-bar { height:2px; background:var(--border2); border-radius:1px; overflow:hidden; margin-top:4px; }
+.batch-progress-fill { height:100%; background:var(--orange); width:0%; transition:width .3s; }
 </style>
 </head>
 <body>
@@ -234,7 +244,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag">● ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.0.9</div>
+      <div class="logo-sub">UPLOAD BOT v2.1.0</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -303,6 +313,15 @@ html.light body::before {
           <div class="skip-row">
             <input type="checkbox" id="skip-upload" class="skip-check"/>
             <label for="skip-upload" class="skip-label">IGNORER GOFILE / BUZZHEAVIER</label>
+          </div>
+          <div class="skip-row" style="margin-top:6px;">
+            <input type="checkbox" id="batch-nfo-toggle" class="skip-check" onchange="toggleBatchMode()"/>
+            <label for="batch-nfo-toggle" class="skip-label">MODE NFO BATCH</label>
+          </div>
+          <div id="batch-zone" style="display:none;margin-top:12px;">
+            <div class="section-label">Fichiers en file d'attente</div>
+            <div id="batch-list" style="margin-bottom:10px;"></div>
+            <button onclick="addBatchFile()" style="width:100%;padding:9px;background:transparent;border:1px dashed var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer;">+ AJOUTER UN FICHIER</button>
           </div>
           <button id="btn-launch" onclick="launch()">▶ &nbsp;LANCER</button>
           <div class="progress-wrap" id="progress-wrap">
@@ -381,8 +400,12 @@ html.light body::before {
           <div class="section-label" style="margin-bottom:0">Historique des releases</div>
           <button class="btn-clear" onclick="clearHistory()">✕ VIDER</button>
         </div>
-        <div class="history-count" id="history-count"></div>
-        <div id="history-list" style="margin-top:16px"></div>
+        <div style="padding:0 24px 12px;display:flex;gap:10px;align-items:center;">
+          <input id="history-search" class="field-input" placeholder="🔍  Rechercher par titre, fichier, tracker…" oninput="filterHistory()" style="flex:1;font-size:12px;"/>
+          <span class="history-count" id="history-count" style="white-space:nowrap;"></span>
+        </div>
+        <div id="history-stats" style="padding:0 24px 16px;display:flex;gap:12px;flex-wrap:wrap;"></div>
+        <div id="history-list" style="margin-top:0"></div>
       </div>
 
       <div id="page-config" class="page">
@@ -408,20 +431,26 @@ html.light body::before {
 </div>
 
 <script>
-let currentFile = null;
-let platform    = 'b';
-let running     = false;
-let nfoType     = 'utf8';
+let currentFile  = null;
+let platform     = 'b';
+let running      = false;
+let nfoType      = 'utf8';
+let batchMode    = false;
+let batchQueue   = [];
+let _historyAll  = [];
 
 window._emit = function(event, data) {
-  if (event === 'log')             addLog(data.msg, data.level);
-  if (event === 'nfo_preview')     showNFO(data.content);
-  if (event === 'tmdb_result')     showTMDB(data);
-  if (event === 'tmdb_confirm')    showTMDBConfirm(data);
-  if (event === 'torrent_select')  showTorrentSelect(data);
-  if (event === 'upload_progress') updateUploadProgress(data);
-  if (event === 'done')            onDone(data);
-  if (event === 'error')           onError(data);
+  if (event === 'log')              addLog(data.msg, data.level);
+  if (event === 'nfo_preview')      showNFO(data.content);
+  if (event === 'tmdb_result')      showTMDB(data);
+  if (event === 'tmdb_confirm')     showTMDBConfirm(data);
+  if (event === 'torrent_select')   showTorrentSelect(data);
+  if (event === 'upload_progress')  updateUploadProgress(data);
+  if (event === 'torrent_progress') updateTorrentProgress(data);
+  if (event === 'batch_file_start') onBatchFileStart(data);
+  if (event === 'batch_done')       onBatchDone(data);
+  if (event === 'done')             onDone(data);
+  if (event === 'error')            onError(data);
 };
 
 function updateUploadProgress(d) {
@@ -432,8 +461,16 @@ function updateUploadProgress(d) {
     el.className = 'log-line';
     document.getElementById('log-panel').appendChild(el);
   }
-  el.innerHTML = '<span class="log-time">' + new Date().toTimeString().slice(0,8) + '</span><span class="log-msg">' + d.filename + ' — ' + d.elapsed + ' écoulé</span>';
+  el.innerHTML = '<span class="log-time">' + new Date().toTimeString().slice(0,8) + '</span><span class="log-msg">' + d.filename + ' — ' + d.elapsed + '</span>';
   document.getElementById('log-panel').scrollTop = document.getElementById('log-panel').scrollHeight;
+  if (typeof d.pct === 'number') {
+    var base = 65, range = 20;
+    setProgress(Math.min(base + Math.round(d.pct * range / 100), base + range), 'UPLOAD ' + d.pct + '%…');
+  }
+}
+
+function updateTorrentProgress(d) {
+  setProgress(Math.min(93 + Math.round(d.pct * 0.04), 97), 'TORRENT ' + d.tracker + ' ' + d.pct + '%…');
 }
 
 function showTMDBConfirm(d) {
@@ -491,7 +528,20 @@ function setPlatform(p) {
   document.getElementById('plat-g').classList.toggle('active', p === 'g');
 }
 
+function _commonParams() {
+  return {
+    source:      document.getElementById('f-source').value,
+    note:        document.getElementById('f-note').value,
+    trackers:    document.getElementById('f-trackers').value,
+    autre:       document.getElementById('f-autre').value,
+    platform:    platform,
+    nfo_type:    nfoType,
+    skip_upload: document.getElementById('skip-upload').checked,
+  };
+}
+
 async function launch() {
+  if (batchMode) { await launchBatch(); return; }
   if (!currentFile) { addLog('Sélectionne un fichier .mkv d\'abord !', 'error'); return; }
   if (running) return;
   running = true;
@@ -502,16 +552,71 @@ async function launch() {
   document.getElementById('log-panel').innerHTML = '';
   document.getElementById('progress-wrap').classList.add('show');
   setProgress(5, 'INITIALISATION…');
-  await window.pywebview.api.run_workflow({
-    file_path: currentFile,
-    source:    document.getElementById('f-source').value,
-    note:      document.getElementById('f-note').value,
-    trackers:  document.getElementById('f-trackers').value,
-    autre:     document.getElementById('f-autre').value,
-    platform:  platform,
-    nfo_type:   nfoType,
-    skip_upload: document.getElementById('skip-upload').checked,
+  await window.pywebview.api.run_workflow({ file_path: currentFile, ..._commonParams() });
+}
+
+async function launchBatch() {
+  if (batchQueue.length === 0) { addLog('Ajoute des fichiers en mode batch d\'abord !', 'error'); return; }
+  if (running) return;
+  running = true;
+  document.getElementById('btn-launch').disabled = true;
+  document.getElementById('done-banner').style.display = 'none';
+  document.getElementById('log-panel').innerHTML = '';
+  document.getElementById('progress-wrap').classList.add('show');
+  setProgress(5, 'BATCH NFO — ' + batchQueue.length + ' fichier(s)…');
+  await window.pywebview.api.run_batch_nfo({ file_paths: batchQueue, params: _commonParams() });
+}
+
+function toggleBatchMode() {
+  batchMode = document.getElementById('batch-nfo-toggle').checked;
+  document.getElementById('batch-zone').style.display = batchMode ? 'block' : 'none';
+  document.getElementById('file-drop').style.opacity  = batchMode ? '0.4' : '1';
+  document.getElementById('file-drop').style.pointerEvents = batchMode ? 'none' : '';
+  document.getElementById('btn-launch').textContent = batchMode ? '▶  LANCER BATCH NFO' : '▶ \u00a0LANCER';
+}
+
+async function addBatchFile() {
+  var paths = await window.pywebview.api.pick_files_multi();
+  if (!paths || paths.length === 0) return;
+  paths.forEach(function(p) {
+    if (!batchQueue.includes(p)) batchQueue.push(p);
   });
+  renderBatchQueue();
+}
+
+function removeBatchFile(idx) {
+  batchQueue.splice(idx, 1);
+  renderBatchQueue();
+}
+
+function renderBatchQueue() {
+  var el = document.getElementById('batch-list');
+  if (batchQueue.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = batchQueue.map(function(p, i) {
+    var name = p.replace(/\\/g,'/').split('/').pop();
+    return '<div class="batch-file-row" id="bfr-' + i + '">' +
+      '<span class="batch-file-name" title="' + p + '">' + name + '</span>' +
+      '<button class="batch-file-rm" onclick="removeBatchFile(' + i + ')">✕</button>' +
+      '<div class="batch-progress-bar"><div class="batch-progress-fill" id="bpf-' + i + '"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function onBatchFileStart(d) {
+  var pct = Math.round((d.current - 1) * 100 / d.total);
+  setProgress(pct, 'NFO ' + d.current + '/' + d.total + ' — ' + d.filename);
+  addLog('── Fichier ' + d.current + '/' + d.total + ' : ' + d.filename, 'info');
+  var fill = document.getElementById('bpf-' + (d.current - 1));
+  if (fill) fill.style.width = '50%';
+}
+
+function onBatchDone(d) {
+  running = false;
+  setProgress(100, 'BATCH TERMINÉ — ' + d.total + ' NFO générés !');
+  document.getElementById('btn-launch').disabled = false;
+  var banner = document.getElementById('done-banner');
+  banner.style.display = 'block';
+  banner.textContent = '✓ BATCH NFO TERMINÉ — ' + d.total + ' fichier(s) traités';
 }
 
 function setProgress(pct, label) {
@@ -557,12 +662,15 @@ function showTMDB(d) {
 }
 
 function onDone(d) {
+  if (batchMode && batchQueue.length > 0) return; // batch gère lui-même
   running = false;
   setProgress(100, 'TERMINE !');
   document.getElementById('btn-launch').disabled = false;
   var banner = document.getElementById('done-banner');
   banner.style.display = 'block';
-  banner.textContent   = '✓ UPLOAD TERMINÉ → ' + d.url;
+  banner.textContent = d.nfo_only
+    ? '✓ NFO GÉNÉRÉ'
+    : ('✓ UPLOAD TERMINÉ → ' + d.url);
 }
 
 function onError(d) {
@@ -669,40 +777,77 @@ async function confirmTorrents() {
   await window.pywebview.api.confirm_torrents({ selected: selected });
 }
 
+function _historyCardHTML(e) {
+  var poster = e.poster_url && e.poster_url.indexOf('Image-not-found') === -1 ? e.poster_url : '';
+  return '<div class="history-card">' +
+    (poster ? '<img class="history-poster" src="' + poster + '" alt=""/>' : '<div class="history-poster"></div>') +
+    '<div class="history-body">' +
+      '<div class="history-title">' + (e.title || e.filename) + '</div>' +
+      '<div class="history-meta">' +
+        (e.year     ? '<span class="history-badge">' + e.year + '</span>' : '') +
+        (e.source   ? '<span class="history-badge orange">' + e.source + '</span>' : '') +
+        (e.trackers ? '<span class="history-badge">' + e.trackers + '</span>' : '') +
+        (e.platform && e.platform !== '—' ? '<span class="history-badge">' + e.platform + '</span>' : '') +
+        '<span class="history-badge">' + e.date + '</span>' +
+      '</div>' +
+      '<div class="history-filename">' + e.filename + '</div>' +
+      (e.url ? '<a class="history-url" href="' + e.url + '" target="_blank">' + e.url + '</a>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function _renderStats(entries) {
+  if (!entries.length) { document.getElementById('history-stats').innerHTML = ''; return; }
+  var trackerCounts = {}, platformCounts = {};
+  entries.forEach(function(e) {
+    if (e.trackers) e.trackers.split(/[\s,]+/).filter(Boolean).forEach(function(t) { trackerCounts[t] = (trackerCounts[t]||0)+1; });
+    if (e.platform && e.platform !== '—') platformCounts[e.platform] = (platformCounts[e.platform]||0)+1;
+  });
+  var topTracker = Object.entries(trackerCounts).sort(function(a,b){return b[1]-a[1];})[0];
+  var topPlat    = Object.entries(platformCounts).sort(function(a,b){return b[1]-a[1];})[0];
+  document.getElementById('history-stats').innerHTML =
+    '<div class="history-stat-card"><div class="history-stat-val">' + entries.length + '</div><div class="history-stat-lbl">RELEASES</div></div>' +
+    (topTracker ? '<div class="history-stat-card"><div class="history-stat-val">' + topTracker[1] + '</div><div class="history-stat-lbl">TOP TRACKER</div><div class="history-stat-sub">' + topTracker[0] + '</div></div>' : '') +
+    (topPlat    ? '<div class="history-stat-card"><div class="history-stat-val">' + topPlat[1] + '</div><div class="history-stat-lbl">TOP PLATEFORME</div><div class="history-stat-sub">' + topPlat[0] + '</div></div>' : '') +
+    '<div class="history-stat-card"><div class="history-stat-val">' + Object.keys(trackerCounts).length + '</div><div class="history-stat-lbl">TRACKERS UNIQUES</div></div>';
+}
+
 async function renderHistory() {
   var list    = document.getElementById('history-list');
   var count   = document.getElementById('history-count');
-  var entries = await window.pywebview.api.load_history();
-  if (!entries || entries.length === 0) {
-    list.innerHTML  = '<div class="history-empty">AUCUNE RELEASE POUR LE MOMENT</div>';
+  _historyAll = await window.pywebview.api.load_history() || [];
+  if (!_historyAll.length) {
+    list.innerHTML = '<div class="history-empty">AUCUNE RELEASE POUR LE MOMENT</div>';
     count.textContent = '';
+    document.getElementById('history-stats').innerHTML = '';
     return;
   }
-  count.textContent = entries.length + ' RELEASE' + (entries.length > 1 ? 'S' : '');
-  list.innerHTML = entries.map(function(e) {
-    var poster = e.poster_url && e.poster_url.indexOf('Image-not-found') === -1
-      ? e.poster_url : '';
-    return '<div class="history-card">' +
-      (poster ? '<img class="history-poster" src="' + poster + '" alt=""/>' : '<div class="history-poster"></div>') +
-      '<div class="history-body">' +
-        '<div class="history-title">' + (e.title || e.filename) + '</div>' +
-        '<div class="history-meta">' +
-          (e.year     ? '<span class="history-badge">' + e.year + '</span>' : '') +
-          (e.source   ? '<span class="history-badge orange">' + e.source + '</span>' : '') +
-          (e.trackers ? '<span class="history-badge">' + e.trackers + '</span>' : '') +
-          (e.platform && e.platform !== '—' ? '<span class="history-badge">' + e.platform + '</span>' : '') +
-          '<span class="history-badge">' + e.date + '</span>' +
-        '</div>' +
-        '<div class="history-filename">' + e.filename + '</div>' +
-        (e.url ? '<a class="history-url" href="' + e.url + '" target="_blank">' + e.url + '</a>' : '') +
-      '</div>' +
-    '</div>';
-  }).join('');
+  _renderStats(_historyAll);
+  filterHistory();
+}
+
+function filterHistory() {
+  var q    = (document.getElementById('history-search') ? document.getElementById('history-search').value : '').toLowerCase();
+  var list  = document.getElementById('history-list');
+  var count = document.getElementById('history-count');
+  var filtered = _historyAll.filter(function(e) {
+    return !q ||
+      (e.title    && e.title.toLowerCase().indexOf(q) !== -1) ||
+      (e.filename && e.filename.toLowerCase().indexOf(q) !== -1) ||
+      (e.trackers && e.trackers.toLowerCase().indexOf(q) !== -1) ||
+      (e.platform && e.platform.toLowerCase().indexOf(q) !== -1) ||
+      (e.source   && e.source.toLowerCase().indexOf(q) !== -1);
+  });
+  count.textContent = filtered.length + ' RELEASE' + (filtered.length !== 1 ? 'S' : '');
+  list.innerHTML = filtered.length
+    ? filtered.map(_historyCardHTML).join('')
+    : '<div class="history-empty">AUCUN RÉSULTAT</div>';
 }
 
 async function clearHistory() {
   if (!confirm('Vider tout l\'historique ?')) return;
   await window.pywebview.api.clear_history();
+  _historyAll = [];
   renderHistory();
 }
 

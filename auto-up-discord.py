@@ -177,17 +177,18 @@ def upload_file(file_path: str, directory_id: str, account_id: str) -> str:
     except Exception as e:
         raise Exception(f"Échec de l'upload pour {file_path}: {str(e)}")
 
-def upload_big_file(file_path: str, directory_id: str, account_id: str) -> str:
+def upload_big_file(file_path: str, directory_id: str, account_id: str, progress_fn=None) -> str:
     filename = os.path.basename(file_path)
     file_size = os.path.getsize(file_path)
     url = f'https://w.buzzheavier.com/{directory_id}/{filename}'
-    
+    uploaded = [0]
+
     headers = {
         'Authorization': f'Bearer {account_id}',
         'Content-Length': str(file_size),
         'Content-Type': 'application/octet-stream'
     }
-    
+
     with tqdm(
         total=file_size,
         unit='B',
@@ -195,19 +196,22 @@ def upload_big_file(file_path: str, directory_id: str, account_id: str) -> str:
         desc=f"Upload {filename}",
         dynamic_ncols=True
     ) as pbar:
-        
+
         with open(file_path, 'rb') as f:
             class ReadProgress:
                 def __init__(self, file_obj, progress_bar):
                     self.file_obj = file_obj
                     self.progress_bar = progress_bar
-                
+
                 def read(self, size=-1):
                     data = self.file_obj.read(size)
                     if data:
+                        uploaded[0] += len(data)
                         self.progress_bar.update(len(data))
+                        if progress_fn:
+                            progress_fn(uploaded[0], file_size)
                     return data
-                
+
             response = requests.put(
                 url,
                 headers=headers,

@@ -30,7 +30,7 @@ UPLOAD_ENDPOINTS = [
 ]
 
 
-def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str] = None):
+def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str] = None, progress_fn=None):
     f_obj = Path(file)
     file_size = f_obj.stat().st_size
     token = os.getenv("GOFILE_TOKEN")
@@ -48,6 +48,8 @@ def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str
                     def progress_callback(m):
                         progress.n = m.bytes_read
                         progress.refresh()
+                        if progress_fn:
+                            progress_fn(m.bytes_read, file_size)
 
                     content_type = mimetypes.guess_type(f_obj)[0] or "application/octet-stream"
 
@@ -86,6 +88,7 @@ def gofile_upload(
     verbose: bool = False,
     export: bool = False,
     open_urls: bool = False,
+    progress_fn=None,
 ):
     files = []
     for _path in path:
@@ -121,7 +124,7 @@ def gofile_upload(
 
     guest_token = None
     for file in files:
-        upload_resp = upload(file, folder_id, guest_token).json()
+        upload_resp = upload(file, folder_id, guest_token, progress_fn=progress_fn).json()
         if to_single_folder and folder_id is None:
             folder_id   = upload_resp["data"]["parentFolder"]
             guest_token = upload_resp["data"].get("guestToken")

@@ -129,6 +129,32 @@ class API:
         threading.Thread(target=self._workflow, args=(params,), daemon=True).start()
         return {"ok": True}
 
+    def run_batch_nfo(self, data: dict):
+        def _run():
+            file_paths = data.get("file_paths", [])
+            params     = data.get("params", {})
+            total      = len(file_paths)
+            for i, fp in enumerate(file_paths):
+                self._emit("batch_file_start", {
+                    "current": i + 1, "total": total,
+                    "filename": os.path.basename(fp)
+                })
+                self._workflow({**params, "file_path": fp, "nfo_only": True})
+            self._emit("batch_done", {"total": total})
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True}
+
+    def pick_files_multi(self):
+        films_dir = BASE_DIR / "FILMS"
+        start_dir = str(films_dir) if films_dir.exists() else str(Path.home())
+        result = self.window.create_file_dialog(
+            webview.OPEN_DIALOG if not hasattr(webview, 'FileDialog') else webview.FileDialog.OPEN,
+            directory=start_dir,
+            allow_multiple=True,
+            file_types=("Vidéo (*.mkv;*.mp4)",)
+        )
+        return list(result) if result else []
+
     def _emit(self, event: str, data):
         payload = json.dumps(data).replace("'", "\\'")
         self.window.evaluate_js(f"window._emit('{event}', {payload})")
@@ -145,19 +171,18 @@ class API:
             ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)
 
         try:
-            fp       = p["file_path"]
-            source   = p.get("source", "")
-            note     = p.get("note", "")
-            trackers = p.get("trackers", "")
-            autre    = p.get("autre", "")
-            platform = p.get("platform", "b")
+            fp          = p["file_path"]
+            source      = p.get("source", "")
+            note        = p.get("note", "")
+            trackers    = p.get("trackers", "")
+            autre       = p.get("autre", "")
+            platform    = p.get("platform", "b")
             nfo_type    = p.get("nfo_type", "utf8")
             skip_upload = p.get("skip_upload", False)
-            nfo_type    = p.get("nfo_type", "utf8")
-            skip_upload = p.get("skip_upload", False)
-            api_key  = os.getenv("API_KEY", "")
-            language = os.getenv("LANGUAGE", "fr-FR")
-            bzhv_id  = os.getenv("BUZZHEAVIER_ACC_ID", "")
+            nfo_only    = p.get("nfo_only", False)
+            api_key     = os.getenv("API_KEY", "")
+            language    = os.getenv("LANGUAGE", "fr-FR")
+            bzhv_id     = os.getenv("BUZZHEAVIER_ACC_ID", "")
             os.environ["GOFILE_TOKEN"] = os.getenv("GOFILE_TOKEN", "")
 
             file_dir = os.path.dirname(fp)
@@ -273,20 +298,41 @@ class API:
 
             # ── 3. UPLOAD ─────────────────────────────────────────────────────
             dl_url = ""
-            if skip_upload:
+            if nfo_only:
+                self._log("Mode NFO Batch — upload ignoré.", "warn")
+            elif skip_upload:
                 self._log("Upload ignoré.", "warn")
             else:
-                self._log(f"Upload sur {'BuzzHeavier' if platform == 'b' else 'Gofile'}…")
+                plat_name = "BuzzHeavier" if platform == "b" else "Gofile"
+                self._log(f"Upload sur {plat_name}…")
                 files_up = [fp, out_dos, out_utf8]
                 if platform == "g":
-                    urls   = gofile_upload(path=files_up, to_single_folder=True, verbose=False)
+                    filesize_g = os.path.getsize(fp)
+                    start_g    = [__import__("time").time()]
+
+                    def _gofile_progress(uploaded, total, _fs=filesize_g, _st=start_g, _fn=os.path.basename(fp)):
+                        import time as _t
+                        pct     = int(uploaded * 100 / total) if total else 0
+                        elapsed = _t.time() - _st[0]
+                        speed   = uploaded / elapsed / 1048576 if elapsed > 0 else 0
+                        h, r    = divmod(int(elapsed), 3600)
+                        m, s    = divmod(r, 60)
+                        e_str   = (str(h) + "h " if h else "") + str(m).zfill(2) + "m " + str(s).zfill(2) + "s"
+                        self._emit("upload_progress", {
+                            "filename": _fn, "pct": pct,
+                            "elapsed": f"{e_str} — {pct}% — {round(speed, 1)} MB/s"
+                        })
+
+                    urls   = gofile_upload(path=files_up, to_single_folder=True, verbose=False, progress_fn=_gofile_progress)
                     dl_url = urls[0] if urls else ""
                 else:
                     dl_url = self._upload_bzhv(files_up, bzhv_id)
                 self._log(f"URL : {dl_url}", "success")
 
             # ── 4. DISCORD ────────────────────────────────────────────────────
-            if skip_upload:
+            if nfo_only:
+                pass  # pas de Discord en mode batch NFO
+            elif skip_upload:
                 self._log("Discord ignoré (upload désactivé).", "warn")
             else:
                 self._log("Envoi Discord…")
@@ -300,7 +346,9 @@ class API:
             fb_pass     = os.getenv("SFTP_PASS", "")
             remote_base = os.getenv("SFTP_PATH", "/rtorrent/REBiRTH")
 
-            if fb_url and fb_user and fb_pass:
+            if nfo_only:
+                self._log("Mode NFO Batch — seedbox ignorée.", "warn")
+            elif fb_url and fb_user and fb_pass:
                 use_utf8    = (nfo_type == "utf8")
                 nfo_to_send = out_utf8 if use_utf8 else out_dos
                 nfo_label   = "UTF-8" if use_utf8 else "CP437"
@@ -349,7 +397,7 @@ class API:
                         self._create_and_send_torrent(final_dir, base, active_selected, remote_path)
                     else:
                         self._log("Aucun tracker sélectionné — torrents ignorés.", "warn")
-            else:
+            elif not nfo_only:
                 self._log("Seedbox non configuree - upload ignore.", "warn")
 
             # ── 6. HISTORIQUE ─────────────────────────────────────────────────
@@ -364,10 +412,10 @@ class API:
                 "source":    source,
                 "trackers":  trackers,
                 "url":       dl_url,
-                "platform":  "BuzzHeavier" if platform == "b" else "Gofile" if not skip_upload else "—",
+                "platform":  "NFO Batch" if nfo_only else ("BuzzHeavier" if platform == "b" else "Gofile" if not skip_upload else "—"),
             })
 
-            self._emit("done", {"url": dl_url})
+            self._emit("done", {"url": dl_url, "nfo_only": nfo_only})
 
         except Exception as e:
             import traceback
@@ -473,6 +521,7 @@ class API:
                 e_str = (str(h) + "h " if h else "") + str(m).zfill(2) + "m " + str(s).zfill(2) + "s"
                 self._emit("upload_progress", {
                     "filename": fname,
+                    "pct": pct,
                     "elapsed": e_str + " — " + str(pct) + "% — " + str(round(speed, 1)) + " MB/s"
                 })
 
@@ -568,7 +617,13 @@ class API:
             t.path       = final_dir
 
             torrent_path = os.path.join(torrent_dir, base + "_" + tk_name + ".torrent")
-            t.generate()
+
+            def _torrent_cb(torrent, path, hashed, total, _tk=tk_name):
+                pct = int(hashed * 100 / total) if total else 0
+                self._emit("torrent_progress", {"tracker": _tk, "pct": pct})
+                return True
+
+            t.generate(callback=_torrent_cb, interval=0.3)
             t.write(torrent_path, overwrite=True)
             self._log("  .torrent cree : " + os.path.basename(torrent_path), "success")
 
@@ -609,24 +664,23 @@ class API:
 
         for f in files:
             filename = os.path.basename(f)
+            filesize = os.path.getsize(f)
             start    = time.time()
-            stop_flag = [False]
 
-            def progress_timer(fn, st, sf):
-                while not sf[0]:
-                    elapsed = time.time() - st
-                    h, r = divmod(int(elapsed), 3600)
-                    m, s = divmod(r, 60)
-                    e_str = (str(h) + "h " if h else "") + str(m).zfill(2) + "m " + str(s).zfill(2) + "s"
-                    self._emit("upload_progress", {"filename": fn, "elapsed": e_str})
-                    time.sleep(2)
+            def _bzhv_progress(uploaded, total, fn=filename, fs=filesize, st=start):
+                pct     = int(uploaded * 100 / total) if total else 0
+                elapsed = time.time() - st
+                speed   = uploaded / elapsed / 1048576 if elapsed > 0 else 0
+                h, r    = divmod(int(elapsed), 3600)
+                m, s    = divmod(r, 60)
+                e_str   = (str(h) + "h " if h else "") + str(m).zfill(2) + "m " + str(s).zfill(2) + "s"
+                self._emit("upload_progress", {
+                    "filename": fn, "pct": pct,
+                    "elapsed": f"{e_str} — {pct}% — {round(speed, 1)} MB/s"
+                })
 
-            t = threading.Thread(target=progress_timer, args=(filename, start, stop_flag), daemon=True)
-            t.start()
+            mod.upload_big_file(f, info["id"], account_id, progress_fn=_bzhv_progress)
 
-            mod.upload_big_file(f, info["id"], account_id)
-
-            stop_flag[0] = True
             elapsed = time.time() - start
             h, r = divmod(int(elapsed), 3600)
             m, s = divmod(r, 60)

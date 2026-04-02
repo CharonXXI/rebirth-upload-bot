@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.0.9-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.1.0-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -240,6 +240,13 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.1.0
+- **Barre de progression réelle** : Gofile, BuzzHeavier et seedbox FTP affichent %, vitesse et temps écoulé en temps réel
+- **Mode NFO Batch** : traitement de plusieurs fichiers en file d'attente avec confirmation TMDB pour chacun
+- **Historique — Recherche** : filtrage temps réel par titre, fichier, tracker, plateforme
+- **Historique — Statistiques** : compteurs releases, top tracker, top plateforme, trackers uniques
+- **Torrent** : progression de génération affichée dans la barre (callback torf)
+
 ### v2.0.9
 - Mode **jour/nuit** : bouton ☀/🌙 dans la sidebar, thème clair complet
 - Persistance du thème via `theme.txt` (rechargé automatiquement au démarrage)
@@ -290,7 +297,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.0.9** — macOS & Windows
+**REBiRTH Upload Bot v2.1.0** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
