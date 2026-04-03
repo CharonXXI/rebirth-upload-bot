@@ -236,6 +236,25 @@ html.light body::before {
 .batch-file-rm:hover { color:var(--red); }
 .batch-progress-bar { height:2px; background:var(--border2); border-radius:1px; overflow:hidden; margin-top:4px; }
 .batch-progress-fill { height:100%; background:var(--orange); width:0%; transition:width .3s; }
+/* Stats page */
+#page-stats { overflow-y:auto; }
+.stats-wrap { padding:24px; display:flex; flex-direction:column; gap:24px; }
+.stats-section-title { font-family:var(--mono); font-size:10px; color:var(--orange); letter-spacing:3px; text-transform:uppercase; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.stats-section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+.stats-kpi-row { display:flex; gap:12px; flex-wrap:wrap; }
+.stats-kpi { background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:14px 20px; min-width:110px; flex:1; }
+.stats-kpi-val { font-family:var(--mono); font-size:28px; font-weight:700; color:var(--orange); line-height:1; }
+.stats-kpi-lbl { font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; margin-top:5px; }
+.stats-tracker-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+.stats-tracker-name { font-family:var(--mono); font-size:12px; color:var(--text-bright); width:64px; flex-shrink:0; }
+.stats-tracker-bar-wrap { flex:1; background:var(--bg3); border-radius:3px; overflow:hidden; height:8px; }
+.stats-tracker-bar { height:8px; background:linear-gradient(90deg,var(--orange),var(--orange2)); border-radius:3px; transition:width .4s; }
+.stats-tracker-count { font-family:var(--mono); font-size:11px; color:var(--text-dim); width:32px; text-align:right; flex-shrink:0; }
+.stats-month-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); }
+.stats-month-label { font-family:var(--mono); font-size:11px; color:var(--text); }
+.stats-month-count { font-family:var(--mono); font-size:11px; color:var(--orange); }
+.stats-plat-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+.stats-plat-name { font-family:var(--mono); font-size:12px; color:var(--text-bright); width:110px; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -255,6 +274,9 @@ html.light body::before {
       </div>
       <div class="nav-item" data-page="history" onclick="showPage('history', this); renderHistory()">
         <span class="nav-icon">🕘</span> Historique
+      </div>
+      <div class="nav-item" data-page="stats" onclick="showPage('stats', this); renderStatsPage()">
+        <span class="nav-icon">📊</span> Stats
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
@@ -406,6 +428,12 @@ html.light body::before {
         </div>
         <div id="history-stats" style="padding:0 24px 16px;display:flex;gap:12px;flex-wrap:wrap;"></div>
         <div id="history-list" style="margin-top:0"></div>
+      </div>
+
+      <div id="page-stats" class="page">
+        <div class="stats-wrap" id="stats-wrap">
+          <div class="history-empty">AUCUNE DONNÉE</div>
+        </div>
       </div>
 
       <div id="page-config" class="page">
@@ -849,6 +877,108 @@ async function clearHistory() {
   await window.pywebview.api.clear_history();
   _historyAll = [];
   renderHistory();
+}
+
+var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TORR9', 'LACALE'];
+var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TORR9:'Torr9', LACALE:'LaCale' };
+
+async function renderStatsPage() {
+  var entries = await window.pywebview.api.load_history() || [];
+  var wrap = document.getElementById('stats-wrap');
+  if (!entries.length) {
+    wrap.innerHTML = '<div class="history-empty">AUCUNE DONNÉE</div>';
+    return;
+  }
+
+  // KPIs
+  var now      = new Date();
+  var thisMonth = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0');
+  var thisMonthCount = entries.filter(function(e) {
+    return e.date && e.date.split(' ')[0].split('/').reverse().join('/').slice(0,7) === thisMonth;
+  }).length;
+
+  // Trackers — détection parmi les 5 connus uniquement
+  var tkCounts = { ABN:0, TOS:0, C411:0, TORR9:0, LACALE:0 };
+  entries.forEach(function(e) {
+    if (!e.trackers) return;
+    var up = e.trackers.toUpperCase();
+    KNOWN_TRACKERS.forEach(function(tk) {
+      if (up.indexOf(tk) !== -1) tkCounts[tk]++;
+    });
+  });
+  var tkMax = Math.max.apply(null, Object.values(tkCounts)) || 1;
+
+  // Plateformes
+  var platCounts = {};
+  entries.forEach(function(e) {
+    var p = e.platform || '—';
+    platCounts[p] = (platCounts[p]||0) + 1;
+  });
+  var platMax = Math.max.apply(null, Object.values(platCounts)) || 1;
+
+  // Mois (6 derniers avec releases)
+  var monthMap = {};
+  entries.forEach(function(e) {
+    if (!e.date) return;
+    var parts = e.date.split(' ')[0].split('/'); // dd/MM/yyyy
+    if (parts.length < 3) return;
+    var key = parts[2] + '/' + parts[1];
+    monthMap[key] = (monthMap[key]||0) + 1;
+  });
+  var monthKeys = Object.keys(monthMap).sort().reverse().slice(0,6);
+
+  var months_fr = ['','Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
+
+  wrap.innerHTML =
+    // ── KPIs ────────────────────────────────────────────────────────
+    '<div>' +
+      '<div class="stats-section-title">Vue d\'ensemble</div>' +
+      '<div class="stats-kpi-row">' +
+        '<div class="stats-kpi"><div class="stats-kpi-val">' + entries.length + '</div><div class="stats-kpi-lbl">Total releases</div></div>' +
+        '<div class="stats-kpi"><div class="stats-kpi-val">' + thisMonthCount + '</div><div class="stats-kpi-lbl">Ce mois</div></div>' +
+        '<div class="stats-kpi"><div class="stats-kpi-val">' + monthKeys.length + '</div><div class="stats-kpi-lbl">Mois actifs</div></div>' +
+      '</div>' +
+    '</div>' +
+
+    // ── Trackers ─────────────────────────────────────────────────────
+    '<div>' +
+      '<div class="stats-section-title">Répartition trackers</div>' +
+      KNOWN_TRACKERS.map(function(tk) {
+        var n   = tkCounts[tk];
+        var pct = Math.round(n * 100 / tkMax);
+        return '<div class="stats-tracker-row">' +
+          '<span class="stats-tracker-name">' + TRACKER_LABELS[tk] + '</span>' +
+          '<div class="stats-tracker-bar-wrap"><div class="stats-tracker-bar" style="width:' + pct + '%"></div></div>' +
+          '<span class="stats-tracker-count">' + n + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    // ── Plateformes ───────────────────────────────────────────────────
+    '<div>' +
+      '<div class="stats-section-title">Plateformes d\'upload</div>' +
+      Object.entries(platCounts).sort(function(a,b){return b[1]-a[1];}).map(function(kv) {
+        var pct = Math.round(kv[1] * 100 / platMax);
+        return '<div class="stats-plat-row">' +
+          '<span class="stats-plat-name">' + kv[0] + '</span>' +
+          '<div class="stats-tracker-bar-wrap"><div class="stats-tracker-bar" style="width:' + pct + '%"></div></div>' +
+          '<span class="stats-tracker-count">' + kv[1] + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    // ── Par mois ─────────────────────────────────────────────────────
+    '<div>' +
+      '<div class="stats-section-title">Releases par mois</div>' +
+      (monthKeys.length ? monthKeys.map(function(k) {
+        var parts = k.split('/');
+        var label = months_fr[parseInt(parts[1],10)] + ' ' + parts[0];
+        return '<div class="stats-month-row">' +
+          '<span class="stats-month-label">' + label + '</span>' +
+          '<span class="stats-month-count">' + monthMap[k] + ' release' + (monthMap[k]>1?'s':'') + '</span>' +
+        '</div>';
+      }).join('') : '<div class="history-empty" style="padding:0">Pas encore de données</div>') +
+    '</div>';
 }
 
 function toggleTheme() {
