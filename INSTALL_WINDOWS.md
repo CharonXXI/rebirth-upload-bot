@@ -34,7 +34,7 @@ venv\Scripts\activate
 ### 3. Installer les dépendances
 
 ```cmd
-pip install pywebview python-dotenv torf requests requests_toolbelt tqdm rich pymediainfo parse-torrent-name
+pip install pywebview python-dotenv torf requests requests_toolbelt tqdm rich pymediainfo
 pip install -r NFO_CUSTOM\requirements.txt
 ```
 

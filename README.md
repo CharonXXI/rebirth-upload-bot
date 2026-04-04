@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.1.1-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.1.2-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -65,7 +65,7 @@ cd rebirth-upload-bot
 python3 -m venv venv
 source venv/bin/activate
 
-pip install pywebview python-dotenv parse-torrent-name torf pymediainfo
+pip install pywebview python-dotenv torf pymediainfo
 pip install -r NFO_CUSTOM/requirements.txt
 ```
 
@@ -160,10 +160,11 @@ venv\Scripts\activate && python app.py
 Selectionner le .mkv
         │
         ▼
-Remplir Source / Note / Trackers / Autre info
+Remplir Source / Note / Autre info
+Cocher les trackers : ABN / TOS / C411 / Torr9 / LaCale
         │
         ▼
-Choisir type NFO : UTF-8 → `(UTF8).nom.nfo` (LaCale, C411, Torr9) ou CP437 → `(CP437).nom.nfo` (TOS, ABN)
+Choisir type NFO : UTF-8 → `(UTF8).nom.nfo` ou CP437 → `(CP437).nom.nfo`
         │
         ▼
 Choisir plateforme : Gofile / BuzzHeavier / Ignorer
@@ -195,7 +196,7 @@ Choisir plateforme : Gofile / BuzzHeavier / Ignorer
 
 ### ☁️ BuzzHeavier
 - Recommandé pour les fichiers > 10 GB
-- Temps écoulé affiché en temps réel
+- Progression réelle : %, vitesse MB/s et temps écoulé en temps réel
 
 ### 🌱 Seedbox FTP
 - Upload automatique du dossier FINAL via FTP TLS
@@ -239,6 +240,12 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.1.2
+- Champ **Trackers** remplacé par cases à cocher (ABN / TOS / C411 / Torr9 / LaCale), toutes cochées par défaut
+- Cases trackers liées à la création `.torrent` — seuls les trackers cochés **et** configurés créent un torrent
+- Mode **NFO Seulement** simplifié — utilise le fichier déjà sélectionné, génère les NFO sans upload ni seedbox
+- Fix : `parse-torrent-name` retiré des dépendances (module inexistant)
 
 ### v2.1.1
 - Fix : mode jour — texte sombre (`#1a1a1a` / `#4a4a4a`) lisible sur fond clair
@@ -303,7 +310,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.1.1** — macOS & Windows
+**REBiRTH Upload Bot v2.1.2** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
