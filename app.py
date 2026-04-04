@@ -187,8 +187,8 @@ class API:
 
             file_dir = os.path.dirname(fp)
             base     = os.path.basename(os.path.splitext(fp)[0])
-            out_utf8 = os.path.join(file_dir, f"{base}.(UTF8).nfo")
-            out_dos  = os.path.join(file_dir, f"{base}.(CP437).nfo")
+            out_utf8 = os.path.join(file_dir, f"(UTF8).{base}.nfo")
+            out_dos  = os.path.join(file_dir, f"(CP437).{base}.nfo")
 
             # ── 1. TMDB EN PREMIER ────────────────────────────────────────────
             self._log("Recherche TMDB…")
