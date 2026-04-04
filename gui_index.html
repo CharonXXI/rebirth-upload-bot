@@ -349,12 +349,7 @@ html.light body::before {
           </div>
           <div class="skip-row" style="margin-top:6px;">
             <input type="checkbox" id="batch-nfo-toggle" class="skip-check" onchange="toggleBatchMode()"/>
-            <label for="batch-nfo-toggle" class="skip-label">MODE NFO BATCH</label>
-          </div>
-          <div id="batch-zone" style="display:none;margin-top:12px;">
-            <div class="section-label">Fichiers en file d'attente</div>
-            <div id="batch-list" style="margin-bottom:10px;"></div>
-            <button onclick="addBatchFile()" style="width:100%;padding:9px;background:transparent;border:1px dashed var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer;">+ AJOUTER UN FICHIER</button>
+            <label for="batch-nfo-toggle" class="skip-label">NFO SEULEMENT</label>
           </div>
           <button id="btn-launch" onclick="launch()">▶ &nbsp;LANCER</button>
           <div class="progress-wrap" id="progress-wrap">
@@ -588,7 +583,6 @@ function _commonParams() {
 }
 
 async function launch() {
-  if (batchMode) { await launchBatch(); return; }
   if (!currentFile) { addLog('Sélectionne un fichier .mkv d\'abord !', 'error'); return; }
   if (running) return;
   running = true;
@@ -599,7 +593,7 @@ async function launch() {
   document.getElementById('log-panel').innerHTML = '';
   document.getElementById('progress-wrap').classList.add('show');
   setProgress(5, 'INITIALISATION…');
-  await window.pywebview.api.run_workflow({ file_path: currentFile, ..._commonParams() });
+  await window.pywebview.api.run_workflow({ file_path: currentFile, nfo_only: batchMode, ..._commonParams() });
 }
 
 async function launchBatch() {
@@ -616,10 +610,7 @@ async function launchBatch() {
 
 function toggleBatchMode() {
   batchMode = document.getElementById('batch-nfo-toggle').checked;
-  document.getElementById('batch-zone').style.display = batchMode ? 'block' : 'none';
-  document.getElementById('file-drop').style.opacity  = batchMode ? '0.4' : '1';
-  document.getElementById('file-drop').style.pointerEvents = batchMode ? 'none' : '';
-  document.getElementById('btn-launch').textContent = batchMode ? '▶  LANCER BATCH NFO' : '▶ \u00a0LANCER';
+  document.getElementById('btn-launch').textContent = batchMode ? '▶  GÉNÉRER NFO' : '▶ \u00a0LANCER';
 }
 
 async function addBatchFile() {
