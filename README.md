@@ -65,7 +65,7 @@ cd rebirth-upload-bot
 python3 -m venv venv
 source venv/bin/activate
 
-pip install pywebview python-dotenv torf pymediainfo
+pip install pywebview python-dotenv torf pymediainfo parse-torrent-name
 pip install -r NFO_CUSTOM/requirements.txt
 ```
 
@@ -245,7 +245,7 @@ rebirth-upload-bot/
 - Champ **Trackers** remplacé par cases à cocher (ABN / TOS / C411 / Torr9 / LaCale), toutes cochées par défaut
 - Cases trackers liées à la création `.torrent` — seuls les trackers cochés **et** configurés créent un torrent
 - Mode **NFO Seulement** simplifié — utilise le fichier déjà sélectionné, génère les NFO sans upload ni seedbox
-- Fix : `parse-torrent-name` retiré des dépendances (module inexistant)
+- Fix : `parse-torrent-name` remis dans les dépendances (requis par NFO_CUSTOM pour la détection saison/épisode)
 
 ### v2.1.1
 - Fix : mode jour — texte sombre (`#1a1a1a` / `#4a4a4a`) lisible sur fond clair
