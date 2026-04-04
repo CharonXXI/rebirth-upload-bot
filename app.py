@@ -372,7 +372,7 @@ class API:
                 self._ftp_upload([final_mkv, final_nfo], remote_path)
                 self._log("Seedbox OK : " + remote_path, "success")
 
-                # Creer les .torrent et envoyer a ruTorrent
+                # Creer les .torrent — filtrés selon les cases cochées dans le formulaire
                 announces = {
                     "ABN":    os.getenv("TRACKER_ABN", ""),
                     "TOS":    os.getenv("TRACKER_TOS", ""),
@@ -380,23 +380,19 @@ class API:
                     "TORR9":  os.getenv("TRACKER_TORR9", ""),
                     "LACALE": os.getenv("TRACKER_LACALE", ""),
                 }
-                active = {k: v for k, v in announces.items() if v}
+                # Normaliser les noms cochés (Torr9→TORR9, LaCale→LACALE, etc.)
+                checked = [t.strip().upper() for t in trackers.split() if t.strip()]
+                active = {
+                    k: v for k, v in announces.items()
+                    if v and k.upper() in checked
+                }
                 if active:
-                    # Demander à l'utilisateur quels trackers utiliser
-                    self._torrent_confirmed = None
-                    self._torrent_event.clear()
-                    self._emit("torrent_select", {"trackers": list(active.keys())})
-                    self._torrent_event.wait(timeout=120)
-
-                    # Filtrer selon la sélection
-                    selected = self._torrent_confirmed if self._torrent_confirmed else list(active.keys())
-                    active_selected = {k: v for k, v in active.items() if k in selected}
-
-                    if active_selected:
-                        self._log("Creation des .torrent...")
-                        self._create_and_send_torrent(final_dir, base, active_selected, remote_path)
-                    else:
-                        self._log("Aucun tracker sélectionné — torrents ignorés.", "warn")
+                    self._log("Creation des .torrent...")
+                    self._create_and_send_torrent(final_dir, base, active, remote_path)
+                elif checked:
+                    self._log("Aucun announce configuré pour les trackers cochés.", "warn")
+                else:
+                    self._log("Aucun tracker coché — torrents ignorés.", "warn")
             elif not nfo_only:
                 self._log("Seedbox non configuree - upload ignore.", "warn")
 
