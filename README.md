@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.1.0-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.1.1-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -240,6 +240,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.1.1
+- Fix : mode jour — texte sombre (`#1a1a1a` / `#4a4a4a`) lisible sur fond clair
+- Fix : NFO preview — couleur texte suit le thème (`var(--text)` au lieu de `#d0d0d0` fixe)
+- Fix : renommage NFO — `(UTF8).*.nfo` et `(CP437).*.nfo` en préfixe
+- Feat : page **Stats** — KPIs, répartition 5 trackers, plateformes, releases par mois
+
 ### v2.1.0
 - **Barre de progression réelle** : Gofile, BuzzHeavier et seedbox FTP affichent %, vitesse et temps écoulé en temps réel
 - **Mode NFO Batch** : traitement de plusieurs fichiers en file d'attente avec confirmation TMDB pour chacun
@@ -297,7 +303,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.1.0** — macOS & Windows
+**REBiRTH Upload Bot v2.1.1** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
