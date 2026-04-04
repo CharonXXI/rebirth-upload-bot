@@ -163,7 +163,7 @@ Selectionner le .mkv
 Remplir Source / Note / Trackers / Autre info
         │
         ▼
-Choisir type NFO : UTF-8 (LaCale, C411, Torr9) ou CP437 (TOS, ABN)
+Choisir type NFO : UTF-8 → `(UTF8).nom.nfo` (LaCale, C411, Torr9) ou CP437 → `(CP437).nom.nfo` (TOS, ABN)
         │
         ▼
 Choisir plateforme : Gofile / BuzzHeavier / Ignorer
@@ -185,8 +185,8 @@ Choisir plateforme : Gofile / BuzzHeavier / Ignorer
 ## ✨ Fonctionnalités
 
 ### 📄 Type NFO
-- **UTF-8** → `(LaCale)-nom.nfo` pour LaCale, C411, Torr9
-- **CP437** → `nom.nfo` pour TOS, ABN
+- **UTF-8** → `(UTF8).nom.nfo` pour LaCale, C411, Torr9
+- **CP437** → `(CP437).nom.nfo` pour TOS, ABN
 
 ### ☁️ Gofile
 - Upload anonyme pour compatibilité maximale
