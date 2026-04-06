@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.1.2-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.1.3-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -48,7 +48,7 @@
 | 🧲 **Torrent** | Création par tracker + envoi ruTorrent via XML-RPC |
 | 🎛️ **Trackers** | Page dédiée pour gérer les announces URL |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
-| 🌙 **Interface** | PyWebView moderne avec mode jour/nuit |
+| 🌙 **Interface** | PyWebView moderne avec mode jour/nuit, animations, toasts |
 
 ---
 
@@ -241,6 +241,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.1.3
+- Feat : **logo animé** — le `●` dans la sidebar pulse en continu
+- Feat : **badges trackers colorés** dans l'historique (ABN=bleu, TOS=vert, C411=violet, Torr9=orange, LaCale=rose)
+- Feat : **transitions de page** — fondu + slide-up entre les pages (0.18s)
+- Feat : **toast notifications** — notifications bottom-right à chaque étape (NFO, TMDB, Upload, Discord, Seedbox, Torrent, fin/erreur)
+
 ### v2.1.2
 - Champ **Trackers** remplacé par cases à cocher (ABN / TOS / C411 / Torr9 / LaCale), toutes cochées par défaut
 - Cases trackers liées à la création `.torrent` — seuls les trackers cochés **et** configurés créent un torrent
@@ -310,7 +316,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.1.2** — macOS & Windows
+**REBiRTH Upload Bot v2.1.3** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
