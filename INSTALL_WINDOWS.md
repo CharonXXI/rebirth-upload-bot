@@ -33,11 +33,15 @@ venv\Scripts\activate
 
 ### 3. Installer les dépendances
 
-```cmd
+> ⚠️ **PowerShell requis** pour cette étape (pas CMD). PowerShell est installé par défaut sur Windows 10/11.
+
+```powershell
 $env:PYTHONUTF8="1"
 pip install pywebview python-dotenv torf requests requests_toolbelt tqdm rich pymediainfo parse-torrent-name
 pip install -r NFO_CUSTOM\requirements.txt
 ```
+
+> 💡 `$env:PYTHONUTF8="1"` est nécessaire pour que `parse-torrent-name` compile correctement sur Python 3.12. Sans cette ligne, le build du package échoue avec une erreur d'encodage.
 
 ### 4. Configurer le fichier `.env`
 
@@ -124,8 +128,11 @@ Pour partager le bot, zipper l'intégralité de `dist\REBiRTH\` (sans le `.env` 
 | Problème | Solution |
 |---|---|
 | `No module named 'webview'` | `pip install pywebview` |
+| `No module named 'PTN'` | PowerShell : `$env:PYTHONUTF8="1"` puis `pip install parse-torrent-name` |
+| `Failed to build parse-torrent-name` | Même solution : utiliser PowerShell + `$env:PYTHONUTF8="1"` avant le pip |
 | Fenêtre blanche au lancement | Installer/réparer .NET Framework |
 | `No module named 'torf'` | `pip install torf` |
+| `Fatal error in launcher` | Le venv est corrompu — le recréer : `python -m venv venv` |
 | Erreur NFO vide | Vérifier que le fichier `.mkv` est accessible |
 | FTP timeout | Vérifier host, port et identifiants seedbox |
 | ruTorrent : erreur XML-RPC | Vérifier URL et credentials ruTorrent |
