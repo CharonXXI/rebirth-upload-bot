@@ -64,6 +64,22 @@ html.light body::before {
 .sidebar-footer { padding:16px 20px; border-top:1px solid var(--border); font-family:var(--mono); font-size:9px; color:var(--text-dim); letter-spacing:1px; }
 .status-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--green); margin-right:6px; animation:pulse 2s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes pageFadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.logo-pulse { display:inline-block; animation:pulse 2s infinite; }
+/* Badges trackers colorés */
+.history-badge.tk-abn    { color:#4da6ff; border-color:rgba(77,166,255,0.3);   background:rgba(77,166,255,0.07); }
+.history-badge.tk-tos    { color:#39ff14; border-color:rgba(57,255,20,0.3);    background:rgba(57,255,20,0.07); }
+.history-badge.tk-c411   { color:#c77dff; border-color:rgba(199,125,255,0.3);  background:rgba(199,125,255,0.07); }
+.history-badge.tk-torr9  { color:#ff9f43; border-color:rgba(255,159,67,0.3);   background:rgba(255,159,67,0.07); }
+.history-badge.tk-lacale { color:#ff6b9d; border-color:rgba(255,107,157,0.3);  background:rgba(255,107,157,0.07); }
+/* Toast notifications */
+#toast-container { position:fixed; bottom:24px; right:24px; z-index:9998; display:flex; flex-direction:column-reverse; gap:8px; pointer-events:none; }
+.toast { font-family:var(--mono); font-size:11px; padding:10px 16px; border-radius:4px; border:1px solid; letter-spacing:1px; opacity:0; transform:translateX(24px); transition:opacity .25s ease, transform .25s ease; max-width:340px; line-height:1.4; }
+.toast.show { opacity:1; transform:translateX(0); }
+.toast.t-success { background:rgba(57,255,20,0.08);  border-color:rgba(57,255,20,0.3);  color:var(--green); }
+.toast.t-error   { background:rgba(255,51,51,0.08);  border-color:rgba(255,51,51,0.3);  color:var(--red); }
+.toast.t-info    { background:rgba(255,107,0,0.08);  border-color:rgba(255,107,0,0.3);  color:var(--orange); }
+.toast.t-warn    { background:rgba(255,214,0,0.08);  border-color:rgba(255,214,0,0.3);  color:var(--yellow); }
 #main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
 #topbar { height:48px; min-height:48px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; gap:8px; }
 .topbar-title { font-family:var(--mono); font-size:11px; color:var(--orange); letter-spacing:2px; text-transform:uppercase; }
@@ -71,9 +87,9 @@ html.light body::before {
 .topbar-path  { font-family:var(--mono); font-size:11px; color:var(--text-dim); }
 #content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
 .page { display:none; flex:1; overflow:hidden; flex-direction:column; }
-.page.active { display:flex; }
+.page.active { display:flex; animation:pageFadeIn 0.18s ease forwards; }
 #page-upload { display:none; flex-direction:row; overflow:hidden; height:100%; }
-#page-upload.active { display:flex; }
+#page-upload.active { display:flex; animation:pageFadeIn 0.18s ease forwards; }
 .upload-left { width:420px; min-width:420px; flex-shrink:0; border-right:1px solid var(--border); display:block; overflow-y:scroll; padding:24px; scroll-behavior:smooth; }
 .upload-right { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
 .section-label { font-family:var(--mono); font-size:10px; color:var(--orange); letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
@@ -266,7 +282,7 @@ html.light body::before {
 <div id="app">
   <div id="sidebar">
     <div class="logo-area">
-      <div class="logo-tag">● ACTIVE</div>
+      <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
       <div class="logo-sub">UPLOAD BOT v2.1.2</div>
     </div>
@@ -662,6 +678,19 @@ function setProgress(pct, label) {
   document.getElementById('progress-label').textContent = label;
 }
 
+function showToast(msg, type, duration) {
+  var container = document.getElementById('toast-container');
+  var t = document.createElement('div');
+  t.className = 'toast t-' + (type || 'info');
+  t.textContent = msg;
+  container.appendChild(t);
+  requestAnimationFrame(function() { requestAnimationFrame(function() { t.classList.add('show'); }); });
+  setTimeout(function() {
+    t.classList.remove('show');
+    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+  }, duration || 3500);
+}
+
 function addLog(msg, level) {
   const panel = document.getElementById('log-panel');
   const now   = new Date().toTimeString().slice(0,8);
@@ -670,15 +699,17 @@ function addLog(msg, level) {
   line.innerHTML = '<span class="log-time">' + now + '</span><span class="log-msg ' + (level||'') + '">' + msg + '</span>';
   panel.appendChild(line);
   panel.scrollTop = panel.scrollHeight;
-  if (msg.indexOf('mediainfo') !== -1)      setProgress(15, 'NFO MEDIAINFO…');
-  if (msg.indexOf('custom') !== -1)         setProgress(30, 'NFO CUSTOM…');
-  if (msg.indexOf('UTF-8') !== -1)          setProgress(45, 'ÉCRITURE NFO…');
-  if (msg.indexOf('TMDB') !== -1)           setProgress(55, 'RECHERCHE TMDB…');
-  if (msg.indexOf('Upload') !== -1)         setProgress(65, 'UPLOAD EN COURS…');
-  if (msg.indexOf('Discord') !== -1)        setProgress(90, 'ENVOI DISCORD…');
-  if (msg.indexOf('Discord envoyé') !== -1) setProgress(75, 'DISCORD OK…');
-  if (msg.indexOf('Seedbox OK') !== -1)      setProgress(88, 'SEEDBOX OK…');
-  if (msg.indexOf('Torrent envoye') !== -1)  setProgress(95, 'TORRENT OK…');
+  if (msg.indexOf('mediainfo') !== -1)      { setProgress(15, 'NFO MEDIAINFO…');  showToast('⚙ Analyse MediaInfo…', 'info'); }
+  if (msg.indexOf('custom') !== -1)         { setProgress(30, 'NFO CUSTOM…'); }
+  if (msg.indexOf('UTF-8') !== -1)          { setProgress(45, 'ÉCRITURE NFO…');   showToast('📄 NFO généré', 'success'); }
+  if (msg.indexOf('TMDB') !== -1)           { setProgress(55, 'RECHERCHE TMDB…'); showToast('🔍 Recherche TMDB…', 'info'); }
+  if (msg.indexOf('Upload') !== -1)         { setProgress(65, 'UPLOAD EN COURS…');showToast('⬆ Upload en cours…', 'info'); }
+  if (msg.indexOf('Discord envoyé') !== -1) { setProgress(75, 'DISCORD OK…');     showToast('✓ Discord envoyé', 'success'); }
+  if (msg.indexOf('Discord') !== -1 && msg.indexOf('envoyé') === -1) setProgress(90, 'ENVOI DISCORD…');
+  if (msg.indexOf('Seedbox OK') !== -1)     { setProgress(88, 'SEEDBOX OK…');     showToast('✓ Seedbox OK', 'success'); }
+  if (msg.indexOf('Torrent envoye') !== -1) { setProgress(95, 'TORRENT OK…');     showToast('✓ Torrent ajouté', 'success'); }
+  if (level === 'error')                      showToast('✗ ' + msg, 'error', 6000);
+  if (level === 'warn')                       showToast('⚠ ' + msg, 'warn', 5000);
 }
 
 function showNFO(content) {
@@ -709,6 +740,7 @@ function onDone(d) {
   banner.textContent = d.nfo_only
     ? '✓ NFO GÉNÉRÉ'
     : ('✓ UPLOAD TERMINÉ → ' + d.url);
+  showToast(d.nfo_only ? '✓ NFO généré avec succès !' : '✓ Upload terminé !', 'success', 5000);
 }
 
 function onError(d) {
@@ -716,6 +748,7 @@ function onError(d) {
   document.getElementById('btn-launch').disabled = false;
   document.getElementById('progress-label').textContent = 'ERREUR';
   addLog(d.msg, 'error');
+  showToast('✗ Erreur : ' + d.msg, 'error', 7000);
 }
 
 var CONFIG_FIELDS = [
@@ -824,7 +857,7 @@ function _historyCardHTML(e) {
       '<div class="history-meta">' +
         (e.year     ? '<span class="history-badge">' + e.year + '</span>' : '') +
         (e.source   ? '<span class="history-badge orange">' + e.source + '</span>' : '') +
-        (e.trackers ? '<span class="history-badge">' + e.trackers + '</span>' : '') +
+        (e.trackers ? e.trackers.split(/[\s,]+/).filter(Boolean).map(function(t){ var c='tk-'+t.toLowerCase().replace(/[^a-z0-9]/g,''); return '<span class="history-badge '+c+'">'+t+'</span>'; }).join('') : '') +
         (e.platform && e.platform !== '—' ? '<span class="history-badge">' + e.platform + '</span>' : '') +
         '<span class="history-badge">' + e.date + '</span>' +
       '</div>' +
@@ -1013,5 +1046,6 @@ window.addEventListener('pywebviewready', function() {
   } catch(e){}
 });
 </script>
+<div id="toast-container"></div>
 </body>
 </html>
