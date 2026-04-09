@@ -197,7 +197,9 @@ def upload_big_file(file_path: str, directory_id: str, account_id: str, progress
         dynamic_ncols=True
     ) as pbar:
 
-        with open(file_path, 'rb') as f:
+        import time as _time
+    _last_emit = [0.0]
+    with open(file_path, 'rb') as f:
             class ReadProgress:
                 def __init__(self, file_obj, progress_bar):
                     self.file_obj = file_obj
@@ -209,7 +211,10 @@ def upload_big_file(file_path: str, directory_id: str, account_id: str, progress
                         uploaded[0] += len(data)
                         self.progress_bar.update(len(data))
                         if progress_fn:
-                            progress_fn(uploaded[0], file_size)
+                            now = _time.time()
+                            if now - _last_emit[0] >= 1.0:
+                                _last_emit[0] = now
+                                progress_fn(uploaded[0], file_size)
                     return data
 
             response = requests.put(

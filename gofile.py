@@ -45,11 +45,15 @@ def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str
                     unit_scale=True,
                     desc=f"Upload {f_obj.name}",
                 ) as progress:
+                    _last_emit = [0.0]
                     def progress_callback(m):
                         progress.n = m.bytes_read
                         progress.refresh()
                         if progress_fn:
-                            progress_fn(m.bytes_read, file_size)
+                            now = time.time()
+                            if now - _last_emit[0] >= 1.0:
+                                _last_emit[0] = now
+                                progress_fn(m.bytes_read, file_size)
 
                     content_type = mimetypes.guess_type(f_obj)[0] or "application/octet-stream"
 

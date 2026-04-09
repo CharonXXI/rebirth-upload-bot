@@ -499,6 +499,7 @@ class API:
             filesize = os.path.getsize(f)
             start    = time.time()
             uploaded = [0]
+            last_emit = [0.0]
 
             if filesize > 1073741824:
                 size_str = str(round(filesize / 1073741824, 2)) + " GiB"
@@ -509,7 +510,11 @@ class API:
 
             def progress(data):
                 uploaded[0] += len(data)
-                elapsed = time.time() - start
+                now = time.time()
+                if now - last_emit[0] < 1.0:
+                    return
+                last_emit[0] = now
+                elapsed = now - start
                 speed = uploaded[0] / elapsed / 1048576 if elapsed > 0 else 0
                 pct = int(uploaded[0] * 100 / filesize) if filesize > 0 else 0
                 h, r = divmod(int(elapsed), 3600)
@@ -522,7 +527,7 @@ class API:
                 })
 
             with open(f, "rb") as fh:
-                ftp.storbinary("STOR " + fname, fh, 8192, progress)
+                ftp.storbinary("STOR " + fname, fh, 1048576, progress)
 
             elapsed = time.time() - start
             h, r = divmod(int(elapsed), 3600)
