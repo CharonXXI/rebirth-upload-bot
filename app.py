@@ -472,7 +472,7 @@ class API:
         return None
 
     def _ftp_upload(self, files, remote_path):
-        import ftplib, time
+        import ftplib, time, socket
         host     = os.getenv("SFTP_HOST_FTP", "")
         port     = int(os.getenv("SFTP_PORT", "23421"))
         user     = os.getenv("SFTP_USER", "")
@@ -483,6 +483,11 @@ class API:
         ftp.connect(host, port)
         ftp.login(user, password)
         ftp.prot_p()
+        # Augmenter le buffer TCP pour maximiser le débit
+        try:
+            ftp.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8 * 1024 * 1024)
+        except Exception:
+            pass
 
         # Naviguer vers le chemin distant
         parts = remote_path.strip("/").split("/")

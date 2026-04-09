@@ -18,8 +18,8 @@ from tqdm import tqdm
 from rich import print as rprint
 from rich.panel import Panel
 
-# Endpoints dans l'ordre de priorité — failover automatique en cas d'erreur
-UPLOAD_ENDPOINTS = [
+# Endpoints de fallback si l'API /servers est indisponible
+UPLOAD_ENDPOINTS_FALLBACK = [
     "https://upload.gofile.io/uploadfile",
     "https://upload-eu-par.gofile.io/uploadfile",
     "https://upload-na-phx.gofile.io/uploadfile",
@@ -29,13 +29,31 @@ UPLOAD_ENDPOINTS = [
     "https://upload-sa-sao.gofile.io/uploadfile",
 ]
 
+def _get_best_endpoints():
+    """Récupère le serveur optimal via l'API Gofile, puis complète avec le fallback."""
+    try:
+        r = requests.get("https://api.gofile.io/servers", timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            servers = data.get("data", {}).get("servers", [])
+            if servers:
+                best = [f"https://{s['name']}.gofile.io/uploadfile" for s in servers]
+                # Ajouter les fallbacks non déjà présents
+                for fb in UPLOAD_ENDPOINTS_FALLBACK:
+                    if fb not in best:
+                        best.append(fb)
+                return best
+    except Exception:
+        pass
+    return UPLOAD_ENDPOINTS_FALLBACK
+
 
 def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str] = None, progress_fn=None):
     f_obj = Path(file)
     file_size = f_obj.stat().st_size
     token = os.getenv("GOFILE_TOKEN")
 
-    for endpoint in UPLOAD_ENDPOINTS:
+    for endpoint in _get_best_endpoints():
         rprint(f"[cyan]Tentative sur :[/cyan] {endpoint}")
         try:
             with open(f_obj, "rb") as f:
