@@ -129,6 +129,83 @@ class API:
         threading.Thread(target=self._workflow, args=(params,), daemon=True).start()
         return {"ok": True}
 
+    def run_torrent_sb(self, params: dict):
+        threading.Thread(target=self._torrent_sb, args=(params,), daemon=True).start()
+        return {"ok": True}
+
+    def _torrent_sb(self, params):
+        try:
+            filename    = params.get("filename", "").strip()
+            remote_path = params.get("remote_path", "").strip()
+            trackers    = params.get("trackers", "")
+
+            if not filename:
+                raise Exception("Aucun nom de fichier spécifié.")
+
+            base = Path(filename).stem  # nom sans extension
+
+            if not remote_path:
+                remote_base = os.getenv("SFTP_PATH", "/rtorrent/REBiRTH")
+                remote_path = remote_base + "/" + base
+
+            self._log("Mode TORRENT SB — " + base)
+            self._log("Chemin seedbox : " + remote_path)
+
+            announces = {
+                "ABN":    os.getenv("TRACKER_ABN", ""),
+                "TOS":    os.getenv("TRACKER_TOS", ""),
+                "C411":   os.getenv("TRACKER_C411", ""),
+                "TORR9":  os.getenv("TRACKER_TORR9", ""),
+                "LACALE": os.getenv("TRACKER_LACALE", ""),
+            }
+            checked = [t.strip().upper() for t in trackers.split() if t.strip()]
+            active  = {k: v for k, v in announces.items() if v and k.upper() in checked}
+
+            if not active:
+                raise Exception("Aucun tracker configuré pour les cases cochées.")
+
+            rt_url  = os.getenv("RUTORRENT_URL", "")
+            rt_user = os.getenv("RUTORRENT_USER", "")
+            rt_pass = os.getenv("RUTORRENT_PASS", "")
+
+            if not rt_url:
+                raise Exception("ruTorrent URL non configurée dans le .env")
+
+            create_url = rt_url.rstrip("/") + "/plugins/create/action.php"
+
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+            for tk_name, announce in active.items():
+                self._log("Création torrent SB pour " + tk_name + "…")
+                data = {
+                    "name":         base,
+                    "dir":          remote_path.rstrip("/") + "/",
+                    "private":      "on",
+                    "startSeeding": "on",
+                    "tracker[0]":   announce,
+                }
+                r = requests.post(
+                    create_url,
+                    data=data,
+                    auth=(rt_user, rt_pass),
+                    verify=False,
+                    timeout=60,
+                )
+                if r.status_code == 200:
+                    self._log("  ✓ Torrent SB créé — seeding démarré (" + tk_name + ")", "success")
+                else:
+                    raise Exception(
+                        "Plugin create ruTorrent — erreur HTTP " + str(r.status_code) +
+                        " pour " + tk_name +
+                        ". Vérifier que le plugin 'create' est installé sur ruTorrent."
+                    )
+
+            self._emit("done", {"nfo_only": False, "url": "Torrents SB créés !"})
+
+        except Exception as e:
+            self._emit("error", {"msg": str(e)})
+
     def run_batch_nfo(self, data: dict):
         def _run():
             file_paths = data.get("file_paths", [])

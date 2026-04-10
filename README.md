@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.1.3-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.1.4-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -241,6 +241,11 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.1.4
+- Feat : **mode TORRENT SB** — création des torrents directement depuis la seedbox via le plugin `create` de ruTorrent, sans fichier local nécessaire
+- Chemin distant auto-rempli depuis le nom du fichier, modifiable manuellement
+- Fonctionne pour les fichiers déjà présents sur la seedbox (usage partagé)
+
 ### v2.1.3
 - Feat : **logo animé** — le `●` dans la sidebar pulse en continu
 - Feat : **badges trackers colorés** dans l'historique (ABN=bleu, TOS=vert, C411=violet, Torr9=orange, LaCale=rose)
@@ -316,7 +321,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.1.3** — macOS & Windows
+**REBiRTH Upload Bot v2.1.4** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
