@@ -129,6 +129,52 @@ class API:
         threading.Thread(target=self._workflow, args=(params,), daemon=True).start()
         return {"ok": True}
 
+    def list_seedbox_files(self):
+        """Retourne la liste des dossiers présents dans SFTP_PATH via FTP."""
+        import ftplib
+        try:
+            host     = os.getenv("SFTP_HOST_FTP", "")
+            port     = int(os.getenv("SFTP_PORT", "23421"))
+            user     = os.getenv("SFTP_USER", "")
+            password = os.getenv("SFTP_PASS", "")
+            path     = os.getenv("SFTP_PATH", "/rtorrent/REBiRTH")
+
+            if not host:
+                return {"error": "SFTP_HOST_FTP non configuré"}
+
+            ftp = ftplib.FTP_TLS()
+            ftp.connect(host, port, timeout=10)
+            ftp.login(user, password)
+            ftp.prot_p()
+
+            # Naviguer vers le dossier REBiRTH
+            parts = path.strip("/").split("/")
+            for part in parts:
+                ftp.cwd(part)
+
+            # Lister le contenu (dossiers uniquement)
+            entries = []
+            ftp.retrlines("LIST", entries.append)
+            ftp.quit()
+
+            folders = []
+            for entry in entries:
+                parts_e = entry.split()
+                if not parts_e:
+                    continue
+                name = parts_e[-1]
+                # Ignore les entrées . et ..
+                if name in (".", ".."):
+                    continue
+                # Lignes commençant par 'd' = dossier, sinon fichier aussi
+                folders.append(name)
+
+            folders.sort(key=lambda x: x.lower())
+            return {"files": folders, "path": path}
+
+        except Exception as e:
+            return {"error": str(e)}
+
     def run_torrent_sb(self, params: dict):
         threading.Thread(target=self._torrent_sb, args=(params,), daemon=True).start()
         return {"ok": True}

@@ -276,6 +276,9 @@ html.light body::before {
 .stats-month-count { font-family:var(--mono); font-size:11px; color:var(--orange); }
 .stats-plat-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
 .stats-plat-name { font-family:var(--mono); font-size:12px; color:var(--text-bright); width:110px; flex-shrink:0; }
+/* Torrent SB file list */
+.tsb-file-row { display:flex; align-items:center; padding:7px 10px; border-radius:4px; border:1px solid transparent; cursor:pointer; transition:all .12s; }
+.tsb-file-row:hover { background:var(--orange-dim); border-color:rgba(255,107,0,0.2); }
 </style>
 </head>
 <body>
@@ -299,7 +302,7 @@ html.light body::before {
       <div class="nav-item" data-page="stats" onclick="showPage('stats', this); renderStatsPage()">
         <span class="nav-icon">📊</span> Stats
       </div>
-      <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this)">
+      <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this); tsbLoadFiles()">
         <span class="nav-icon">🧲</span> Torrent SB
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
@@ -470,9 +473,20 @@ html.light body::before {
             Le fichier doit déjà être présent sur la seedbox.
           </p>
 
+          <!-- Liste seedbox -->
+          <div class="field-group">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <label class="field-label" style="margin-bottom:0;">FICHIERS SUR LA SEEDBOX</label>
+              <button id="tsb-refresh" onclick="tsbLoadFiles()" style="padding:4px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:10px;cursor:pointer;letter-spacing:1px;transition:all .15s;" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">↺ REFRESH</button>
+            </div>
+            <div id="tsb-filelist" style="max-height:220px;overflow-y:auto;border:1px solid var(--border2);border-radius:4px;background:var(--bg3);padding:6px;">
+              <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:center;padding:16px;">Cliquer sur REFRESH pour charger les fichiers</div>
+            </div>
+          </div>
+
           <!-- Nom du fichier -->
           <div class="field-group">
-            <label class="field-label">NOM DU FICHIER (.MKV)</label>
+            <label class="field-label">NOM DU FICHIER SÉLECTIONNÉ</label>
             <div style="display:flex;gap:8px;">
               <input id="tsb-filename" class="field-input" type="text" placeholder="Film.2025.1080p.BluRay.x264-REBiRTH.mkv" oninput="tsbUpdatePath()"/>
               <button onclick="tsbPickFile()" style="padding:8px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:11px;cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">📁 LOCAL</button>
@@ -729,6 +743,50 @@ function setProgress(pct, label) {
 
 // ── TORRENT SB ───────────────────────────────────────────────────────
 var _tsbRunning = false;
+
+async function tsbLoadFiles() {
+  var btn  = document.getElementById('tsb-refresh');
+  var list = document.getElementById('tsb-filelist');
+  btn.textContent = '⏳ CHARGEMENT…';
+  btn.disabled = true;
+  list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:center;padding:16px;">Connexion FTP…</div>';
+
+  var result = await window.pywebview.api.list_seedbox_files();
+
+  btn.textContent = '↺ REFRESH';
+  btn.disabled = false;
+
+  if (result.error) {
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--red);padding:10px;">✗ ' + result.error + '</div>';
+    return;
+  }
+
+  if (!result.files || result.files.length === 0) {
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:center;padding:16px;">Aucun fichier trouvé dans ' + result.path + '</div>';
+    return;
+  }
+
+  list.innerHTML = result.files.map(function(name) {
+    return '<div class="tsb-file-row" onclick="tsbSelect(\'' + name.replace(/'/g,"\\'") + '\',\'' + result.path.replace(/'/g,"\\'") + '\')">' +
+      '<span style="font-family:var(--mono);font-size:10px;color:var(--orange);margin-right:8px;">📁</span>' +
+      '<span style="font-family:var(--mono);font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + name + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function tsbSelect(name, basePath) {
+  // Retirer l'extension si présente pour le champ filename
+  document.getElementById('tsb-filename').value = name;
+  var stem = name.replace(/\.[^.]+$/, '');
+  document.getElementById('tsb-remote-path').value = basePath.replace(/\/$/, '') + '/' + stem;
+  // Highlight la ligne sélectionnée
+  document.querySelectorAll('.tsb-file-row').forEach(function(r) {
+    r.style.background = 'transparent';
+    r.style.borderColor = 'transparent';
+  });
+  event.currentTarget.style.background = 'var(--orange-dim)';
+  event.currentTarget.style.borderColor = 'rgba(255,107,0,0.4)';
+}
 
 async function tsbPickFile() {
   var path = await window.pywebview.api.pick_file();
