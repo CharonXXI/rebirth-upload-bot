@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.1.6-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.1.7-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -241,6 +241,9 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.1.7
+- Refactor : **création de torrents retirée du workflow Upload** — l'upload s'arrête après l'envoi FTP sur la seedbox, la création des torrents se fait exclusivement via la page Torrent SB
+
 ### v2.1.6
 - Feat : **sauvegarde .torrent en local** dans `TORRENTS/` à côté du bot (plus de FTP pour ça)
 - Feat : **sync trackers Upload → Torrent SB** — les cases cochées dans Upload sont automatiquement reproduites en ouvrant la page Torrent SB
@@ -331,7 +334,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.1.6** — macOS & Windows
+**REBiRTH Upload Bot v2.1.7** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

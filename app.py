@@ -459,27 +459,7 @@ class API:
                 self._log("Upload dossier FINAL sur la seedbox via FTP...")
                 self._ftp_upload([final_mkv, final_nfo], remote_path)
                 self._log("Seedbox OK : " + remote_path, "success")
-
-                # Creer les torrents via ruTorrent create plugin (côté seedbox)
-                announces = {
-                    "ABN":    os.getenv("TRACKER_ABN", ""),
-                    "TOS":    os.getenv("TRACKER_TOS", ""),
-                    "C411":   os.getenv("TRACKER_C411", ""),
-                    "TORR9":  os.getenv("TRACKER_TORR9", ""),
-                    "LACALE": os.getenv("TRACKER_LACALE", ""),
-                }
-                checked = [t.strip().upper() for t in trackers.split() if t.strip()]
-                active = {
-                    k: v for k, v in announces.items()
-                    if v and k.upper() in checked
-                }
-                if active:
-                    self._log("Creation des torrents via ruTorrent (seedbox)...")
-                    self._create_torrent_rutorrent(base, remote_path, active)
-                elif checked:
-                    self._log("Aucun announce configuré pour les trackers cochés.", "warn")
-                else:
-                    self._log("Aucun tracker coché — torrents ignorés.", "warn")
+                self._log("➜ Passe sur Torrent SB pour créer les torrents.", "warn")
             elif not nfo_only:
                 self._log("Seedbox non configuree - upload ignore.", "warn")
 
