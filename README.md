@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.1.4-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.1.5-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -241,6 +241,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.1.5
+- Feat : **torrent privé coché par défaut** dans la page Torrent SB (checkbox visible, modifiable)
+- Feat : **taille de pièces fixée à 4 MiB** pour tous les torrents créés via ruTorrent
+- Feat : **sauvegarde automatique du .torrent** dans le dossier `TORRENTS/` sur la seedbox si le plugin retourne le fichier binaire
+- Refactor : `_create_torrent_rutorrent` accepte le flag `private` en paramètre (défaut `True`)
+
 ### v2.1.4
 - Feat : **mode TORRENT SB** — création des torrents directement depuis la seedbox via le plugin `create` de ruTorrent, sans fichier local nécessaire
 - Chemin distant auto-rempli depuis le nom du fichier, modifiable manuellement
@@ -321,7 +327,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.1.4** — macOS & Windows
+**REBiRTH Upload Bot v2.1.5** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

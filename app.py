@@ -184,6 +184,7 @@ class API:
             filename    = params.get("filename", "").strip()
             remote_path = params.get("remote_path", "").strip()
             trackers    = params.get("trackers", "")
+            private     = params.get("private", True)
 
             if not filename:
                 raise Exception("Aucun nom de fichier spécifié.")
@@ -210,43 +211,7 @@ class API:
             if not active:
                 raise Exception("Aucun tracker configuré pour les cases cochées.")
 
-            rt_url  = os.getenv("RUTORRENT_URL", "")
-            rt_user = os.getenv("RUTORRENT_USER", "")
-            rt_pass = os.getenv("RUTORRENT_PASS", "")
-
-            if not rt_url:
-                raise Exception("ruTorrent URL non configurée dans le .env")
-
-            create_url = rt_url.rstrip("/") + "/plugins/create/action.php"
-
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-            for tk_name, announce in active.items():
-                self._log("Création torrent SB pour " + tk_name + "…")
-                data = {
-                    "name":         base,
-                    "dir":          remote_path.rstrip("/") + "/",
-                    "private":      "on",
-                    "startSeeding": "on",
-                    "tracker[0]":   announce,
-                }
-                r = requests.post(
-                    create_url,
-                    data=data,
-                    auth=(rt_user, rt_pass),
-                    verify=False,
-                    timeout=60,
-                )
-                if r.status_code == 200:
-                    self._log("  ✓ Torrent SB créé — seeding démarré (" + tk_name + ")", "success")
-                else:
-                    raise Exception(
-                        "Plugin create ruTorrent — erreur HTTP " + str(r.status_code) +
-                        " pour " + tk_name +
-                        ". Vérifier que le plugin 'create' est installé sur ruTorrent."
-                    )
-
+            self._create_torrent_rutorrent(base, remote_path, active, private=bool(private))
             self._emit("done", {"nfo_only": False, "url": "Torrents SB créés !"})
 
         except Exception as e:
@@ -495,7 +460,7 @@ class API:
                 self._ftp_upload([final_mkv, final_nfo], remote_path)
                 self._log("Seedbox OK : " + remote_path, "success")
 
-                # Creer les .torrent — filtrés selon les cases cochées dans le formulaire
+                # Creer les torrents via ruTorrent create plugin (côté seedbox)
                 announces = {
                     "ABN":    os.getenv("TRACKER_ABN", ""),
                     "TOS":    os.getenv("TRACKER_TOS", ""),
@@ -503,15 +468,14 @@ class API:
                     "TORR9":  os.getenv("TRACKER_TORR9", ""),
                     "LACALE": os.getenv("TRACKER_LACALE", ""),
                 }
-                # Normaliser les noms cochés (Torr9→TORR9, LaCale→LACALE, etc.)
                 checked = [t.strip().upper() for t in trackers.split() if t.strip()]
                 active = {
                     k: v for k, v in announces.items()
                     if v and k.upper() in checked
                 }
                 if active:
-                    self._log("Creation des .torrent...")
-                    self._create_and_send_torrent(final_dir, base, active, remote_path)
+                    self._log("Creation des torrents via ruTorrent (seedbox)...")
+                    self._create_torrent_rutorrent(base, remote_path, active)
                 elif checked:
                     self._log("Aucun announce configuré pour les trackers cochés.", "warn")
                 else:
@@ -723,46 +687,82 @@ class API:
             else:
                 raise Exception("Upload Filebrowser échoué pour " + fname + " : " + str(r.status_code))
 
-    def _create_and_send_torrent(self, final_dir, base, announce_urls, remote_path):
-        import torf, ssl, xmlrpc.client
-        import time
-
-        torrent_dir = os.path.join(str(BASE_DIR), "TORRENTS")
-        os.makedirs(torrent_dir, exist_ok=True)
+    def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
+        """Crée les torrents via le plugin create de ruTorrent (côté seedbox, pas de hashing local).
+        Piece size fixé à 4 MiB. Si la réponse contient le .torrent binaire, il est sauvegardé
+        dans {SFTP_PATH}/../TORRENTS/ sur la seedbox via FTP.
+        """
+        import urllib3, ftplib, io
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         rt_url  = os.getenv("RUTORRENT_URL", "")
         rt_user = os.getenv("RUTORRENT_USER", "")
         rt_pass = os.getenv("RUTORRENT_PASS", "")
 
+        if not rt_url:
+            raise Exception("ruTorrent URL non configurée dans le .env")
+
+        create_url = rt_url.rstrip("/") + "/plugins/create/action.php"
+
         for tk_name, announce in announce_urls.items():
             if not announce:
                 continue
-            self._log("Creation torrent pour " + tk_name + "...")
-            t = torf.Torrent()
-            t.name       = base
-            t.private    = True
-            t.piece_size = 4 * 1024 * 1024
-            t.trackers   = [[announce]]
-            t.path       = final_dir
+            self._log("Création torrent SB pour " + tk_name + "…")
+            data = {
+                "name":         base,
+                "dir":          remote_path.rstrip("/") + "/",
+                "piece_size":   "4194304",   # 4 MiB
+                "startSeeding": "on",
+                "tracker[0]":   announce,
+            }
+            if private:
+                data["private"] = "on"
 
-            torrent_path = os.path.join(torrent_dir, base + "_" + tk_name + ".torrent")
+            r = requests.post(
+                create_url,
+                data=data,
+                auth=(rt_user, rt_pass),
+                verify=False,
+                timeout=120,
+            )
+            if r.status_code != 200:
+                raise Exception(
+                    "Plugin create ruTorrent — erreur HTTP " + str(r.status_code) +
+                    " pour " + tk_name +
+                    ". Vérifier que le plugin 'create' est installé sur ruTorrent."
+                )
 
-            t.generate()
-            t.write(torrent_path, overwrite=True)
-            self._log("  .torrent cree : " + os.path.basename(torrent_path), "success")
+            self._log("  ✓ Torrent créé — seeding démarré (" + tk_name + ")", "success")
 
-            # Envoyer a ruTorrent
-            if rt_url and rt_user and rt_pass:
-                with open(torrent_path, "rb") as f:
-                    torrent_data = f.read()
-                ctx = ssl.create_default_context()
-                ctx.check_hostname = False
-                ctx.verify_mode = ssl.CERT_NONE
-                transport = xmlrpc.client.SafeTransport(context=ctx)
-                full_url = rt_url.replace("://", "://" + rt_user + ":" + rt_pass + "@") + "/plugins/httprpc/action.php"
-                server = xmlrpc.client.ServerProxy(full_url, transport=transport)
-                server.load.raw_start("", xmlrpc.client.Binary(torrent_data), "d.directory.set=" + remote_path)
-                self._log("  Torrent envoye a ruTorrent !", "success")
+            # Si la réponse est un fichier .torrent binaire (bencoded dict → commence par 'd'),
+            # on le sauvegarde dans {SFTP_PATH}/../TORRENTS/ sur la seedbox
+            if r.content and r.content.lstrip()[:1] == b"d":
+                torrent_name = base + "__" + tk_name + ".torrent"
+                try:
+                    ftp_host = os.getenv("SFTP_HOST_FTP", "")
+                    ftp_port = int(os.getenv("SFTP_PORT", "23421"))
+                    ftp_user = os.getenv("SFTP_USER", "")
+                    ftp_pass = os.getenv("SFTP_PASS", "")
+                    base_path    = os.getenv("SFTP_PATH", "/rtorrent/REBiRTH")
+                    torrents_dir = base_path.rsplit("/", 1)[0] + "/TORRENTS"
+
+                    ftp2 = ftplib.FTP_TLS()
+                    ftp2.connect(ftp_host, ftp_port, timeout=15)
+                    ftp2.login(ftp_user, ftp_pass)
+                    ftp2.prot_p()
+
+                    for part in torrents_dir.strip("/").split("/"):
+                        try:
+                            ftp2.cwd(part)
+                        except ftplib.error_perm:
+                            ftp2.mkd(part)
+                            ftp2.cwd(part)
+
+                    ftp2.storbinary("STOR " + torrent_name, io.BytesIO(r.content))
+                    ftp2.quit()
+                    self._log("  💾 .torrent sauvegardé → TORRENTS/" + torrent_name, "success")
+                except Exception as e_ftp:
+                    self._log("  ⚠ Sauvegarde .torrent FTP ignorée : " + str(e_ftp), "warn")
 
     def _get_movie_title(self, tid, key, lang):
         r = requests.get(f"https://api.themoviedb.org/3/movie/{tid}",

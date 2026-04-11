@@ -287,7 +287,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.1.4</div>
+      <div class="logo-sub">UPLOAD BOT v2.1.5</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -508,6 +508,20 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tsb-c411"   checked/><span class="tck-lbl">C411</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-lacale" checked/><span class="tck-lbl">LaCale</span></label>
+            </div>
+          </div>
+
+          <!-- Options torrent -->
+          <div class="field-group" style="margin-top:8px;">
+            <label class="field-label">OPTIONS</label>
+            <div class="tracker-checks" style="margin-top:6px;">
+              <label class="tck-row">
+                <input type="checkbox" id="tsb-private" checked/>
+                <span class="tck-lbl">Privé</span>
+              </label>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-left:16px;line-height:1;">
+                Taille pièces : <strong style="color:var(--orange);">4 MiB</strong>
+              </span>
             </div>
           </div>
 
@@ -823,9 +837,11 @@ function _tsbGetTrackers() {
 
 async function launchTorrentSB() {
   if (_tsbRunning) return;
-  var fname  = document.getElementById('tsb-filename').value.trim();
-  var rpath  = document.getElementById('tsb-remote-path').value.trim();
-  var trk    = _tsbGetTrackers();
+  var fname   = document.getElementById('tsb-filename').value.trim();
+  var rpath   = document.getElementById('tsb-remote-path').value.trim();
+  var trk     = _tsbGetTrackers();
+  var privEl  = document.getElementById('tsb-private');
+  var isPriv  = privEl ? privEl.checked : true;
   if (!fname) { _tsbLog('Spécifie un nom de fichier.', 'error'); return; }
   if (!trk)   { _tsbLog('Coche au moins un tracker.', 'error'); return; }
   _tsbRunning = true;
@@ -837,6 +853,7 @@ async function launchTorrentSB() {
     filename:    fname,
     remote_path: rpath,
     trackers:    trk,
+    private:     isPriv,
   });
 }
 
