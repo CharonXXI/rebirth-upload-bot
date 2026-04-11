@@ -690,9 +690,9 @@ class API:
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
         """Crée les torrents via le plugin create de ruTorrent (côté seedbox, pas de hashing local).
         Piece size fixé à 4 MiB. Si la réponse contient le .torrent binaire, il est sauvegardé
-        dans {SFTP_PATH}/../TORRENTS/ sur la seedbox via FTP.
+        localement dans BASE_DIR/TORRENTS/.
         """
-        import urllib3, ftplib, io
+        import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         rt_url  = os.getenv("RUTORRENT_URL", "")
@@ -703,6 +703,10 @@ class API:
             raise Exception("ruTorrent URL non configurée dans le .env")
 
         create_url = rt_url.rstrip("/") + "/plugins/create/action.php"
+
+        # Dossier local TORRENTS/ à côté du bot
+        torrents_local = BASE_DIR / "TORRENTS"
+        torrents_local.mkdir(exist_ok=True)
 
         for tk_name, announce in announce_urls.items():
             if not announce:
@@ -735,34 +739,14 @@ class API:
             self._log("  ✓ Torrent créé — seeding démarré (" + tk_name + ")", "success")
 
             # Si la réponse est un fichier .torrent binaire (bencoded dict → commence par 'd'),
-            # on le sauvegarde dans {SFTP_PATH}/../TORRENTS/ sur la seedbox
+            # on le sauvegarde localement dans TORRENTS/
             if r.content and r.content.lstrip()[:1] == b"d":
                 torrent_name = base + "__" + tk_name + ".torrent"
                 try:
-                    ftp_host = os.getenv("SFTP_HOST_FTP", "")
-                    ftp_port = int(os.getenv("SFTP_PORT", "23421"))
-                    ftp_user = os.getenv("SFTP_USER", "")
-                    ftp_pass = os.getenv("SFTP_PASS", "")
-                    base_path    = os.getenv("SFTP_PATH", "/rtorrent/REBiRTH")
-                    torrents_dir = base_path.rsplit("/", 1)[0] + "/TORRENTS"
-
-                    ftp2 = ftplib.FTP_TLS()
-                    ftp2.connect(ftp_host, ftp_port, timeout=15)
-                    ftp2.login(ftp_user, ftp_pass)
-                    ftp2.prot_p()
-
-                    for part in torrents_dir.strip("/").split("/"):
-                        try:
-                            ftp2.cwd(part)
-                        except ftplib.error_perm:
-                            ftp2.mkd(part)
-                            ftp2.cwd(part)
-
-                    ftp2.storbinary("STOR " + torrent_name, io.BytesIO(r.content))
-                    ftp2.quit()
+                    (torrents_local / torrent_name).write_bytes(r.content)
                     self._log("  💾 .torrent sauvegardé → TORRENTS/" + torrent_name, "success")
-                except Exception as e_ftp:
-                    self._log("  ⚠ Sauvegarde .torrent FTP ignorée : " + str(e_ftp), "warn")
+                except Exception as e_save:
+                    self._log("  ⚠ Sauvegarde .torrent ignorée : " + str(e_save), "warn")
 
     def _get_movie_title(self, tid, key, lang):
         r = requests.get(f"https://api.themoviedb.org/3/movie/{tid}",

@@ -287,7 +287,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.1.5</div>
+      <div class="logo-sub">UPLOAD BOT v2.1.6</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -302,7 +302,7 @@ html.light body::before {
       <div class="nav-item" data-page="stats" onclick="showPage('stats', this); renderStatsPage()">
         <span class="nav-icon">📊</span> Stats
       </div>
-      <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this); tsbLoadFiles()">
+      <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this); tsbSyncTrackers(); tsbLoadFiles()">
         <span class="nav-icon">🧲</span> Torrent SB
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
@@ -757,6 +757,17 @@ function setProgress(pct, label) {
 
 // ── TORRENT SB ───────────────────────────────────────────────────────
 var _tsbRunning = false;
+
+// Synchronise les cases trackers depuis la page Upload vers Torrent SB
+function tsbSyncTrackers() {
+  var map = { 'tck-abn':'tsb-abn', 'tck-tos':'tsb-tos', 'tck-c411':'tsb-c411',
+              'tck-torr9':'tsb-torr9', 'tck-lacale':'tsb-lacale' };
+  Object.entries(map).forEach(function(kv) {
+    var src = document.getElementById(kv[0]);
+    var dst = document.getElementById(kv[1]);
+    if (src && dst) dst.checked = src.checked;
+  });
+}
 
 async function tsbLoadFiles() {
   var btn  = document.getElementById('tsb-refresh');
