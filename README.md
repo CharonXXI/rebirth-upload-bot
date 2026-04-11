@@ -45,7 +45,7 @@
 | 💬 **Discord** | Notification automatique avec embed TMDB |
 | 📁 **FINAL/** | Création automatique avec le bon NFO par tracker |
 | 🌱 **Seedbox** | Upload complet via FTP TLS |
-| 🧲 **Torrent** | Création par tracker + envoi ruTorrent via XML-RPC |
+| 🧲 **Torrent SB** | Création côté seedbox via plugin ruTorrent (hash SB), .torrent sauvegardé dans `TORRENTS/` |
 | 🎛️ **Trackers** | Page dédiée pour gérer les announces URL |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
 | 🌙 **Interface** | PyWebView moderne avec mode jour/nuit, animations, toasts |
@@ -65,7 +65,7 @@ cd rebirth-upload-bot
 python3 -m venv venv
 source venv/bin/activate
 
-pip install pywebview python-dotenv torf pymediainfo parse-torrent-name
+pip install pywebview python-dotenv pymediainfo parse-torrent-name
 pip install -r NFO_CUSTOM/requirements.txt
 ```
 
@@ -128,6 +128,8 @@ TRACKER_LACALE=https://lacale.com/announce/PASSKEY
 | `SFTP_PORT` | Port FTP (ex: `23421`) |
 | `SFTP_USER / SFTP_PASS` | Login et mot de passe seedbox |
 | `SFTP_PATH` | Chemin distant (ex: `/rtorrent/REBiRTH`) |
+| `SFTP_HOST` | URL du FileBrowser seedbox (ex: `https://files.seedbox.link`) |
+| `SFTP_HOST_FTP` | Host FTP de ta seedbox |
 | `RUTORRENT_URL` | URL complète de ruTorrent |
 | `TRACKER_XXX` | Announce URL du tracker (avec passkey) |
 
@@ -177,8 +179,14 @@ Choisir plateforme : Gofile / BuzzHeavier / Ignorer
         ├─ [UPLOAD]   Gofile ou BuzzHeavier (si actif)
         ├─ [DISCORD]  Notification embed (si actif)
         ├─ [FINAL]    Creation FINAL/nom_film/ (MKV + NFO)
-        ├─ [FTP]      Upload seedbox via FTP TLS
-        └─ [TORRENT]  Creation + envoi ruTorrent
+        └─ [FTP]      Upload seedbox via FTP TLS
+                           │
+                           ▼
+              Aller sur page Torrent SB
+                           │
+        └─ [TORRENT SB]  Creation torrents via plugin ruTorrent
+                          Seeding démarre immédiatement
+                          .torrent sauvegardé dans TORRENTS/
 ```
 
 ---
@@ -202,11 +210,14 @@ Choisir plateforme : Gofile / BuzzHeavier / Ignorer
 - Upload automatique du dossier FINAL via FTP TLS
 - Création automatique du sous-dossier `nom_film`
 
-### 🧲 Torrent & ruTorrent
-- Création d'un `.torrent` par tracker configuré
-- Piece size 4 MiB, flag privé activé
-- Envoi direct à ruTorrent via XML-RPC
-- ruTorrent démarre le seeding immédiatement
+### 🧲 Torrent SB
+- Page dédiée à la création de torrents, indépendante du workflow Upload
+- Sélectionne un dossier déjà présent sur la seedbox dans la liste FTP, ou saisie manuelle
+- Les cases trackers se **synchronisent automatiquement** depuis la page Upload à l'ouverture
+- Création côté seedbox via le plugin `create` de ruTorrent (hash serveur, aucun fichier local requis)
+- Piece size **4 MiB**, flag **Privé** coché par défaut (modifiable)
+- Seeding démarre immédiatement sur ruTorrent
+- Le fichier `.torrent` binaire retourné par le plugin est sauvegardé dans `TORRENTS/`
 
 ### 💬 Discord
 - Embed avec poster TMDB, liens TMDB/IMDb, source, trackers, note
