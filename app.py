@@ -689,15 +689,13 @@ class API:
         # Attendre que rtorrent ait hashé et enregistré le torrent
         _time.sleep(5)
 
+        # d.multicall : chaque méthode est un <param> séparé (pas un <array>)
         payload = (
             '<?xml version="1.0"?><methodCall>'
-            '<methodName>d.multicall2</methodName><params>'
-            '<param><value><string></string></value></param>'
+            '<methodName>d.multicall</methodName><params>'
             '<param><value><string>main</string></value></param>'
-            '<param><value><array><data>'
-            '<value><string>d.hash=</string></value>'
-            '<value><string>d.name=</string></value>'
-            '</data></array></value></param>'
+            '<param><value><string>d.hash=</string></value></param>'
+            '<param><value><string>d.name=</string></value></param>'
             '</params></methodCall>'
         )
         r = requests.post(rpc_url, data=payload,
@@ -705,7 +703,7 @@ class API:
         if r.status_code != 200:
             raise Exception("XML-RPC HTTP " + str(r.status_code) + " — " + r.text[:100])
 
-        # Parser avec xmlrpc.client (parse correcte des tableaux imbriqués rtorrent)
+        # Parser avec xmlrpc.client
         try:
             result   = _xrpc.loads(r.text)
             torrents = result[0][0]   # liste de (hash, name)
