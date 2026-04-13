@@ -186,6 +186,11 @@ class API:
             trackers    = params.get("trackers", "")
             private     = params.get("private", True)
 
+            self._log("▶ Torrent SB démarré")
+            self._log("  filename    : " + (filename or "(vide)"))
+            self._log("  trackers    : " + (trackers or "(vide)"))
+            self._log("  remote_path : " + (remote_path or "(auto)"))
+
             if not filename:
                 raise Exception("Aucun nom de fichier spécifié.")
 
@@ -194,9 +199,7 @@ class API:
             if not remote_path:
                 remote_base = os.getenv("SFTP_PATH", "/rtorrent/REBiRTH")
                 remote_path = remote_base + "/" + base
-
-            self._log("Mode TORRENT SB — " + base)
-            self._log("Chemin seedbox : " + remote_path)
+                self._log("  remote_path (auto) : " + remote_path)
 
             announces = {
                 "ABN":    os.getenv("TRACKER_ABN", ""),
@@ -208,13 +211,22 @@ class API:
             checked = [t.strip().upper() for t in trackers.split() if t.strip()]
             active  = {k: v for k, v in announces.items() if v and k.upper() in checked}
 
+            self._log("  trackers cochés : " + str(checked))
+            self._log("  trackers actifs : " + str(list(active.keys())))
+
+            rt_url = os.getenv("RUTORRENT_URL", "")
+            self._log("  ruTorrent URL   : " + (rt_url or "(non configuré !)"))
+
             if not active:
-                raise Exception("Aucun tracker configuré pour les cases cochées.")
+                raise Exception("Aucun tracker configuré pour les cases cochées. Vérifie les announces dans Config.")
 
             self._create_torrent_rutorrent(base, remote_path, active, private=bool(private))
             self._emit("done", {"nfo_only": False, "url": "Torrents SB créés !"})
 
         except Exception as e:
+            import traceback
+            self._log("✗ Erreur : " + str(e), "error")
+            traceback.print_exc()
             self._emit("error", {"msg": str(e)})
 
     def run_batch_nfo(self, data: dict):
@@ -736,6 +748,7 @@ class API:
             raise Exception("ruTorrent URL non configurée dans le .env")
 
         create_url = rt_url.rstrip("/") + "/plugins/create/action.php"
+        self._log("  URL create : " + create_url)
 
         # Dossier local TORRENTS/ à côté du bot
         torrents_local = BASE_DIR / "TORRENTS"
@@ -755,6 +768,8 @@ class API:
             if private:
                 data["private"] = "on"
 
+            self._log("  POST → " + create_url)
+            self._log("  dir  = " + data["dir"])
             r = requests.post(
                 create_url,
                 data=data,
@@ -762,6 +777,11 @@ class API:
                 verify=False,
                 timeout=120,
             )
+            self._log("  HTTP " + str(r.status_code) + " — " + str(len(r.content)) + " octets reçus")
+            if r.content:
+                preview = r.content[:120].decode("utf-8", errors="replace").replace("\n", " ")
+                self._log("  Réponse : " + preview)
+
             if r.status_code != 200:
                 raise Exception(
                     "Plugin create ruTorrent — erreur HTTP " + str(r.status_code) +

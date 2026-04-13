@@ -287,7 +287,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.1.8</div>
+      <div class="logo-sub">UPLOAD BOT v2.1.9</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -847,7 +847,13 @@ function _tsbGetTrackers() {
 }
 
 async function launchTorrentSB() {
-  if (_tsbRunning) return;
+  // Reset auto si le flag est bloqué (ex: crash silencieux)
+  if (_tsbRunning) {
+    _tsbRunning = false;
+    var btnR = document.getElementById('tsb-btn');
+    if (btnR) { btnR.disabled = false; btnR.textContent = '🧲  CRÉER TORRENTS SB'; }
+    _tsbLog('⚠ Relance après état bloqué…', 'warn');
+  }
   var fname   = document.getElementById('tsb-filename').value.trim();
   var rpath   = document.getElementById('tsb-remote-path').value.trim();
   var trk     = _tsbGetTrackers();
@@ -860,12 +866,19 @@ async function launchTorrentSB() {
   document.getElementById('tsb-btn').disabled = true;
   document.getElementById('tsb-btn').textContent = '⏳  CRÉATION EN COURS…';
   _tsbLog('Lancement création torrents SB…');
-  await window.pywebview.api.run_torrent_sb({
-    filename:    fname,
-    remote_path: rpath,
-    trackers:    trk,
-    private:     isPriv,
-  });
+  try {
+    await window.pywebview.api.run_torrent_sb({
+      filename:    fname,
+      remote_path: rpath,
+      trackers:    trk,
+      private:     isPriv,
+    });
+  } catch(e) {
+    _tsbRunning = false;
+    var btn2 = document.getElementById('tsb-btn');
+    if (btn2) { btn2.disabled = false; btn2.textContent = '🧲  CRÉER TORRENTS SB'; }
+    _tsbLog('✗ Erreur JS : ' + e, 'error');
+  }
 }
 
 function onTorrentSBDone() {
