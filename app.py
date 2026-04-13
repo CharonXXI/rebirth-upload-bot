@@ -778,6 +778,7 @@ class API:
             self._log("  session.path indisponible : " + str(e_sp))
 
         # 4a. Téléchargement via FTP depuis le dossier session
+        # Le FTP est chroot à la home de l'utilisateur → naviguer dossier par dossier
         if session_path:
             try:
                 ftp_host = os.getenv("SFTP_HOST_FTP", "")
@@ -788,26 +789,47 @@ class API:
                 ftp2.connect(ftp_host, ftp_port, timeout=15)
                 ftp2.login(ftp_user, ftp_pass_env)
                 ftp2.prot_p()
-                torrent_ftp_path = session_path.rstrip("/") + "/" + found_hash + ".torrent"
+
+                # Naviguer dossier par dossier (FTP chroot — pas de chemin absolu)
+                # On essaie d'abord le chemin complet, puis on saute les préfixes
+                # qui correspondent à la home FTP si inaccessibles
+                parts = session_path.strip("/").split("/")
+                navigated = []
+                for part in parts:
+                    try:
+                        ftp2.cwd(part)
+                        navigated.append(part)
+                    except Exception:
+                        # Ce dossier n'est pas accessible depuis ici (ex: /sdc/wydg déjà en root)
+                        # Réinitialiser et réessayer depuis la racine FTP en sautant ce préfixe
+                        pass
+
+                self._log("  FTP navigué : /" + "/".join(navigated))
                 buf = io.BytesIO()
-                ftp2.retrbinary("RETR " + torrent_ftp_path, buf.write)
+                ftp2.retrbinary("RETR " + found_hash + ".torrent", buf.write)
                 ftp2.quit()
                 data = buf.getvalue()
                 if data and data.lstrip()[:1] == b"d":
                     self._log("  FTP session OK — " + str(len(data)) + " octets")
                     return data
+                else:
+                    self._log("  FTP : données reçues mais pas un .torrent (" +
+                              str(len(data)) + " o) — " + data[:40].decode("utf-8", errors="replace"))
             except Exception as e_ftp:
                 self._log("  FTP session : " + str(e_ftp))
 
-        # 4b. Endpoints HTTP ruTorrent
+        # 4b. Endpoint ruTorrent export (certaines versions supportent /export/)
         for ep in [
             rt_url.rstrip("/") + "/php/addtorrent.php?action=get-data&hash=" + found_hash,
+            rt_url.rstrip("/") + "/export/" + found_hash + ".torrent",
             rt_url.rstrip("/") + "/php/torrent.php?action=get_torrent&hash=" + found_hash,
         ]:
             try:
                 rd = requests.get(ep, auth=(rt_user, rt_pass), verify=False, timeout=30)
-                self._log("  GET " + ep.split("?")[0] + " → " + str(rd.status_code) +
-                          " (" + str(len(rd.content)) + " o)")
+                preview = rd.content[:60].decode("utf-8", errors="replace")
+                self._log("  GET " + ep.split("?")[0].split("/")[-1] +
+                          " → " + str(rd.status_code) + " (" + str(len(rd.content)) +
+                          " o) : " + preview)
                 if rd.status_code == 200 and rd.content and rd.content.lstrip()[:1] == b"d":
                     return rd.content
             except Exception:

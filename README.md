@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.2-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.3-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -252,6 +252,11 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.2.3
+- Fix : **FTP chroot** — navigation dossier par dossier au lieu du chemin absolu (le FTP est chroot à la home, `/sdc/wydg/...` n'est pas accessible directement)
+- Fix : log du contenu des réponses HTTP pour identifier l'endpoint correct
+- Ajout endpoint `/export/HASH.torrent` dans les tentatives HTTP
+
 ### v2.2.2
 - Fix : **`-506 Method not defined`** — abandon de `d.multicall`/`d.multicall2` ; nouvelle stratégie : `download_list` → `system.multicall(d.name)` → match nom → `session.path` + FTP pour télécharger le `.torrent` depuis le dossier session rtorrent
 - Fallback `d.name` individuel si `system.multicall` échoue
@@ -368,7 +373,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.2.2** — macOS & Windows
+**REBiRTH Upload Bot v2.2.3** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
