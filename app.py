@@ -667,10 +667,63 @@ class API:
             else:
                 raise Exception("Upload Filebrowser échoué pour " + fname + " : " + str(r.status_code))
 
+    def _fetch_torrent_from_rutorrent(self, base, rt_url, rt_user, rt_pass):
+        """Récupère le fichier .torrent depuis ruTorrent via XML-RPC (recherche par nom → hash → download)."""
+        import time as _time, xml.etree.ElementTree as ET
+        rpc_url = rt_url.rstrip("/") + "/plugins/httprpc/action.php"
+
+        # Attendre que rtorrent ait bien enregistré le torrent (hash en cours)
+        _time.sleep(3)
+
+        # XML-RPC : récupérer tous les torrents (hash + nom)
+        payload = (
+            '<?xml version="1.0"?><methodCall>'
+            '<methodName>d.multicall2</methodName><params>'
+            '<param><value><string></string></value></param>'
+            '<param><value><string>main</string></value></param>'
+            '<param><value><array><data>'
+            '<value><string>d.hash=</string></value>'
+            '<value><string>d.name=</string></value>'
+            '</data></array></value></param>'
+            '</params></methodCall>'
+        )
+        r = requests.post(rpc_url, data=payload,
+                          auth=(rt_user, rt_pass), verify=False, timeout=30)
+        if r.status_code != 200:
+            raise Exception("XML-RPC erreur HTTP " + str(r.status_code))
+
+        # Parser la réponse XML pour trouver le hash correspondant au nom
+        root  = ET.fromstring(r.text)
+        found = None
+        for arr in root.iter("array"):
+            vals = [v.text or "" for v in arr.iter("string")]
+            if len(vals) >= 2:
+                h, n = vals[0], vals[1]
+                if n.lower() == base.lower():
+                    found = h
+                    break
+
+        if not found:
+            raise Exception("Torrent '" + base + "' introuvable dans ruTorrent après création.")
+
+        # Télécharger le .torrent via l'endpoint de téléchargement ruTorrent
+        dl_url = rt_url.rstrip("/") + "/php/addtorrent.php?action=get-data&hash=" + found
+        r2 = requests.get(dl_url, auth=(rt_user, rt_pass), verify=False, timeout=30)
+        if r2.status_code == 200 and r2.content and r2.content.lstrip()[:1] == b"d":
+            return r2.content
+
+        # Fallback : endpoint alternatif
+        dl_url2 = rt_url.rstrip("/") + "/php/torrent.php?action=get_torrent&hash=" + found
+        r3 = requests.get(dl_url2, auth=(rt_user, rt_pass), verify=False, timeout=30)
+        if r3.status_code == 200 and r3.content and r3.content.lstrip()[:1] == b"d":
+            return r3.content
+
+        raise Exception("Impossible de télécharger le .torrent (hash=" + found + ").")
+
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
-        """Crée les torrents via le plugin create de ruTorrent (côté seedbox, pas de hashing local).
-        Piece size fixé à 4 MiB. Si la réponse contient le .torrent binaire, il est sauvegardé
-        localement dans BASE_DIR/TORRENTS/.
+        """Crée les torrents via le plugin create de ruTorrent (côté seedbox, hash SB).
+        Piece size fixé à 4 MiB. Le .torrent est ensuite récupéré via XML-RPC et
+        sauvegardé localement dans BASE_DIR/TORRENTS/.
         """
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -718,15 +771,34 @@ class API:
 
             self._log("  ✓ Torrent créé — seeding démarré (" + tk_name + ")", "success")
 
-            # Si la réponse est un fichier .torrent binaire (bencoded dict → commence par 'd'),
-            # on le sauvegarde localement dans TORRENTS/
+            torrent_name = base + "__" + tk_name + ".torrent"
+
+            # 1. Le plugin renvoie parfois directement le binaire dans la réponse
+            torrent_bytes = None
             if r.content and r.content.lstrip()[:1] == b"d":
-                torrent_name = base + "__" + tk_name + ".torrent"
+                torrent_bytes = r.content
+                self._log("  📦 .torrent reçu dans la réponse HTTP", "success")
+
+            # 2. Sinon : récupérer via XML-RPC (hash lookup + download)
+            if not torrent_bytes:
+                self._log("  Récupération du .torrent via XML-RPC…")
                 try:
-                    (torrents_local / torrent_name).write_bytes(r.content)
+                    torrent_bytes = self._fetch_torrent_from_rutorrent(
+                        base, rt_url, rt_user, rt_pass
+                    )
+                    self._log("  📦 .torrent récupéré via ruTorrent", "success")
+                except Exception as e_rpc:
+                    self._log("  ⚠ Récupération XML-RPC échouée : " + str(e_rpc), "warn")
+
+            # 3. Sauvegarder localement
+            if torrent_bytes:
+                try:
+                    (torrents_local / torrent_name).write_bytes(torrent_bytes)
                     self._log("  💾 .torrent sauvegardé → TORRENTS/" + torrent_name, "success")
                 except Exception as e_save:
-                    self._log("  ⚠ Sauvegarde .torrent ignorée : " + str(e_save), "warn")
+                    self._log("  ⚠ Sauvegarde locale échouée : " + str(e_save), "warn")
+            else:
+                self._log("  ⚠ .torrent non disponible — seeding actif sur la SB", "warn")
 
     def _get_movie_title(self, tid, key, lang):
         r = requests.get(f"https://api.themoviedb.org/3/movie/{tid}",
