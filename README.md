@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.3-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.4-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -251,6 +251,10 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.2.4
+- Fix : **FTP session path** — navigation itérative avec reconnexion FTP à chaque tentative ; skip des N premiers composants du chemin absolu jusqu'à trouver le chemin relatif correct depuis la racine chroot (ex : `config/rtorrent/rtorrent_sess/`)
+- Fix : logs détaillés pour chaque tentative `skip=N` afin de tracer l'erreur précise
 
 ### v2.2.3
 - Fix : **FTP chroot** — navigation dossier par dossier au lieu du chemin absolu (le FTP est chroot à la home, `/sdc/wydg/...` n'est pas accessible directement)

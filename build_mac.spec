@@ -27,8 +27,6 @@ a = Analysis(
         'pymediainfo',
         # NFO / parsing
         'PTN',
-        # Torrent
-        'torf',
         # FTP / ruTorrent
         'ftplib',
         'ssl',
@@ -84,7 +82,7 @@ app = BUNDLE(
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': True,
-        'CFBundleShortVersionString': '2.2.3',
+        'CFBundleShortVersionString': '2.2.4',
         'CFBundleName': 'REBiRTH',
         'NSRequiresAquaSystemAppearance': False,
     },

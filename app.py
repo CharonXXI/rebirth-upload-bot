@@ -777,65 +777,48 @@ class API:
         except Exception as e_sp:
             self._log("  session.path indisponible : " + str(e_sp))
 
-        # 4a. Téléchargement via FTP depuis le dossier session
-        # Le FTP est chroot à la home de l'utilisateur → naviguer dossier par dossier
+        # 4a. Téléchargement via FTP depuis le dossier session rtorrent
+        # Le FTP est chroot à la home utilisateur (ex: /sdc/wydg/).
+        # session_path est un chemin absolu système (ex: /sdc/wydg/config/rtorrent/rtorrent_sess/).
+        # On essaie progressivement en sautant les premiers composants jusqu'à ce que
+        # la navigation depuis la racine FTP réussisse.
         if session_path:
-            try:
-                ftp_host = os.getenv("SFTP_HOST_FTP", "")
-                ftp_port = int(os.getenv("SFTP_PORT", "23421"))
-                ftp_user = os.getenv("SFTP_USER", "")
-                ftp_pass_env = os.getenv("SFTP_PASS", "")
-                ftp2 = ftplib.FTP_TLS()
-                ftp2.connect(ftp_host, ftp_port, timeout=15)
-                ftp2.login(ftp_user, ftp_pass_env)
-                ftp2.prot_p()
+            ftp_host    = os.getenv("SFTP_HOST_FTP", "")
+            ftp_port    = int(os.getenv("SFTP_PORT", "23421"))
+            ftp_user    = os.getenv("SFTP_USER", "")
+            ftp_pass_env = os.getenv("SFTP_PASS", "")
+            parts = [p for p in session_path.strip("/").split("/") if p]
+            torrent_filename = found_hash + ".torrent"
 
-                # Naviguer dossier par dossier (FTP chroot — pas de chemin absolu)
-                # On essaie d'abord le chemin complet, puis on saute les préfixes
-                # qui correspondent à la home FTP si inaccessibles
-                parts = session_path.strip("/").split("/")
-                navigated = []
-                for part in parts:
+            for skip in range(len(parts)):
+                rel_parts = parts[skip:]
+                try:
+                    ftp2 = ftplib.FTP_TLS()
+                    ftp2.connect(ftp_host, ftp_port, timeout=15)
+                    ftp2.login(ftp_user, ftp_pass_env)
+                    ftp2.prot_p()
+                    for p in rel_parts:
+                        ftp2.cwd(p)
+                    self._log("  FTP navigué (skip=" + str(skip) + ") : /" + "/".join(rel_parts))
+                    buf = io.BytesIO()
+                    ftp2.retrbinary("RETR " + torrent_filename, buf.write)
+                    ftp2.quit()
+                    data = buf.getvalue()
+                    if data and data.lstrip()[:1] == b"d":
+                        self._log("  FTP session OK — " + str(len(data)) + " octets")
+                        return data
+                    self._log("  FTP : contenu reçu mais non-bencoded (" +
+                              str(len(data)) + " o)")
+                    break
+                except Exception as e_skip:
+                    self._log("  FTP skip=" + str(skip) + " : " + str(e_skip))
                     try:
-                        ftp2.cwd(part)
-                        navigated.append(part)
+                        ftp2.quit()
                     except Exception:
-                        # Ce dossier n'est pas accessible depuis ici (ex: /sdc/wydg déjà en root)
-                        # Réinitialiser et réessayer depuis la racine FTP en sautant ce préfixe
                         pass
 
-                self._log("  FTP navigué : /" + "/".join(navigated))
-                buf = io.BytesIO()
-                ftp2.retrbinary("RETR " + found_hash + ".torrent", buf.write)
-                ftp2.quit()
-                data = buf.getvalue()
-                if data and data.lstrip()[:1] == b"d":
-                    self._log("  FTP session OK — " + str(len(data)) + " octets")
-                    return data
-                else:
-                    self._log("  FTP : données reçues mais pas un .torrent (" +
-                              str(len(data)) + " o) — " + data[:40].decode("utf-8", errors="replace"))
-            except Exception as e_ftp:
-                self._log("  FTP session : " + str(e_ftp))
-
-        # 4b. Endpoint ruTorrent export (certaines versions supportent /export/)
-        for ep in [
-            rt_url.rstrip("/") + "/php/addtorrent.php?action=get-data&hash=" + found_hash,
-            rt_url.rstrip("/") + "/export/" + found_hash + ".torrent",
-            rt_url.rstrip("/") + "/php/torrent.php?action=get_torrent&hash=" + found_hash,
-        ]:
-            try:
-                rd = requests.get(ep, auth=(rt_user, rt_pass), verify=False, timeout=30)
-                preview = rd.content[:60].decode("utf-8", errors="replace")
-                self._log("  GET " + ep.split("?")[0].split("/")[-1] +
-                          " → " + str(rd.status_code) + " (" + str(len(rd.content)) +
-                          " o) : " + preview)
-                if rd.status_code == 200 and rd.content and rd.content.lstrip()[:1] == b"d":
-                    return rd.content
-            except Exception:
-                continue
-
-        raise Exception("Impossible de télécharger le .torrent (hash=" + found_hash + ").")
+        raise Exception("Impossible de récupérer le .torrent (hash=" + found_hash +
+                        "). Seeding actif sur la SB.")
 
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
         """Crée les torrents via le plugin create de ruTorrent (côté seedbox, hash SB).
