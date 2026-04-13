@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.1.9-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.0-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -252,6 +252,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.2.0
+- Fix : **parsing XML-RPC corrigé** — utilisation de `xmlrpc.client.loads()` (stdlib Python) au lieu du parser ElementTree maison qui ratait les tableaux imbriqués rtorrent
+- Fix : **recherche par nom** dans ruTorrent — match exact puis fallback partiel, log des noms disponibles si introuvable
+- Fix : **tentative sur 3 endpoints** pour le téléchargement du `.torrent` après création
+- Fix : délai augmenté à 5 s pour laisser rtorrent terminer le hashing
+
 ### v2.1.9
 - Fix : **logs de diagnostic complets** dans Torrent SB — URL, params, réponse HTTP, trackers actifs affichés dans le panel de log
 - Fix : **erreurs silencieuses** — les exceptions sont maintenant loggées dans le panel avant d'être émises
@@ -354,7 +360,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.1.9** — macOS & Windows
+**REBiRTH Upload Bot v2.2.0** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

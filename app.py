@@ -680,14 +680,15 @@ class API:
                 raise Exception("Upload Filebrowser échoué pour " + fname + " : " + str(r.status_code))
 
     def _fetch_torrent_from_rutorrent(self, base, rt_url, rt_user, rt_pass):
-        """Récupère le fichier .torrent depuis ruTorrent via XML-RPC (recherche par nom → hash → download)."""
-        import time as _time, xml.etree.ElementTree as ET
+        """Récupère le fichier .torrent depuis ruTorrent via XML-RPC
+        (d.multicall2 → hash par nom → download endpoint).
+        """
+        import time as _time, xmlrpc.client as _xrpc
         rpc_url = rt_url.rstrip("/") + "/plugins/httprpc/action.php"
 
-        # Attendre que rtorrent ait bien enregistré le torrent (hash en cours)
-        _time.sleep(3)
+        # Attendre que rtorrent ait hashé et enregistré le torrent
+        _time.sleep(5)
 
-        # XML-RPC : récupérer tous les torrents (hash + nom)
         payload = (
             '<?xml version="1.0"?><methodCall>'
             '<methodName>d.multicall2</methodName><params>'
@@ -702,35 +703,57 @@ class API:
         r = requests.post(rpc_url, data=payload,
                           auth=(rt_user, rt_pass), verify=False, timeout=30)
         if r.status_code != 200:
-            raise Exception("XML-RPC erreur HTTP " + str(r.status_code))
+            raise Exception("XML-RPC HTTP " + str(r.status_code) + " — " + r.text[:100])
 
-        # Parser la réponse XML pour trouver le hash correspondant au nom
-        root  = ET.fromstring(r.text)
+        # Parser avec xmlrpc.client (parse correcte des tableaux imbriqués rtorrent)
+        try:
+            result   = _xrpc.loads(r.text)
+            torrents = result[0][0]   # liste de (hash, name)
+        except Exception as e_parse:
+            raise Exception("XML-RPC parse : " + str(e_parse) + " — " + r.text[:200])
+
+        # Log les noms présents pour faciliter le debug
+        names_found = [t[1] for t in torrents[:20]]
+        self._log("  Torrents dans ruTorrent : " + str(names_found))
+
+        # Recherche exacte puis partielle (cas où le nom diffère légèrement)
         found = None
-        for arr in root.iter("array"):
-            vals = [v.text or "" for v in arr.iter("string")]
-            if len(vals) >= 2:
-                h, n = vals[0], vals[1]
-                if n.lower() == base.lower():
-                    found = h
+        for pair in torrents:
+            if pair[1].lower() == base.lower():
+                found = pair[0]
+                break
+        if not found:
+            for pair in torrents:
+                if base.lower() in pair[1].lower():
+                    found = pair[0]
+                    self._log("  Match partiel : " + pair[1])
                     break
 
         if not found:
-            raise Exception("Torrent '" + base + "' introuvable dans ruTorrent après création.")
+            raise Exception(
+                "Torrent '" + base + "' introuvable dans ruTorrent. "
+                "Noms disponibles : " + str(names_found[:5])
+            )
 
-        # Télécharger le .torrent via l'endpoint de téléchargement ruTorrent
-        dl_url = rt_url.rstrip("/") + "/php/addtorrent.php?action=get-data&hash=" + found
-        r2 = requests.get(dl_url, auth=(rt_user, rt_pass), verify=False, timeout=30)
-        if r2.status_code == 200 and r2.content and r2.content.lstrip()[:1] == b"d":
-            return r2.content
+        self._log("  Hash trouvé : " + found)
 
-        # Fallback : endpoint alternatif
-        dl_url2 = rt_url.rstrip("/") + "/php/torrent.php?action=get_torrent&hash=" + found
-        r3 = requests.get(dl_url2, auth=(rt_user, rt_pass), verify=False, timeout=30)
-        if r3.status_code == 200 and r3.content and r3.content.lstrip()[:1] == b"d":
-            return r3.content
+        # Essayer plusieurs endpoints de téléchargement ruTorrent
+        endpoints = [
+            rt_url.rstrip("/") + "/php/addtorrent.php?action=get-data&hash=" + found,
+            rt_url.rstrip("/") + "/php/torrent.php?action=get_torrent&hash=" + found,
+            rt_url.rstrip("/") + "/plugins/httprpc/action.php?hash=" + found,
+        ]
+        for ep in endpoints:
+            try:
+                rd = requests.get(ep, auth=(rt_user, rt_pass), verify=False, timeout=30)
+                self._log("  GET " + ep.split("?")[0] + " → HTTP " + str(rd.status_code) +
+                          " — " + str(len(rd.content)) + " octets")
+                if rd.status_code == 200 and rd.content and rd.content.lstrip()[:1] == b"d":
+                    return rd.content
+            except Exception:
+                continue
 
-        raise Exception("Impossible de télécharger le .torrent (hash=" + found + ").")
+        raise Exception("Aucun endpoint n'a retourné le .torrent pour hash=" + found)
 
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
         """Crée les torrents via le plugin create de ruTorrent (côté seedbox, hash SB).
