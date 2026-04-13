@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.1-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.2-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -252,6 +252,11 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.2.2
+- Fix : **`-506 Method not defined`** — abandon de `d.multicall`/`d.multicall2` ; nouvelle stratégie : `download_list` → `system.multicall(d.name)` → match nom → `session.path` + FTP pour télécharger le `.torrent` depuis le dossier session rtorrent
+- Fallback `d.name` individuel si `system.multicall` échoue
+- Fallback HTTP endpoints si FTP session échoue
+
 ### v2.2.1
 - Fix : **XML-RPC `-503 Wrong object type`** — `d.multicall` avec méthodes comme `<param>` séparés au lieu d'un `<array>` (format incorrect rejeté par rtorrent)
 
@@ -363,7 +368,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.2.1** — macOS & Windows
+**REBiRTH Upload Bot v2.2.2** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

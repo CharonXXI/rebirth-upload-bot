@@ -679,79 +679,141 @@ class API:
             else:
                 raise Exception("Upload Filebrowser échoué pour " + fname + " : " + str(r.status_code))
 
-    def _fetch_torrent_from_rutorrent(self, base, rt_url, rt_user, rt_pass):
-        """Récupère le fichier .torrent depuis ruTorrent via XML-RPC
-        (d.multicall2 → hash par nom → download endpoint).
-        """
-        import time as _time, xmlrpc.client as _xrpc
-        rpc_url = rt_url.rstrip("/") + "/plugins/httprpc/action.php"
-
-        # Attendre que rtorrent ait hashé et enregistré le torrent
-        _time.sleep(5)
-
-        # d.multicall : chaque méthode est un <param> séparé (pas un <array>)
+    def _xmlrpc_call(self, rpc_url, method, params_xml, rt_user, rt_pass):
+        """Appel XML-RPC générique, retourne le résultat parsé."""
+        import xmlrpc.client as _xrpc
         payload = (
             '<?xml version="1.0"?><methodCall>'
-            '<methodName>d.multicall</methodName><params>'
-            '<param><value><string>main</string></value></param>'
-            '<param><value><string>d.hash=</string></value></param>'
-            '<param><value><string>d.name=</string></value></param>'
-            '</params></methodCall>'
+            '<methodName>' + method + '</methodName>'
+            '<params>' + params_xml + '</params>'
+            '</methodCall>'
         )
         r = requests.post(rpc_url, data=payload,
                           auth=(rt_user, rt_pass), verify=False, timeout=30)
         if r.status_code != 200:
-            raise Exception("XML-RPC HTTP " + str(r.status_code) + " — " + r.text[:100])
+            raise Exception(method + " → HTTP " + str(r.status_code))
+        return _xrpc.loads(r.text)[0][0]
 
-        # Parser avec xmlrpc.client
+    def _fetch_torrent_from_rutorrent(self, base, rt_url, rt_user, rt_pass):
+        """Récupère le .torrent via XML-RPC :
+           download_list → d.name sur chaque hash → session.path → FTP download.
+        """
+        import time as _time, ftplib, io
+        rpc_url = rt_url.rstrip("/") + "/plugins/httprpc/action.php"
+
+        _time.sleep(5)
+
+        # 1. Lister tous les hashes
+        hashes = self._xmlrpc_call(rpc_url, "download_list",
+                                   '<param><value><string></string></value></param>',
+                                   rt_user, rt_pass)
+        self._log("  " + str(len(hashes)) + " torrents dans ruTorrent")
+
+        # 2. Trouver le hash correspondant au nom (system.multicall pour tout en 1 requête)
+        import xmlrpc.client as _xrpc
+        calls_xml = "".join(
+            '<value><struct>'
+            '<member><name>methodName</name><value><string>d.name</string></value></member>'
+            '<member><name>params</name><value><array><data>'
+            '<value><string>' + h + '</string></value>'
+            '</data></array></value></member>'
+            '</struct></value>'
+            for h in hashes
+        )
+        payload_mc = (
+            '<?xml version="1.0"?><methodCall>'
+            '<methodName>system.multicall</methodName><params>'
+            '<param><value><array><data>' + calls_xml + '</data></array></value></param>'
+            '</params></methodCall>'
+        )
+        r_mc = requests.post(rpc_url, data=payload_mc,
+                             auth=(rt_user, rt_pass), verify=False, timeout=60)
+        found_hash = None
+        if r_mc.status_code == 200:
+            try:
+                results = _xrpc.loads(r_mc.text)[0][0]
+                names_found = []
+                for i, h in enumerate(hashes):
+                    try:
+                        name = results[i][0] if isinstance(results[i], (list, tuple)) else results[i]
+                        names_found.append(name)
+                        if name.lower() == base.lower():
+                            found_hash = h
+                            break
+                        if not found_hash and base.lower() in name.lower():
+                            found_hash = h  # match partiel, on continue au cas où
+                    except Exception:
+                        pass
+                self._log("  Noms dans ruTorrent : " + str(names_found[:10]))
+            except Exception as e_mc:
+                self._log("  system.multicall parse : " + str(e_mc))
+
+        # Fallback : requête individuelle d.name si system.multicall a échoué
+        if not found_hash:
+            for h in hashes:
+                try:
+                    name = self._xmlrpc_call(
+                        rpc_url, "d.name",
+                        '<param><value><string>' + h + '</string></value></param>',
+                        rt_user, rt_pass
+                    )
+                    if name.lower() == base.lower() or base.lower() in name.lower():
+                        found_hash = h
+                        self._log("  Match (fallback) : " + name + " → " + h)
+                        break
+                except Exception:
+                    pass
+
+        if not found_hash:
+            raise Exception("Torrent '" + base + "' introuvable dans ruTorrent après création.")
+
+        self._log("  Hash : " + found_hash)
+
+        # 3. Récupérer le chemin de session via XML-RPC
+        session_path = None
         try:
-            result   = _xrpc.loads(r.text)
-            torrents = result[0][0]   # liste de (hash, name)
-        except Exception as e_parse:
-            raise Exception("XML-RPC parse : " + str(e_parse) + " — " + r.text[:200])
+            session_path = self._xmlrpc_call(rpc_url, "session.path", "", rt_user, rt_pass)
+            self._log("  Session path : " + str(session_path))
+        except Exception as e_sp:
+            self._log("  session.path indisponible : " + str(e_sp))
 
-        # Log les noms présents pour faciliter le debug
-        names_found = [t[1] for t in torrents[:20]]
-        self._log("  Torrents dans ruTorrent : " + str(names_found))
+        # 4a. Téléchargement via FTP depuis le dossier session
+        if session_path:
+            try:
+                ftp_host = os.getenv("SFTP_HOST_FTP", "")
+                ftp_port = int(os.getenv("SFTP_PORT", "23421"))
+                ftp_user = os.getenv("SFTP_USER", "")
+                ftp_pass_env = os.getenv("SFTP_PASS", "")
+                ftp2 = ftplib.FTP_TLS()
+                ftp2.connect(ftp_host, ftp_port, timeout=15)
+                ftp2.login(ftp_user, ftp_pass_env)
+                ftp2.prot_p()
+                torrent_ftp_path = session_path.rstrip("/") + "/" + found_hash + ".torrent"
+                buf = io.BytesIO()
+                ftp2.retrbinary("RETR " + torrent_ftp_path, buf.write)
+                ftp2.quit()
+                data = buf.getvalue()
+                if data and data.lstrip()[:1] == b"d":
+                    self._log("  FTP session OK — " + str(len(data)) + " octets")
+                    return data
+            except Exception as e_ftp:
+                self._log("  FTP session : " + str(e_ftp))
 
-        # Recherche exacte puis partielle (cas où le nom diffère légèrement)
-        found = None
-        for pair in torrents:
-            if pair[1].lower() == base.lower():
-                found = pair[0]
-                break
-        if not found:
-            for pair in torrents:
-                if base.lower() in pair[1].lower():
-                    found = pair[0]
-                    self._log("  Match partiel : " + pair[1])
-                    break
-
-        if not found:
-            raise Exception(
-                "Torrent '" + base + "' introuvable dans ruTorrent. "
-                "Noms disponibles : " + str(names_found[:5])
-            )
-
-        self._log("  Hash trouvé : " + found)
-
-        # Essayer plusieurs endpoints de téléchargement ruTorrent
-        endpoints = [
-            rt_url.rstrip("/") + "/php/addtorrent.php?action=get-data&hash=" + found,
-            rt_url.rstrip("/") + "/php/torrent.php?action=get_torrent&hash=" + found,
-            rt_url.rstrip("/") + "/plugins/httprpc/action.php?hash=" + found,
-        ]
-        for ep in endpoints:
+        # 4b. Endpoints HTTP ruTorrent
+        for ep in [
+            rt_url.rstrip("/") + "/php/addtorrent.php?action=get-data&hash=" + found_hash,
+            rt_url.rstrip("/") + "/php/torrent.php?action=get_torrent&hash=" + found_hash,
+        ]:
             try:
                 rd = requests.get(ep, auth=(rt_user, rt_pass), verify=False, timeout=30)
-                self._log("  GET " + ep.split("?")[0] + " → HTTP " + str(rd.status_code) +
-                          " — " + str(len(rd.content)) + " octets")
+                self._log("  GET " + ep.split("?")[0] + " → " + str(rd.status_code) +
+                          " (" + str(len(rd.content)) + " o)")
                 if rd.status_code == 200 and rd.content and rd.content.lstrip()[:1] == b"d":
                     return rd.content
             except Exception:
                 continue
 
-        raise Exception("Aucun endpoint n'a retourné le .torrent pour hash=" + found)
+        raise Exception("Impossible de télécharger le .torrent (hash=" + found_hash + ").")
 
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
         """Crée les torrents via le plugin create de ruTorrent (côté seedbox, hash SB).
