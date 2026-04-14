@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.5-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.6-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -251,6 +251,14 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.2.6
+- Fix : **`config/` inaccessible via FTP** — le répertoire tasks/ de ruTorrent est chroot-bloqué pour le FTP. Nouvelle cascade de récupération :
+  - **A) HTTP GET** sur `plugins/create/action.php` — poll le statut des tâches et télécharge quand terminé (aucun FTP requis)
+  - **B) SFTP (SSH)** via `paramiko` — accès direct au filesystem sans restriction chroot (chemin absolu `{home}/config/rutorrent/share/users/{user}/settings/tasks/`)
+  - **C) FTP tasks/** — fallback si `RUTORRENT_TASKS_PATH` est configuré manuellement dans le .env
+- Ajout variable d'env optionnelle `SFTP_SSH_PORT` (défaut 22) pour le port SSH
+- Ajout variable d'env optionnelle `RUTORRENT_TASKS_PATH` pour chemin FTP custom
 
 ### v2.2.5
 - Fix : **stratégie de récupération du .torrent entièrement repensée** — le plugin create de ruTorrent sauvegarde le résultat mktorrent dans `config/rutorrent/share/users/{user}/settings/tasks/{task_id}/temp.torrent`. Le bot snapshote le dossier `tasks/` avant la création, déclenche le plugin, puis poll via FTP toutes les 5 s jusqu'à ce qu'un nouveau `temp.torrent` bencoded valide apparaisse (timeout 10 min)

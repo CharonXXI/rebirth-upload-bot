@@ -679,39 +679,174 @@ class API:
             else:
                 raise Exception("Upload Filebrowser échoué pour " + fname + " : " + str(r.status_code))
 
-    def _list_rutorrent_tasks(self, ftp_host, ftp_port, ftp_user, ftp_pass, rt_user):
-        """Liste les task IDs dans config/rutorrent/share/users/{rt_user}/settings/tasks/"""
-        import ftplib
-        parts = ["config", "rutorrent", "share", "users", rt_user, "settings", "tasks"]
-        ftp = ftplib.FTP_TLS()
-        ftp.connect(ftp_host, ftp_port, timeout=15)
-        ftp.login(ftp_user, ftp_pass)
-        ftp.prot_p()
-        try:
-            for p in parts:
-                ftp.cwd(p)
-            entries = set(e for e in ftp.nlst() if e not in (".", ".."))
-            ftp.quit()
-            return entries
-        except Exception:
-            try:
-                ftp.quit()
-            except Exception:
-                pass
-            raise
-
-    def _poll_rutorrent_task(self, ftp_host, ftp_port, ftp_user, ftp_pass, rt_user,
-                             before_tasks, timeout=600):
-        """Attend qu'un nouveau dossier tasks/ contienne un temp.torrent bencoded valide.
-        Le plugin create de ruTorrent sauvegarde le résultat mktorrent ici :
-        config/rutorrent/share/users/{rt_user}/settings/tasks/{task_id}/temp.torrent
+    # ──────────────────────────────────────────────────────────────────────────
+    # Méthode A : HTTP GET sur le plugin create (aucun accès FTP requis)
+    # ──────────────────────────────────────────────────────────────────────────
+    def _poll_via_http_api(self, create_url, rt_user, rt_pass, base, timeout=600):
+        """Poll l'API HTTP du plugin create ruTorrent.
+        GET /plugins/create/action.php → liste des tâches + statut.
+        Quand terminé, télécharge le .torrent via l'URL de la tâche.
         """
-        import ftplib, io, time
-        parts = ["config", "rutorrent", "share", "users", rt_user, "settings", "tasks"]
+        import time
         deadline = time.time() + timeout
         poll_interval = 5
+        self._log("  [HTTP] Polling create plugin API…")
 
-        self._log("  Polling tasks ruTorrent (max " + str(timeout) + "s)…")
+        while time.time() < deadline:
+            time.sleep(poll_interval)
+            try:
+                r = requests.get(create_url, auth=(rt_user, rt_pass),
+                                 verify=False, timeout=10)
+                preview = r.text[:400].replace("\n", " ")
+                self._log("  [HTTP] " + str(r.status_code) + " : " + preview)
+
+                if r.status_code == 200:
+                    try:
+                        data = r.json()
+                        tasks = data if isinstance(data, list) else []
+                        for task in tasks:
+                            t_name   = str(task.get("name",     task.get("n",  "")))
+                            t_status = str(task.get("status",   task.get("s",  ""))).lower()
+                            t_id     = str(task.get("id",       task.get("taskid", "")))
+                            t_prog   = str(task.get("progress", task.get("proc", ""))).strip()
+                            self._log("  [HTTP] tâche id=" + t_id +
+                                      " name=" + t_name +
+                                      " status=" + t_status +
+                                      " prog=" + t_prog)
+                            if base.lower() in t_name.lower():
+                                done = (t_status in ("done", "finished", "complete", "1") or
+                                        t_prog in ("100", "1.0", "1"))
+                                if done:
+                                    for suffix in [
+                                        "?action=download&taskid=" + t_id,
+                                        "?download=1&id=" + t_id,
+                                        "?id=" + t_id + "&action=getfile",
+                                    ]:
+                                        try:
+                                            dl = requests.get(
+                                                create_url + suffix,
+                                                auth=(rt_user, rt_pass),
+                                                verify=False, timeout=30)
+                                            if dl.content and dl.content.lstrip()[:1] == b"d":
+                                                self._log("  [HTTP] ✅ .torrent OK ("
+                                                          + suffix + ")", "success")
+                                                return dl.content
+                                            self._log("  [HTTP] " + suffix + " → " +
+                                                      dl.content[:80].decode("utf-8", errors="replace"))
+                                        except Exception as e_dl:
+                                            self._log("  [HTTP] dl erreur : " + str(e_dl))
+                    except (ValueError, KeyError) as e_j:
+                        self._log("  [HTTP] parse JSON : " + str(e_j))
+            except Exception as e:
+                self._log("  [HTTP] erreur : " + str(e))
+            poll_interval = min(poll_interval + 3, 30)
+
+        raise Exception("[HTTP] Timeout " + str(timeout) + "s")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Méthode B : SFTP via paramiko (SSH, pas de chroot FTP)
+    # ──────────────────────────────────────────────────────────────────────────
+    def _poll_via_sftp(self, sftp_host, ssh_port, sftp_user, sftp_pass,
+                       rt_user, before_ts, timeout=600):
+        """Récupère temp.torrent via SFTP (SSH) — accès illimité au filesystem.
+        Chemin : {home}/config/rutorrent/share/users/{rt_user}/settings/tasks/
+        """
+        try:
+            import paramiko
+        except ImportError:
+            raise Exception("paramiko non installé (pip install paramiko)")
+
+        import time, io
+        deadline = time.time() + timeout
+        poll_interval = 5
+        self._log("  [SFTP] Connexion SSH " + sftp_host + ":" + str(ssh_port) + "…")
+
+        while time.time() < deadline:
+            time.sleep(poll_interval)
+            transport = None
+            try:
+                transport = paramiko.Transport((sftp_host, ssh_port))
+                transport.connect(username=sftp_user, password=sftp_pass)
+                sftp = paramiko.SFTPClient.from_transport(transport)
+
+                home      = sftp.normalize(".")
+                tasks_dir = (home + "/config/rutorrent/share/users/"
+                             + rt_user + "/settings/tasks")
+                self._log("  [SFTP] tasks dir : " + tasks_dir)
+
+                try:
+                    all_ids = sftp.listdir(tasks_dir)
+                except Exception as e_ls:
+                    self._log("  [SFTP] listdir : " + str(e_ls))
+                    transport.close()
+                    poll_interval = min(poll_interval + 3, 30)
+                    continue
+
+                # Garder seulement les tâches récentes (mtime >= avant le POST)
+                new_tasks = []
+                for tid in all_ids:
+                    try:
+                        st = sftp.stat(tasks_dir + "/" + tid)
+                        if st.st_mtime >= before_ts - 60:
+                            new_tasks.append(tid)
+                    except Exception:
+                        pass
+
+                if not new_tasks:
+                    self._log("  [SFTP] Attente… (" +
+                              str(int(deadline - time.time())) + "s restantes)")
+                    transport.close()
+                    transport = None
+                    poll_interval = min(poll_interval + 2, 20)
+                    continue
+
+                for task_id in sorted(new_tasks, reverse=True):
+                    task_file = tasks_dir + "/" + task_id + "/temp.torrent"
+                    try:
+                        st = sftp.stat(task_file)
+                        if st.st_size > 100:
+                            buf = io.BytesIO()
+                            with sftp.file(task_file, "rb") as f:
+                                buf.write(f.read())
+                            data = buf.getvalue()
+                            if data and data.lstrip()[:1] == b"d":
+                                transport.close()
+                                self._log("  [SFTP] ✅ temp.torrent OK — tâche "
+                                          + task_id + " (" + str(len(data)) + " o)",
+                                          "success")
+                                return data
+                        self._log("  [SFTP] tâche " + task_id + " : " +
+                                  str(st.st_size) + " o (hashage en cours…)")
+                    except IOError:
+                        self._log("  [SFTP] tâche " + task_id +
+                                  " : temp.torrent pas encore créé")
+                    break
+
+            except Exception as e:
+                self._log("  [SFTP] erreur : " + str(e))
+            finally:
+                if transport:
+                    try:
+                        transport.close()
+                    except Exception:
+                        pass
+            poll_interval = min(poll_interval + 3, 30)
+
+        raise Exception("[SFTP] Timeout " + str(timeout) + "s")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Méthode C : FTP tasks dir (chemin configurable via RUTORRENT_TASKS_PATH)
+    # ──────────────────────────────────────────────────────────────────────────
+    def _poll_via_ftp_tasks(self, ftp_host, ftp_port, ftp_user, ftp_pass,
+                            tasks_rel_path, before_tasks, timeout=600):
+        """Récupère temp.torrent via FTP depuis un chemin configuré manuellement.
+        Configurer RUTORRENT_TASKS_PATH dans le .env (ex: config/rutorrent/share/users/wydg/settings/tasks)
+        """
+        import ftplib, io, time
+        parts = [p for p in tasks_rel_path.strip("/").split("/") if p]
+        deadline = time.time() + timeout
+        poll_interval = 5
+        self._log("  [FTP] Polling " + tasks_rel_path + "…")
 
         while time.time() < deadline:
             time.sleep(poll_interval)
@@ -724,11 +859,11 @@ class API:
                 for p in parts:
                     ftp.cwd(p)
 
-                current = set(e for e in ftp.nlst() if e not in (".", ".."))
+                current   = set(e for e in ftp.nlst() if e not in (".", ".."))
                 new_tasks = current - before_tasks
 
                 if not new_tasks:
-                    self._log("  Attente nouvelle tâche… (" +
+                    self._log("  [FTP] Attente… (" +
                               str(int(deadline - time.time())) + "s restantes)")
                     try:
                         ftp.quit()
@@ -738,7 +873,6 @@ class API:
                     poll_interval = min(poll_interval + 2, 20)
                     continue
 
-                # Essayer la tâche la plus récente (tri décroissant = timestamp le + élevé)
                 for task_id in sorted(new_tasks, reverse=True):
                     try:
                         ftp.cwd(task_id)
@@ -751,45 +885,47 @@ class API:
                             except Exception:
                                 pass
                             ftp = None
-                            self._log("  ✅ temp.torrent OK — tâche " + task_id +
+                            self._log("  [FTP] ✅ temp.torrent OK — tâche " + task_id +
                                       " (" + str(len(data)) + " o)", "success")
                             return data
-                        self._log("  Tâche " + task_id + " : hashage en cours (" +
-                                  str(len(data)) + " o)…")
-                    except ftplib.error_perm as ep:
-                        self._log("  Tâche " + task_id + " : " + str(ep))
+                        self._log("  [FTP] tâche " + task_id + " : " +
+                                  str(len(data)) + " o (hashage en cours…)")
                     except Exception as et:
-                        self._log("  Tâche " + task_id + " erreur : " + str(et))
-                    break  # Une seule tâche testée par cycle de polling
+                        self._log("  [FTP] tâche " + task_id + " : " + str(et))
+                    break
 
             except Exception as e:
-                self._log("  Erreur FTP poll : " + str(e))
+                self._log("  [FTP] erreur : " + str(e))
             finally:
                 if ftp:
                     try:
                         ftp.quit()
                     except Exception:
                         pass
-
             poll_interval = min(poll_interval + 3, 30)
 
-        raise Exception("Timeout " + str(timeout) + "s : temp.torrent non récupéré depuis ruTorrent")
+        raise Exception("[FTP] Timeout " + str(timeout) + "s")
 
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
         """Crée les torrents via le plugin create de ruTorrent (hash côté seedbox).
-        Piece size 4 MiB. Récupère le .torrent depuis le dossier tasks/ ruTorrent via FTP
-        et le sauvegarde localement dans BASE_DIR/TORRENTS/.
+        Piece size 4 MiB. Récupère le .torrent en cascade :
+          A) HTTP GET sur le plugin create (aucun accès FTP requis)
+          B) SFTP via paramiko (SSH, pas de chroot)
+          C) FTP tasks dir (si RUTORRENT_TASKS_PATH est configuré dans le .env)
         """
-        import urllib3
+        import urllib3, time
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        rt_url   = os.getenv("RUTORRENT_URL", "")
-        rt_user  = os.getenv("RUTORRENT_USER", "")
-        rt_pass  = os.getenv("RUTORRENT_PASS", "")
-        ftp_host = os.getenv("SFTP_HOST_FTP", "")
-        ftp_port = int(os.getenv("SFTP_PORT", "21"))
-        ftp_user = os.getenv("SFTP_USER", "")
-        ftp_pass = os.getenv("SFTP_PASS", "")
+        rt_url    = os.getenv("RUTORRENT_URL", "")
+        rt_user   = os.getenv("RUTORRENT_USER", "")
+        rt_pass   = os.getenv("RUTORRENT_PASS", "")
+        ftp_host  = os.getenv("SFTP_HOST_FTP", "")
+        ftp_port  = int(os.getenv("SFTP_PORT", "21"))
+        ftp_user  = os.getenv("SFTP_USER", "")
+        ftp_pass  = os.getenv("SFTP_PASS", "")
+        sftp_host = os.getenv("SFTP_HOST", "")
+        ssh_port  = int(os.getenv("SFTP_SSH_PORT", "22"))
+        tasks_path_env = os.getenv("RUTORRENT_TASKS_PATH", "")
 
         if not rt_url:
             raise Exception("ruTorrent URL non configurée dans le .env")
@@ -803,18 +939,25 @@ class API:
                 continue
             self._log("Création torrent SB pour " + tk_name + "…")
 
-            # ── 1. Snapshot du dossier tasks/ AVANT la création ────────────────
+            # ── 1. Snapshot FTP tasks/ (best-effort, pour méthode C) ───────────
             before_tasks = set()
-            try:
-                before_tasks = self._list_rutorrent_tasks(
-                    ftp_host, ftp_port, ftp_user, ftp_pass, rt_user
-                )
-                self._log("  Tâches existantes : " + str(len(before_tasks)))
-            except Exception as e_snap:
-                self._log("  ⚠ Snapshot tasks échoué : " + str(e_snap) +
-                          " — polling sur toutes les tâches", "warn")
+            before_ts    = time.time()
+            if tasks_path_env:
+                try:
+                    import ftplib
+                    ftp_s = ftplib.FTP_TLS()
+                    ftp_s.connect(ftp_host, ftp_port, timeout=15)
+                    ftp_s.login(ftp_user, ftp_pass)
+                    ftp_s.prot_p()
+                    for p in [x for x in tasks_path_env.strip("/").split("/") if x]:
+                        ftp_s.cwd(p)
+                    before_tasks = set(e for e in ftp_s.nlst() if e not in (".", ".."))
+                    ftp_s.quit()
+                    self._log("  [FTP] snapshot : " + str(len(before_tasks)) + " tâches")
+                except Exception as e_snap:
+                    self._log("  [FTP] snapshot échoué : " + str(e_snap), "warn")
 
-            # ── 2. Déclenchement de la création côté ruTorrent ─────────────────
+            # ── 2. POST au plugin create ────────────────────────────────────────
             post_data = {
                 "name":         base,
                 "dir":          remote_path.rstrip("/") + "/",
@@ -827,17 +970,12 @@ class API:
 
             self._log("  POST → " + create_url)
             self._log("  dir  = " + post_data["dir"])
-            r = requests.post(
-                create_url,
-                data=post_data,
-                auth=(rt_user, rt_pass),
-                verify=False,
-                timeout=120,
-            )
+            r = requests.post(create_url, data=post_data,
+                              auth=(rt_user, rt_pass), verify=False, timeout=120)
             self._log("  HTTP " + str(r.status_code) + " — " + str(len(r.content)) + " o")
             if r.content:
                 preview = r.content[:120].decode("utf-8", errors="replace").replace("\n", " ")
-                self._log("  Réponse : " + preview)
+                self._log("  Réponse POST : " + preview)
 
             if r.status_code != 200:
                 raise Exception(
@@ -846,23 +984,39 @@ class API:
                     " (vérifier que le plugin 'create' est installé)"
                 )
 
-            # ── 3. Récupérer le .torrent depuis le dossier tasks/ ──────────────
+            # ── 3. Récupération du .torrent (cascade A → B → C) ───────────────
             torrent_bytes = None
 
-            # Cas rare : le plugin renvoie directement le binaire
+            # Réponse directe (rare)
             if r.content and r.content.lstrip()[:1] == b"d":
                 torrent_bytes = r.content
-                self._log("  📦 .torrent reçu dans la réponse HTTP", "success")
+                self._log("  📦 .torrent reçu directement dans la réponse POST", "success")
 
-            # Cas normal : attendre que mktorrent termine et lire temp.torrent via FTP
+            # A) HTTP GET polling du plugin create
             if not torrent_bytes:
                 try:
-                    torrent_bytes = self._poll_rutorrent_task(
+                    torrent_bytes = self._poll_via_http_api(
+                        create_url, rt_user, rt_pass, base, timeout=600)
+                except Exception as e_http:
+                    self._log("  ⚠ [HTTP] " + str(e_http), "warn")
+
+            # B) SFTP (SSH, pas de chroot) — nécessite paramiko
+            if not torrent_bytes and sftp_host:
+                try:
+                    torrent_bytes = self._poll_via_sftp(
+                        sftp_host, ssh_port, ftp_user, ftp_pass,
+                        rt_user, before_ts, timeout=600)
+                except Exception as e_sftp:
+                    self._log("  ⚠ [SFTP] " + str(e_sftp), "warn")
+
+            # C) FTP tasks dir — seulement si RUTORRENT_TASKS_PATH configuré
+            if not torrent_bytes and tasks_path_env:
+                try:
+                    torrent_bytes = self._poll_via_ftp_tasks(
                         ftp_host, ftp_port, ftp_user, ftp_pass,
-                        rt_user, before_tasks, timeout=600
-                    )
-                except Exception as e_poll:
-                    self._log("  ⚠ Poll tâche échoué : " + str(e_poll), "warn")
+                        tasks_path_env, before_tasks, timeout=600)
+                except Exception as e_ftp:
+                    self._log("  ⚠ [FTP] " + str(e_ftp), "warn")
 
             # ── 4. Sauvegarde locale ────────────────────────────────────────────
             if torrent_bytes:
