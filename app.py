@@ -844,26 +844,75 @@ class API:
             raise Exception("[XRPC] session.path : " + str(e_sp))
 
         # Dériver le home utilisateur depuis session_path
-        # Ex : /sdc/wydg/config/rtorrent/rtorrent_sess → home = /sdc/wydg/
+        # Ex : /sdc/wydg/config/rtorrent/rtorrent_sess → home = /sdc/wydg
         parts = session_path.strip("/").split("/")
-        home = "/"
+        home = ""
         for i, p in enumerate(parts):
             if p.lower() in ("config", ".config"):
-                home = "/" + "/".join(parts[:i]) + "/"
+                home = "/" + "/".join(parts[:i])
                 break
+        if not home:
+            home = "/" + "/".join(parts[:2])  # fallback : 2 premiers composants
 
-        src_file  = session_path + "/" + found_hash + ".torrent"
+        # ── 2b. directory.default → vrai répertoire download de rtorrent ────
+        dl_default = home + "/rtorrent"        # fallback
+        try:
+            r_dd = requests.post(
+                rpc_url,
+                data=('<?xml version="1.0"?><methodCall>'
+                      '<methodName>directory.default</methodName>'
+                      '<params></params></methodCall>'),
+                auth=(rt_user, rt_pass), verify=False, timeout=10)
+            dd_val = _xrpc.loads(r_dd.text)[0][0].rstrip("/")
+            if dd_val:
+                dl_default = dd_val
+            self._log("  [XRPC] directory.default : " + dl_default)
+        except Exception as e_dd:
+            self._log("  [XRPC] directory.default : " + str(e_dd))
+
+        # ── 2c. d.tied_to_file → chemin exact du .torrent chargé ────────────
+        tied_file = ""
+        try:
+            r_ttf = requests.post(
+                rpc_url,
+                data=('<?xml version="1.0"?><methodCall>'
+                      '<methodName>d.tied_to_file</methodName>'
+                      '<params><param><value><string>'
+                      + found_hash +
+                      '</string></value></param></params></methodCall>'),
+                auth=(rt_user, rt_pass), verify=False, timeout=10)
+            tied_file = _xrpc.loads(r_ttf.text)[0][0]
+            self._log("  [XRPC] d.tied_to_file : " + tied_file)
+        except Exception as e_ttf:
+            self._log("  [XRPC] d.tied_to_file : " + str(e_ttf))
+
         tmp_name  = "temp_" + found_hash[:16] + ".torrent"
-        dest_file = home + "rtorrent/" + tmp_name
-        self._log("  [XRPC] cp " + src_file + " → " + dest_file)
+        dest_file = dl_default + "/" + tmp_name
 
-        # ── 3. execute.nothrow.bg cp ─────────────────────────────────────────
-        # Cherche /bin/cp ou /usr/bin/cp selon la distrib
+        # Dériver le chemin FTP relatif à partir de dl_default et home
+        ftp_dir = "rtorrent"       # fallback
+        home_rel = home.strip("/")
+        dl_rel   = dl_default.strip("/")
+        if dl_rel.startswith(home_rel + "/"):
+            ftp_dir = dl_rel[len(home_rel) + 1:]
+        self._log("  [XRPC] dest : " + dest_file + "  (FTP: " + ftp_dir + "/)")
+
+        # Sources à essayer pour la copie (tied_to_file en priorité, session en fallback)
+        src_session = session_path + "/" + found_hash + ".torrent"
+        sources = []
+        if tied_file:
+            sources.append(tied_file)
+        sources.append(src_session)
+
+        # ── 3. /bin/sh -c "cp SRC DST && chmod 644 DST" ─────────────────────
+        # Execute via shell pour chaîner cp+chmod en une commande atomique,
+        # et tenter plusieurs sources si la première n'existe pas.
         exec_ok = False
-        for cp_bin in ("/bin/cp", "/usr/bin/cp"):
+        for src in sources:
+            shell_cmd = ("cp '" + src + "' '" + dest_file + "' "
+                         "&& chmod 644 '" + dest_file + "'")
+            self._log("  [XRPC] sh -c : " + shell_cmd)
             for exec_method in ("execute.nothrow.bg", "execute.nothrow", "execute"):
-                # Format rtorrent : (target="", command, arg1, arg2, ...)
-                # Le premier paramètre est toujours la cible (vide = global)
                 for with_target in (True, False):
                     try:
                         target_xml = ('<param><value><string></string></value></param>'
@@ -873,18 +922,16 @@ class API:
                             data=('<?xml version="1.0"?><methodCall>'
                                   '<methodName>' + exec_method + '</methodName><params>'
                                   + target_xml +
-                                  '<param><value><string>' + cp_bin + '</string></value></param>'
-                                  '<param><value><string>' + src_file + '</string></value></param>'
-                                  '<param><value><string>' + dest_file + '</string></value></param>'
+                                  '<param><value><string>/bin/sh</string></value></param>'
+                                  '<param><value><string>-c</string></value></param>'
+                                  '<param><value><string>' + shell_cmd + '</string></value></param>'
                                   '</params></methodCall>'),
-                            auth=(rt_user, rt_pass), verify=False, timeout=15)
-                        resp_preview = r_exec.text[:200].replace("\n", " ")
+                            auth=(rt_user, rt_pass), verify=False, timeout=20)
+                        resp = r_exec.text[:200].replace("\n", " ")
                         self._log("  [XRPC] " + exec_method
-                                  + (" +target" if with_target else " -target")
-                                  + " " + cp_bin.split("/")[-1]
+                                  + (" +t" if with_target else "")
                                   + " : HTTP " + str(r_exec.status_code)
-                                  + " — " + resp_preview)
-                        # Succès si HTTP 200 sans fault XML-RPC
+                                  + " — " + resp)
                         if r_exec.status_code == 200 and "<fault>" not in r_exec.text:
                             exec_ok = True
                             break
@@ -895,38 +942,7 @@ class API:
             if exec_ok:
                 break
         if not exec_ok:
-            self._log("  [XRPC] ⚠ execute.nothrow.bg bloqué — tentative FTP directe", "warn")
-        else:
-            # ── 3b. chmod 644 sur le fichier copié ──────────────────────────
-            # Le .torrent de session est en mode 600 (rtorrent user) → FTP user
-            # ne peut pas lire. On fixe les permissions juste après le cp.
-            chmod_done = False
-            for chmod_bin in ("/bin/chmod", "/usr/bin/chmod"):
-                for with_target in (True, False):
-                    try:
-                        target_xml = ('<param><value><string></string></value></param>'
-                                      if with_target else "")
-                        r_ch = requests.post(
-                            rpc_url,
-                            data=('<?xml version="1.0"?><methodCall>'
-                                  '<methodName>execute.nothrow.bg</methodName><params>'
-                                  + target_xml +
-                                  '<param><value><string>' + chmod_bin + '</string></value></param>'
-                                  '<param><value><string>644</string></value></param>'
-                                  '<param><value><string>' + dest_file + '</string></value></param>'
-                                  '</params></methodCall>'),
-                            auth=(rt_user, rt_pass), verify=False, timeout=10)
-                        self._log("  [XRPC] chmod 644 : HTTP " + str(r_ch.status_code)
-                                  + " — " + r_ch.text[:100].replace("\n", " "))
-                        if r_ch.status_code == 200 and "<fault>" not in r_ch.text:
-                            chmod_done = True
-                            break
-                    except Exception as e_ch:
-                        self._log("  [XRPC] chmod : " + str(e_ch))
-                if chmod_done:
-                    break
-            if not chmod_done:
-                self._log("  [XRPC] ⚠ chmod 644 échoué — le FTP pourrait refuser la lecture", "warn")
+            self._log("  [XRPC] ⚠ execute bloqué ou toutes sources échouées", "warn")
 
         def _cleanup_exec():
             """Supprime le fichier temporaire via execute.nothrow.bg rm."""
@@ -946,7 +962,7 @@ class API:
             except Exception:
                 pass
 
-        # ── 4. FTP RETR rtorrent/temp_{hash16}.torrent ───────────────────────
+        # ── 4. FTP RETR {ftp_dir}/temp_{hash16}.torrent ──────────────────────
         for wait_s in (3, 5, 8, 12):
             time.sleep(wait_s)
             ftp = None
@@ -955,12 +971,14 @@ class API:
                 ftp.connect(ftp_host, ftp_port, timeout=15)
                 ftp.login(ftp_user, ftp_pass)
                 ftp.prot_p()
-                ftp.cwd("rtorrent")
-                # Debug NLST : vérifier si le fichier est visible en listing
+                if ftp_dir:
+                    for part in [x for x in ftp_dir.split("/") if x]:
+                        ftp.cwd(part)
+                # NLST : vérifier si le fichier est visible
                 try:
                     nlst = ftp.nlst()
                     has_file = any(tmp_name in f for f in nlst)
-                    self._log("  [XRPC] rtorrent/ NLST : " + str(len(nlst))
+                    self._log("  [XRPC] " + ftp_dir + "/ NLST : " + str(len(nlst))
                               + " entrées, " + tmp_name + " présent=" + str(has_file))
                 except Exception as e_nlst:
                     self._log("  [XRPC] NLST : " + str(e_nlst))
@@ -995,7 +1013,7 @@ class API:
                     verify=False, timeout=15)
                 if r_login.status_code == 200:
                     fb_token = r_login.text.strip().strip('"')
-                    fb_path  = "/rtorrent/" + tmp_name
+                    fb_path  = "/" + ftp_dir.strip("/") + "/" + tmp_name
                     r_dl = requests.get(
                         fb_url.rstrip("/") + "/api/raw" + fb_path,
                         headers={"X-Auth": fb_token},
