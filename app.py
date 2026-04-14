@@ -55,6 +55,7 @@ class API:
             "TRACKER_C411":       os.getenv("TRACKER_C411", ""),
             "TRACKER_TORR9":      os.getenv("TRACKER_TORR9", ""),
             "TRACKER_LACALE":     os.getenv("TRACKER_LACALE", ""),
+            "BDINFO_CLI_PATH":    os.getenv("BDINFO_CLI_PATH", ""),
         }
 
     def save_config(self, cfg: dict):
@@ -254,6 +255,160 @@ class API:
             file_types=("Vidéo (*.mkv;*.mp4)",)
         )
         return list(result) if result else []
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # BD Info
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def browse_folder_bdinfo(self):
+        """Ouvre le Finder pour sélectionner un dossier BDMV (ou son parent)."""
+        films_dir = BASE_DIR / "FILMS"
+        start_dir = str(films_dir) if films_dir.exists() else str(Path.home())
+        result = self.window.create_file_dialog(
+            webview.FOLDER_DIALOG,
+            directory=start_dir
+        )
+        if result and result[0]:
+            return {"path": result[0]}
+        return {"path": ""}
+
+    def run_bdinfo_scan(self, folder_path: str):
+        """Lance BDInfoCLI sur folder_path (thread séparé).
+        Cherche le dossier BDMV à l'intérieur si nécessaire.
+        Sauvegarde le rapport dans BDINFO/<nom>.nfo et l'émet via log.
+        """
+        threading.Thread(
+            target=self._bdinfo_worker,
+            args=(folder_path,),
+            daemon=True
+        ).start()
+        return {"ok": True}
+
+    def _bdinfo_worker(self, folder_path: str):
+        import subprocess
+
+        def _log(msg, level="info"):
+            self._emit("bdinfo_log", {"msg": msg, "level": level})
+
+        _log("▶ Démarrage BD Info — " + folder_path)
+
+        # ── 1. Trouver le dossier racine contenant BDMV ───────────────────────
+        scan_root = folder_path
+        folder_path_obj = Path(folder_path)
+
+        # Si l'utilisateur a sélectionné BDMV directement → prendre le parent
+        if folder_path_obj.name.upper() == "BDMV":
+            scan_root = str(folder_path_obj.parent)
+            _log("  BDMV détecté → scan root : " + scan_root)
+        else:
+            # Chercher BDMV dans les sous-dossiers (profondeur max 3)
+            found_bdmv = None
+            for depth in range(1, 4):
+                pattern = "/".join(["*"] * depth) + "/BDMV"
+                matches = list(folder_path_obj.glob(pattern))
+                if matches:
+                    found_bdmv = matches[0].parent   # parent de BDMV
+                    break
+            # Aussi vérifier BDMV directement dans folder_path
+            if not found_bdmv and (folder_path_obj / "BDMV").exists():
+                found_bdmv = folder_path_obj
+            if found_bdmv:
+                scan_root = str(found_bdmv)
+                _log("  BDMV trouvé → scan root : " + scan_root)
+            else:
+                _log("  ⚠ Aucun dossier BDMV trouvé dans " + folder_path, "warn")
+                _log("  Scan lancé sur le dossier sélectionné quand même…", "warn")
+
+        # ── 2. Localiser dotnet et BDInfo.dll ────────────────────────────────
+        bdinfo_dll = os.getenv("BDINFO_CLI_PATH", "")
+        if not bdinfo_dll:
+            candidates = [
+                Path.home() / "BDInfoCLI/BDInfo/bin/Release/net8.0/osx-arm64/BDInfo.dll",
+                Path.home() / "BDInfoCLI/BDInfo/bin/Release/net8.0/linux-x64/BDInfo.dll",
+                Path.home() / "BDInfoCLI/BDInfo/bin/Release/net8.0/win-x64/BDInfo.dll",
+                BASE_DIR / "BDInfoCLI/BDInfo/bin/Release/net8.0/osx-arm64/BDInfo.dll",
+            ]
+            for c in candidates:
+                if c.exists():
+                    bdinfo_dll = str(c)
+                    _log("  BDInfo.dll : " + bdinfo_dll)
+                    break
+
+        if not bdinfo_dll:
+            _log("  ✖ BDInfo.dll introuvable. Configurez BDINFO_CLI_PATH dans le .env", "error")
+            self._emit("bdinfo_done", {"ok": False, "error": "BDInfo.dll introuvable"})
+            return
+
+        # dotnet : chercher dans Homebrew d'abord (PyWebView n'hérite pas du PATH user)
+        dotnet_candidates = [
+            "/opt/homebrew/opt/dotnet@8/bin/dotnet",
+            "/opt/homebrew/bin/dotnet",
+            "/usr/local/bin/dotnet",
+            "/usr/bin/dotnet",
+            "dotnet",
+        ]
+        dotnet_bin = "dotnet"
+        for dc in dotnet_candidates:
+            if dc == "dotnet" or Path(dc).exists():
+                dotnet_bin = dc
+                break
+
+        _log("  dotnet : " + dotnet_bin)
+
+        # DOTNET_ROOT pour Homebrew (évite l'erreur "No usable version of libssl")
+        env = os.environ.copy()
+        if "DOTNET_ROOT" not in env:
+            dotnet_root = "/opt/homebrew/opt/dotnet@8/libexec"
+            if Path(dotnet_root).exists():
+                env["DOTNET_ROOT"] = dotnet_root
+
+        # ── 3. Lancer BDInfoCLI ───────────────────────────────────────────────
+        cmd = [dotnet_bin, bdinfo_dll, "-w", scan_root]
+        _log("  CMD : " + " ".join(cmd))
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env
+            )
+            output_lines = []
+            for line in proc.stdout:
+                line = line.rstrip()
+                output_lines.append(line)
+                _log(line)
+            proc.wait()
+        except Exception as e_proc:
+            _log("  ✖ Erreur subprocess : " + str(e_proc), "error")
+            self._emit("bdinfo_done", {"ok": False, "error": str(e_proc)})
+            return
+
+        output_text = "\n".join(output_lines)
+
+        if proc.returncode != 0:
+            _log("  ⚠ BDInfoCLI exit code " + str(proc.returncode), "warn")
+
+        # ── 4. Sauvegarder le .nfo ────────────────────────────────────────────
+        nfo_dir = BASE_DIR / "BDINFO"
+        nfo_dir.mkdir(exist_ok=True)
+        folder_name = Path(scan_root).name or Path(folder_path).name
+        nfo_path = nfo_dir / (folder_name + ".nfo")
+        try:
+            nfo_path.write_text(output_text, encoding="utf-8")
+            _log("  💾 NFO sauvegardé → BDINFO/" + nfo_path.name, "success")
+        except Exception as e_nfo:
+            _log("  ⚠ Impossible d'écrire le NFO : " + str(e_nfo), "warn")
+
+        self._emit("bdinfo_done", {
+            "ok":       True,
+            "nfo_path": str(nfo_path),
+            "nfo_name": nfo_path.name,
+            "lines":    len(output_lines),
+        })
 
     def _emit(self, event: str, data):
         payload = json.dumps(data).replace("'", "\\'")

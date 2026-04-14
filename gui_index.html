@@ -305,6 +305,9 @@ html.light body::before {
       <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this); tsbSyncTrackers(); tsbLoadFiles()">
         <span class="nav-icon">🧲</span> Torrent SB
       </div>
+      <div class="nav-item" data-page="bdinfo" onclick="showPage('bdinfo', this)">
+        <span class="nav-icon">💿</span> BD Info
+      </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
       </div>
@@ -535,6 +538,38 @@ html.light body::before {
         </div>
       </div>
 
+      <!-- ═══════════════════════════════════════════════════════════ BD INFO -->
+      <div id="page-bdinfo" class="page">
+        <div style="padding:28px;overflow-y:auto;max-width:640px;">
+          <div class="section-label">BD Info</div>
+          <p style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:20px;line-height:1.7;">
+            Scanne un disque Blu-ray (dossier contenant <strong style="color:var(--text)">BDMV/</strong>)<br>
+            via <strong style="color:var(--text)">BDInfoCLI</strong> et génère un rapport <strong style="color:var(--orange)">.nfo</strong> dans le dossier <strong style="color:var(--text)">BDINFO/</strong>.
+          </p>
+
+          <!-- Chemin du dossier -->
+          <div class="field-group">
+            <label class="field-label">DOSSIER BDMV (ou son parent)</label>
+            <div style="display:flex;gap:8px;">
+              <input id="bdi-folder" class="field-input" type="text"
+                     placeholder="/Volumes/MonDisque/Film.2025.UHD.BluRay/" style="flex:1;"/>
+              <button onclick="bdiBrowse()" style="padding:8px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:11px;cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">📁 PARCOURIR</button>
+            </div>
+          </div>
+
+          <!-- Bouton scan -->
+          <button id="bdi-btn" onclick="bdiScan()" style="width:100%;margin-top:4px;padding:13px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='var(--orange2)'" onmouseout="this.style.background='var(--orange)'">
+            💿  SCANNER
+          </button>
+
+          <!-- Statut NFO -->
+          <div id="bdi-status" style="display:none;margin-top:12px;padding:10px 14px;border-radius:4px;background:var(--bg3);border:1px solid var(--border2);font-family:var(--mono);font-size:11px;"></div>
+
+          <!-- Log -->
+          <div id="bdi-log" style="margin-top:14px;font-family:var(--mono);font-size:11px;line-height:1.8;color:var(--text-dim);max-height:340px;overflow-y:auto;border:1px solid var(--border2);border-radius:4px;background:var(--bg3);padding:10px;display:none;"></div>
+        </div>
+      </div>
+
       <div id="page-config" class="page">
         <div class="section-label">Configuration</div>
         <div class="config-grid" id="config-grid"></div>
@@ -578,7 +613,69 @@ window._emit = function(event, data) {
   if (event === 'batch_done')       onBatchDone(data);
   if (event === 'done')             onDone(data);
   if (event === 'error')            onError(data);
+  if (event === 'bdinfo_log')       bdiAddLog(data.msg, data.level);
+  if (event === 'bdinfo_done')      bdiOnDone(data);
 };
+
+// ── BD Info ──────────────────────────────────────────────────────────────────
+
+async function bdiBrowse() {
+  const res = await window.pywebview.api.browse_folder_bdinfo();
+  if (res && res.path) {
+    document.getElementById('bdi-folder').value = res.path;
+  }
+}
+
+async function bdiScan() {
+  const folder = document.getElementById('bdi-folder').value.trim();
+  if (!folder) {
+    alert('Sélectionne ou saisis un chemin vers le dossier BDMV.');
+    return;
+  }
+  // Réinitialiser UI
+  var logEl    = document.getElementById('bdi-log');
+  var statusEl = document.getElementById('bdi-status');
+  var btn      = document.getElementById('bdi-btn');
+  logEl.innerHTML = '';
+  logEl.style.display = 'block';
+  statusEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = '⏳  SCAN EN COURS…';
+
+  await window.pywebview.api.run_bdinfo_scan(folder);
+}
+
+function bdiAddLog(msg, level) {
+  var logEl = document.getElementById('bdi-log');
+  if (!logEl) return;
+  var color = level === 'error'   ? 'var(--red)'
+            : level === 'warn'    ? '#f0a500'
+            : level === 'success' ? 'var(--green)'
+            : 'var(--text-dim)';
+  var line = document.createElement('div');
+  line.style.cssText = 'color:' + color + ';word-break:break-all;';
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function bdiOnDone(data) {
+  var btn      = document.getElementById('bdi-btn');
+  var statusEl = document.getElementById('bdi-status');
+  btn.disabled = false;
+  btn.textContent = '💿  SCANNER';
+  if (data.ok) {
+    statusEl.style.display = 'block';
+    statusEl.style.borderColor = 'var(--green)';
+    statusEl.innerHTML = '✅ &nbsp;<strong style="color:var(--green)">NFO généré</strong> &nbsp;→&nbsp; '
+      + '<span style="color:var(--orange)">BDINFO/' + data.nfo_name + '</span>'
+      + ' &nbsp;<span style="color:var(--text-dim)">(' + data.lines + ' lignes)</span>';
+  } else {
+    statusEl.style.display = 'block';
+    statusEl.style.borderColor = 'var(--red)';
+    statusEl.innerHTML = '✖ &nbsp;<span style="color:var(--red)">' + (data.error || 'Erreur inconnue') + '</span>';
+  }
+}
 
 function updateUploadProgress(d) {
   var el = document.getElementById('upload-progress-line');
