@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.6-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.7-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -251,6 +251,10 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.2.7
+- Fix : **HTTP API bail rapide** — si le plugin create retourne `[]` vide 3 fois de suite, abandon immédiat (le plugin ne supporte pas le GET) pour passer directement à SFTP
+- Fix : **auto-install paramiko** — si `paramiko` n'est pas installé, le bot l'installe automatiquement via `pip` avant la tentative SFTP
 
 ### v2.2.6
 - Fix : **`config/` inaccessible via FTP** — le répertoire tasks/ de ruTorrent est chroot-bloqué pour le FTP. Nouvelle cascade de récupération :

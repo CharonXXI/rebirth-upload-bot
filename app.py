@@ -682,37 +682,47 @@ class API:
     # ──────────────────────────────────────────────────────────────────────────
     # Méthode A : HTTP GET sur le plugin create (aucun accès FTP requis)
     # ──────────────────────────────────────────────────────────────────────────
-    def _poll_via_http_api(self, create_url, rt_user, rt_pass, base, timeout=600):
+    def _poll_via_http_api(self, create_url, rt_user, rt_pass, base, timeout=60):
         """Poll l'API HTTP du plugin create ruTorrent.
         GET /plugins/create/action.php → liste des tâches + statut.
-        Quand terminé, télécharge le .torrent via l'URL de la tâche.
+        Bail rapide si le plugin retourne toujours [] (ne supporte pas le GET).
         """
         import time
-        deadline = time.time() + timeout
-        poll_interval = 5
-        self._log("  [HTTP] Polling create plugin API…")
+        deadline       = time.time() + timeout
+        poll_interval  = 5
+        empty_streak   = 0   # nb de polls consécutifs avec liste vide
+        MAX_EMPTY      = 3   # abandon si [] 3 fois de suite
+        self._log("  [HTTP] Polling create plugin API (max " + str(timeout) + "s)…")
 
         while time.time() < deadline:
             time.sleep(poll_interval)
             try:
                 r = requests.get(create_url, auth=(rt_user, rt_pass),
                                  verify=False, timeout=10)
-                preview = r.text[:400].replace("\n", " ")
-                self._log("  [HTTP] " + str(r.status_code) + " : " + preview)
+                self._log("  [HTTP] " + str(r.status_code) + " : " +
+                           r.text[:200].replace("\n", " "))
 
                 if r.status_code == 200:
                     try:
-                        data = r.json()
+                        data  = r.json()
                         tasks = data if isinstance(data, list) else []
+
+                        if not tasks:
+                            empty_streak += 1
+                            if empty_streak >= MAX_EMPTY:
+                                raise Exception(
+                                    "GET retourne [] — le plugin create ne supporte "
+                                    "pas le polling HTTP, passage à SFTP")
+                            continue
+
+                        empty_streak = 0
                         for task in tasks:
                             t_name   = str(task.get("name",     task.get("n",  "")))
                             t_status = str(task.get("status",   task.get("s",  ""))).lower()
                             t_id     = str(task.get("id",       task.get("taskid", "")))
                             t_prog   = str(task.get("progress", task.get("proc", ""))).strip()
-                            self._log("  [HTTP] tâche id=" + t_id +
-                                      " name=" + t_name +
-                                      " status=" + t_status +
-                                      " prog=" + t_prog)
+                            self._log("  [HTTP] tâche " + t_id + " '" + t_name +
+                                      "' status=" + t_status + " prog=" + t_prog)
                             if base.lower() in t_name.lower():
                                 done = (t_status in ("done", "finished", "complete", "1") or
                                         t_prog in ("100", "1.0", "1"))
@@ -732,13 +742,16 @@ class API:
                                                           + suffix + ")", "success")
                                                 return dl.content
                                             self._log("  [HTTP] " + suffix + " → " +
-                                                      dl.content[:80].decode("utf-8", errors="replace"))
+                                                      dl.content[:80].decode(
+                                                          "utf-8", errors="replace"))
                                         except Exception as e_dl:
-                                            self._log("  [HTTP] dl erreur : " + str(e_dl))
-                    except (ValueError, KeyError) as e_j:
-                        self._log("  [HTTP] parse JSON : " + str(e_j))
+                                            self._log("  [HTTP] dl err : " + str(e_dl))
+                    except Exception as e_j:
+                        raise   # re-lève pour le except externe
             except Exception as e:
-                self._log("  [HTTP] erreur : " + str(e))
+                self._log("  [HTTP] " + str(e))
+                if "ne supporte pas" in str(e):
+                    raise   # bail rapide
             poll_interval = min(poll_interval + 3, 30)
 
         raise Exception("[HTTP] Timeout " + str(timeout) + "s")
@@ -754,7 +767,21 @@ class API:
         try:
             import paramiko
         except ImportError:
-            raise Exception("paramiko non installé (pip install paramiko)")
+            self._log("  [SFTP] paramiko absent — installation automatique…")
+            import subprocess, sys
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "paramiko",
+                     "--break-system-packages", "--quiet"],
+                    check=True, capture_output=True
+                )
+            except subprocess.CalledProcessError:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "paramiko", "--quiet"],
+                    check=True, capture_output=True
+                )
+            import paramiko   # noqa: F811
+            self._log("  [SFTP] paramiko installé ✓")
 
         import time, io
         deadline = time.time() + timeout
