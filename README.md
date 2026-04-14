@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.4-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.5-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -251,6 +251,11 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.2.5
+- Fix : **stratégie de récupération du .torrent entièrement repensée** — le plugin create de ruTorrent sauvegarde le résultat mktorrent dans `config/rutorrent/share/users/{user}/settings/tasks/{task_id}/temp.torrent`. Le bot snapshote le dossier `tasks/` avant la création, déclenche le plugin, puis poll via FTP toutes les 5 s jusqu'à ce qu'un nouveau `temp.torrent` bencoded valide apparaisse (timeout 10 min)
+- Suppression de toute la logique XML-RPC (`download_list`, `system.multicall`, `session.path`) devenue inutile
+- Suppression de l'approche FTP sur le dossier session rtorrent (mauvais répertoire)
 
 ### v2.2.4
 - Fix : **FTP session path** — navigation itérative avec reconnexion FTP à chaque tentative ; skip des N premiers composants du chemin absolu jusqu'à trouver le chemin relatif correct depuis la racine chroot (ex : `config/rtorrent/rtorrent_sess/`)

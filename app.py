@@ -679,166 +679,122 @@ class API:
             else:
                 raise Exception("Upload Filebrowser échoué pour " + fname + " : " + str(r.status_code))
 
-    def _xmlrpc_call(self, rpc_url, method, params_xml, rt_user, rt_pass):
-        """Appel XML-RPC générique, retourne le résultat parsé."""
-        import xmlrpc.client as _xrpc
-        payload = (
-            '<?xml version="1.0"?><methodCall>'
-            '<methodName>' + method + '</methodName>'
-            '<params>' + params_xml + '</params>'
-            '</methodCall>'
-        )
-        r = requests.post(rpc_url, data=payload,
-                          auth=(rt_user, rt_pass), verify=False, timeout=30)
-        if r.status_code != 200:
-            raise Exception(method + " → HTTP " + str(r.status_code))
-        return _xrpc.loads(r.text)[0][0]
-
-    def _fetch_torrent_from_rutorrent(self, base, rt_url, rt_user, rt_pass):
-        """Récupère le .torrent via XML-RPC :
-           download_list → d.name sur chaque hash → session.path → FTP download.
-        """
-        import time as _time, ftplib, io
-        rpc_url = rt_url.rstrip("/") + "/plugins/httprpc/action.php"
-
-        _time.sleep(5)
-
-        # 1. Lister tous les hashes
-        hashes = self._xmlrpc_call(rpc_url, "download_list",
-                                   '<param><value><string></string></value></param>',
-                                   rt_user, rt_pass)
-        self._log("  " + str(len(hashes)) + " torrents dans ruTorrent")
-
-        # 2. Trouver le hash correspondant au nom (system.multicall pour tout en 1 requête)
-        import xmlrpc.client as _xrpc
-        calls_xml = "".join(
-            '<value><struct>'
-            '<member><name>methodName</name><value><string>d.name</string></value></member>'
-            '<member><name>params</name><value><array><data>'
-            '<value><string>' + h + '</string></value>'
-            '</data></array></value></member>'
-            '</struct></value>'
-            for h in hashes
-        )
-        payload_mc = (
-            '<?xml version="1.0"?><methodCall>'
-            '<methodName>system.multicall</methodName><params>'
-            '<param><value><array><data>' + calls_xml + '</data></array></value></param>'
-            '</params></methodCall>'
-        )
-        r_mc = requests.post(rpc_url, data=payload_mc,
-                             auth=(rt_user, rt_pass), verify=False, timeout=60)
-        found_hash = None
-        if r_mc.status_code == 200:
-            try:
-                results = _xrpc.loads(r_mc.text)[0][0]
-                names_found = []
-                for i, h in enumerate(hashes):
-                    try:
-                        name = results[i][0] if isinstance(results[i], (list, tuple)) else results[i]
-                        names_found.append(name)
-                        if name.lower() == base.lower():
-                            found_hash = h
-                            break
-                        if not found_hash and base.lower() in name.lower():
-                            found_hash = h  # match partiel, on continue au cas où
-                    except Exception:
-                        pass
-                self._log("  Noms dans ruTorrent : " + str(names_found[:10]))
-            except Exception as e_mc:
-                self._log("  system.multicall parse : " + str(e_mc))
-
-        # Fallback : requête individuelle d.name si system.multicall a échoué
-        if not found_hash:
-            for h in hashes:
-                try:
-                    name = self._xmlrpc_call(
-                        rpc_url, "d.name",
-                        '<param><value><string>' + h + '</string></value></param>',
-                        rt_user, rt_pass
-                    )
-                    if name.lower() == base.lower() or base.lower() in name.lower():
-                        found_hash = h
-                        self._log("  Match (fallback) : " + name + " → " + h)
-                        break
-                except Exception:
-                    pass
-
-        if not found_hash:
-            raise Exception("Torrent '" + base + "' introuvable dans ruTorrent après création.")
-
-        self._log("  Hash : " + found_hash)
-
-        # 3. Récupérer le chemin de session via XML-RPC
-        session_path = None
+    def _list_rutorrent_tasks(self, ftp_host, ftp_port, ftp_user, ftp_pass, rt_user):
+        """Liste les task IDs dans config/rutorrent/share/users/{rt_user}/settings/tasks/"""
+        import ftplib
+        parts = ["config", "rutorrent", "share", "users", rt_user, "settings", "tasks"]
+        ftp = ftplib.FTP_TLS()
+        ftp.connect(ftp_host, ftp_port, timeout=15)
+        ftp.login(ftp_user, ftp_pass)
+        ftp.prot_p()
         try:
-            session_path = self._xmlrpc_call(rpc_url, "session.path", "", rt_user, rt_pass)
-            self._log("  Session path : " + str(session_path))
-        except Exception as e_sp:
-            self._log("  session.path indisponible : " + str(e_sp))
+            for p in parts:
+                ftp.cwd(p)
+            entries = set(e for e in ftp.nlst() if e not in (".", ".."))
+            ftp.quit()
+            return entries
+        except Exception:
+            try:
+                ftp.quit()
+            except Exception:
+                pass
+            raise
 
-        # 4a. Téléchargement via FTP depuis le dossier session rtorrent
-        # Le FTP est chroot à la home utilisateur (ex: /sdc/wydg/).
-        # session_path est un chemin absolu système (ex: /sdc/wydg/config/rtorrent/rtorrent_sess/).
-        # On essaie progressivement en sautant les premiers composants jusqu'à ce que
-        # la navigation depuis la racine FTP réussisse.
-        if session_path:
-            ftp_host    = os.getenv("SFTP_HOST_FTP", "")
-            ftp_port    = int(os.getenv("SFTP_PORT", "23421"))
-            ftp_user    = os.getenv("SFTP_USER", "")
-            ftp_pass_env = os.getenv("SFTP_PASS", "")
-            parts = [p for p in session_path.strip("/").split("/") if p]
-            torrent_filename = found_hash + ".torrent"
+    def _poll_rutorrent_task(self, ftp_host, ftp_port, ftp_user, ftp_pass, rt_user,
+                             before_tasks, timeout=600):
+        """Attend qu'un nouveau dossier tasks/ contienne un temp.torrent bencoded valide.
+        Le plugin create de ruTorrent sauvegarde le résultat mktorrent ici :
+        config/rutorrent/share/users/{rt_user}/settings/tasks/{task_id}/temp.torrent
+        """
+        import ftplib, io, time
+        parts = ["config", "rutorrent", "share", "users", rt_user, "settings", "tasks"]
+        deadline = time.time() + timeout
+        poll_interval = 5
 
-            for skip in range(len(parts)):
-                rel_parts = parts[skip:]
-                try:
-                    ftp2 = ftplib.FTP_TLS()
-                    ftp2.connect(ftp_host, ftp_port, timeout=15)
-                    ftp2.login(ftp_user, ftp_pass_env)
-                    ftp2.prot_p()
-                    for p in rel_parts:
-                        ftp2.cwd(p)
-                    self._log("  FTP navigué (skip=" + str(skip) + ") : /" + "/".join(rel_parts))
-                    buf = io.BytesIO()
-                    ftp2.retrbinary("RETR " + torrent_filename, buf.write)
-                    ftp2.quit()
-                    data = buf.getvalue()
-                    if data and data.lstrip()[:1] == b"d":
-                        self._log("  FTP session OK — " + str(len(data)) + " octets")
-                        return data
-                    self._log("  FTP : contenu reçu mais non-bencoded (" +
-                              str(len(data)) + " o)")
-                    break
-                except Exception as e_skip:
-                    self._log("  FTP skip=" + str(skip) + " : " + str(e_skip))
+        self._log("  Polling tasks ruTorrent (max " + str(timeout) + "s)…")
+
+        while time.time() < deadline:
+            time.sleep(poll_interval)
+            ftp = None
+            try:
+                ftp = ftplib.FTP_TLS()
+                ftp.connect(ftp_host, ftp_port, timeout=15)
+                ftp.login(ftp_user, ftp_pass)
+                ftp.prot_p()
+                for p in parts:
+                    ftp.cwd(p)
+
+                current = set(e for e in ftp.nlst() if e not in (".", ".."))
+                new_tasks = current - before_tasks
+
+                if not new_tasks:
+                    self._log("  Attente nouvelle tâche… (" +
+                              str(int(deadline - time.time())) + "s restantes)")
                     try:
-                        ftp2.quit()
+                        ftp.quit()
+                    except Exception:
+                        pass
+                    ftp = None
+                    poll_interval = min(poll_interval + 2, 20)
+                    continue
+
+                # Essayer la tâche la plus récente (tri décroissant = timestamp le + élevé)
+                for task_id in sorted(new_tasks, reverse=True):
+                    try:
+                        ftp.cwd(task_id)
+                        buf = io.BytesIO()
+                        ftp.retrbinary("RETR temp.torrent", buf.write)
+                        data = buf.getvalue()
+                        if data and data.lstrip()[:1] == b"d":
+                            try:
+                                ftp.quit()
+                            except Exception:
+                                pass
+                            ftp = None
+                            self._log("  ✅ temp.torrent OK — tâche " + task_id +
+                                      " (" + str(len(data)) + " o)", "success")
+                            return data
+                        self._log("  Tâche " + task_id + " : hashage en cours (" +
+                                  str(len(data)) + " o)…")
+                    except ftplib.error_perm as ep:
+                        self._log("  Tâche " + task_id + " : " + str(ep))
+                    except Exception as et:
+                        self._log("  Tâche " + task_id + " erreur : " + str(et))
+                    break  # Une seule tâche testée par cycle de polling
+
+            except Exception as e:
+                self._log("  Erreur FTP poll : " + str(e))
+            finally:
+                if ftp:
+                    try:
+                        ftp.quit()
                     except Exception:
                         pass
 
-        raise Exception("Impossible de récupérer le .torrent (hash=" + found_hash +
-                        "). Seeding actif sur la SB.")
+            poll_interval = min(poll_interval + 3, 30)
+
+        raise Exception("Timeout " + str(timeout) + "s : temp.torrent non récupéré depuis ruTorrent")
 
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
-        """Crée les torrents via le plugin create de ruTorrent (côté seedbox, hash SB).
-        Piece size fixé à 4 MiB. Le .torrent est ensuite récupéré via XML-RPC et
-        sauvegardé localement dans BASE_DIR/TORRENTS/.
+        """Crée les torrents via le plugin create de ruTorrent (hash côté seedbox).
+        Piece size 4 MiB. Récupère le .torrent depuis le dossier tasks/ ruTorrent via FTP
+        et le sauvegarde localement dans BASE_DIR/TORRENTS/.
         """
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        rt_url  = os.getenv("RUTORRENT_URL", "")
-        rt_user = os.getenv("RUTORRENT_USER", "")
-        rt_pass = os.getenv("RUTORRENT_PASS", "")
+        rt_url   = os.getenv("RUTORRENT_URL", "")
+        rt_user  = os.getenv("RUTORRENT_USER", "")
+        rt_pass  = os.getenv("RUTORRENT_PASS", "")
+        ftp_host = os.getenv("SFTP_HOST_FTP", "")
+        ftp_port = int(os.getenv("SFTP_PORT", "21"))
+        ftp_user = os.getenv("SFTP_USER", "")
+        ftp_pass = os.getenv("SFTP_PASS", "")
 
         if not rt_url:
             raise Exception("ruTorrent URL non configurée dans le .env")
 
-        create_url = rt_url.rstrip("/") + "/plugins/create/action.php"
-        self._log("  URL create : " + create_url)
-
-        # Dossier local TORRENTS/ à côté du bot
+        create_url     = rt_url.rstrip("/") + "/plugins/create/action.php"
         torrents_local = BASE_DIR / "TORRENTS"
         torrents_local.mkdir(exist_ok=True)
 
@@ -846,7 +802,20 @@ class API:
             if not announce:
                 continue
             self._log("Création torrent SB pour " + tk_name + "…")
-            data = {
+
+            # ── 1. Snapshot du dossier tasks/ AVANT la création ────────────────
+            before_tasks = set()
+            try:
+                before_tasks = self._list_rutorrent_tasks(
+                    ftp_host, ftp_port, ftp_user, ftp_pass, rt_user
+                )
+                self._log("  Tâches existantes : " + str(len(before_tasks)))
+            except Exception as e_snap:
+                self._log("  ⚠ Snapshot tasks échoué : " + str(e_snap) +
+                          " — polling sur toutes les tâches", "warn")
+
+            # ── 2. Déclenchement de la création côté ruTorrent ─────────────────
+            post_data = {
                 "name":         base,
                 "dir":          remote_path.rstrip("/") + "/",
                 "piece_size":   "4194304",   # 4 MiB
@@ -854,59 +823,54 @@ class API:
                 "tracker[0]":   announce,
             }
             if private:
-                data["private"] = "on"
+                post_data["private"] = "on"
 
             self._log("  POST → " + create_url)
-            self._log("  dir  = " + data["dir"])
+            self._log("  dir  = " + post_data["dir"])
             r = requests.post(
                 create_url,
-                data=data,
+                data=post_data,
                 auth=(rt_user, rt_pass),
                 verify=False,
                 timeout=120,
             )
-            self._log("  HTTP " + str(r.status_code) + " — " + str(len(r.content)) + " octets reçus")
+            self._log("  HTTP " + str(r.status_code) + " — " + str(len(r.content)) + " o")
             if r.content:
                 preview = r.content[:120].decode("utf-8", errors="replace").replace("\n", " ")
                 self._log("  Réponse : " + preview)
 
             if r.status_code != 200:
                 raise Exception(
-                    "Plugin create ruTorrent — erreur HTTP " + str(r.status_code) +
+                    "Plugin create ruTorrent — HTTP " + str(r.status_code) +
                     " pour " + tk_name +
-                    ". Vérifier que le plugin 'create' est installé sur ruTorrent."
+                    " (vérifier que le plugin 'create' est installé)"
                 )
 
-            self._log("  ✓ Torrent créé — seeding démarré (" + tk_name + ")", "success")
-
-            torrent_name = base + "__" + tk_name + ".torrent"
-
-            # 1. Le plugin renvoie parfois directement le binaire dans la réponse
+            # ── 3. Récupérer le .torrent depuis le dossier tasks/ ──────────────
             torrent_bytes = None
+
+            # Cas rare : le plugin renvoie directement le binaire
             if r.content and r.content.lstrip()[:1] == b"d":
                 torrent_bytes = r.content
                 self._log("  📦 .torrent reçu dans la réponse HTTP", "success")
 
-            # 2. Sinon : récupérer via XML-RPC (hash lookup + download)
+            # Cas normal : attendre que mktorrent termine et lire temp.torrent via FTP
             if not torrent_bytes:
-                self._log("  Récupération du .torrent via XML-RPC…")
                 try:
-                    torrent_bytes = self._fetch_torrent_from_rutorrent(
-                        base, rt_url, rt_user, rt_pass
+                    torrent_bytes = self._poll_rutorrent_task(
+                        ftp_host, ftp_port, ftp_user, ftp_pass,
+                        rt_user, before_tasks, timeout=600
                     )
-                    self._log("  📦 .torrent récupéré via ruTorrent", "success")
-                except Exception as e_rpc:
-                    self._log("  ⚠ Récupération XML-RPC échouée : " + str(e_rpc), "warn")
+                except Exception as e_poll:
+                    self._log("  ⚠ Poll tâche échoué : " + str(e_poll), "warn")
 
-            # 3. Sauvegarder localement
+            # ── 4. Sauvegarde locale ────────────────────────────────────────────
             if torrent_bytes:
-                try:
-                    (torrents_local / torrent_name).write_bytes(torrent_bytes)
-                    self._log("  💾 .torrent sauvegardé → TORRENTS/" + torrent_name, "success")
-                except Exception as e_save:
-                    self._log("  ⚠ Sauvegarde locale échouée : " + str(e_save), "warn")
+                torrent_name = base + "__" + tk_name + ".torrent"
+                (torrents_local / torrent_name).write_bytes(torrent_bytes)
+                self._log("  💾 Sauvegardé → TORRENTS/" + torrent_name, "success")
             else:
-                self._log("  ⚠ .torrent non disponible — seeding actif sur la SB", "warn")
+                self._log("  ⚠ .torrent non récupéré — seeding actif sur la SB", "warn")
 
     def _get_movie_title(self, tid, key, lang):
         r = requests.get(f"https://api.themoviedb.org/3/movie/{tid}",
