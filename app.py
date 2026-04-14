@@ -408,6 +408,7 @@ class API:
             "nfo_path": str(nfo_path),
             "nfo_name": nfo_path.name,
             "lines":    len(output_lines),
+            "content":  output_text,
         })
 
     def _emit(self, event: str, data):

@@ -540,34 +540,62 @@ html.light body::before {
 
       <!-- ═══════════════════════════════════════════════════════════ BD INFO -->
       <div id="page-bdinfo" class="page">
-        <div style="padding:28px;overflow-y:auto;max-width:640px;">
-          <div class="section-label">BD Info</div>
-          <p style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:20px;line-height:1.7;">
-            Scanne un disque Blu-ray (dossier contenant <strong style="color:var(--text)">BDMV/</strong>)<br>
-            via <strong style="color:var(--text)">BDInfoCLI</strong> et génère un rapport <strong style="color:var(--orange)">.nfo</strong> dans le dossier <strong style="color:var(--text)">BDINFO/</strong>.
-          </p>
 
-          <!-- Chemin du dossier -->
-          <div class="field-group">
-            <label class="field-label">DOSSIER BDMV (ou son parent)</label>
-            <div style="display:flex;gap:8px;">
-              <input id="bdi-folder" class="field-input" type="text"
-                     placeholder="/Volumes/MonDisque/Film.2025.UHD.BluRay/" style="flex:1;"/>
-              <button onclick="bdiBrowse()" style="padding:8px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:11px;cursor:pointer;white-space:nowrap;transition:all .15s;" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">📁 PARCOURIR</button>
-            </div>
+        <!-- ── Colonne gauche ─────────────────────────────────────────────── -->
+        <div class="upload-left">
+
+          <div class="section-label">Dossier source</div>
+
+          <!-- Zone de sélection dossier (style file-drop) -->
+          <div class="file-drop" id="bdi-drop" onclick="bdiBrowse()"
+               style="margin-bottom:20px;">
+            <div class="file-icon">💿</div>
+            <div class="file-label" id="bdi-drop-label">CLIQUER POUR SÉLECTIONNER</div>
+            <div class="file-name" id="bdi-drop-name" style="margin-top:6px;font-size:11px;color:var(--orange);word-break:break-all;"></div>
           </div>
 
-          <!-- Bouton scan -->
-          <button id="bdi-btn" onclick="bdiScan()" style="width:100%;margin-top:4px;padding:13px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='var(--orange2)'" onmouseout="this.style.background='var(--orange)'">
-            💿  SCANNER
+          <div class="section-label">Scan</div>
+
+          <!-- Info technique -->
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);line-height:1.8;margin-bottom:16px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;">
+            <span style="color:var(--text);">BDInfoCLI</span> (net8.0 · osx-arm64)<br>
+            Détection automatique du dossier <span style="color:var(--orange);">BDMV/</span><br>
+            Rapport sauvegardé dans <span style="color:var(--orange);">BDINFO/*.nfo</span>
+          </div>
+
+          <!-- Bouton scanner -->
+          <button id="bdi-btn" onclick="bdiScan()"
+                  style="width:100%;padding:13px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
+                  onmouseover="this.style.background='var(--orange2)'"
+                  onmouseout="this.style.background='var(--orange)'">
+            💿 &nbsp;SCANNER
           </button>
 
-          <!-- Statut NFO -->
-          <div id="bdi-status" style="display:none;margin-top:12px;padding:10px 14px;border-radius:4px;background:var(--bg3);border:1px solid var(--border2);font-family:var(--mono);font-size:11px;"></div>
+          <!-- Barre de progression (masquée par défaut) -->
+          <div class="progress-wrap" id="bdi-progress" style="display:none;">
+            <div class="progress-label" id="bdi-progress-label">ANALYSE EN COURS…</div>
+            <div class="progress-bar"><div class="progress-fill" id="bdi-progress-fill" style="width:0%"></div></div>
+          </div>
 
-          <!-- Log -->
-          <div id="bdi-log" style="margin-top:14px;font-family:var(--mono);font-size:11px;line-height:1.8;color:var(--text-dim);max-height:340px;overflow-y:auto;border:1px solid var(--border2);border-radius:4px;background:var(--bg3);padding:10px;display:none;"></div>
+          <!-- Bannière de fin -->
+          <div id="bdi-done-banner"></div>
+
         </div>
+
+        <!-- ── Colonne droite : NFO Preview ───────────────────────────────── -->
+        <div class="upload-right">
+          <div class="nfo-header">
+            <div class="nfo-dot r"></div>
+            <div class="nfo-dot y"></div>
+            <div class="nfo-dot g"></div>
+            <span class="nfo-title">BD INFO PREVIEW</span>
+            <!-- Nom du NFO sauvegardé -->
+            <span id="bdi-nfo-label" style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-dim);"></span>
+          </div>
+          <pre id="bdi-nfo-content"
+               style="flex:1;overflow:auto;padding:16px 20px;font-family:'Courier New',monospace;font-size:10px;line-height:1.35;color:var(--text);white-space:pre;background:var(--bg);direction:ltr;text-align:left;-webkit-font-smoothing:none;min-width:0;"></pre>
+        </div>
+
       </div>
 
       <div id="page-config" class="page">
@@ -619,61 +647,92 @@ window._emit = function(event, data) {
 
 // ── BD Info ──────────────────────────────────────────────────────────────────
 
+var _bdiFolder = '';
+var _bdiLines  = [];
+
 async function bdiBrowse() {
   const res = await window.pywebview.api.browse_folder_bdinfo();
   if (res && res.path) {
-    document.getElementById('bdi-folder').value = res.path;
+    _bdiFolder = res.path;
+    var name = res.path.split('/').filter(Boolean).pop() || res.path;
+    var drop = document.getElementById('bdi-drop');
+    drop.classList.add('has-file');
+    document.getElementById('bdi-drop-label').textContent = 'DOSSIER SÉLECTIONNÉ';
+    document.getElementById('bdi-drop-name').textContent  = name;
   }
 }
 
 async function bdiScan() {
-  const folder = document.getElementById('bdi-folder').value.trim();
-  if (!folder) {
-    alert('Sélectionne ou saisis un chemin vers le dossier BDMV.');
+  if (!_bdiFolder) {
+    var drop = document.getElementById('bdi-drop');
+    drop.style.borderColor = 'var(--red)';
+    setTimeout(function(){ drop.style.borderColor = ''; }, 1500);
     return;
   }
-  // Réinitialiser UI
-  var logEl    = document.getElementById('bdi-log');
-  var statusEl = document.getElementById('bdi-status');
-  var btn      = document.getElementById('bdi-btn');
-  logEl.innerHTML = '';
-  logEl.style.display = 'block';
-  statusEl.style.display = 'none';
-  btn.disabled = true;
-  btn.textContent = '⏳  SCAN EN COURS…';
+  // Reset UI
+  _bdiLines = [];
+  document.getElementById('bdi-nfo-content').textContent = '';
+  document.getElementById('bdi-nfo-label').textContent   = '';
+  document.getElementById('bdi-done-banner').innerHTML   = '';
 
-  await window.pywebview.api.run_bdinfo_scan(folder);
+  var btn  = document.getElementById('bdi-btn');
+  var prog = document.getElementById('bdi-progress');
+  btn.disabled      = true;
+  btn.innerHTML     = '⏳ &nbsp;SCAN EN COURS…';
+  prog.style.display = 'block';
+  document.getElementById('bdi-progress-fill').style.width = '15%';
+  document.getElementById('bdi-progress-label').textContent = 'ANALYSE EN COURS…';
+
+  await window.pywebview.api.run_bdinfo_scan(_bdiFolder);
 }
 
 function bdiAddLog(msg, level) {
-  var logEl = document.getElementById('bdi-log');
-  if (!logEl) return;
-  var color = level === 'error'   ? 'var(--red)'
-            : level === 'warn'    ? '#f0a500'
-            : level === 'success' ? 'var(--green)'
-            : 'var(--text-dim)';
-  var line = document.createElement('div');
-  line.style.cssText = 'color:' + color + ';word-break:break-all;';
-  line.textContent = msg;
-  logEl.appendChild(line);
-  logEl.scrollTop = logEl.scrollHeight;
+  // Accumuler les lignes → afficher dans la preview
+  _bdiLines.push(msg);
+  document.getElementById('bdi-nfo-content').textContent = _bdiLines.join('\n');
+  var pre = document.getElementById('bdi-nfo-content');
+  pre.scrollTop = pre.scrollHeight;
+
+  // Faire avancer la barre de progression (simulation)
+  var fill = document.getElementById('bdi-progress-fill');
+  if (fill) {
+    var cur = parseFloat(fill.style.width) || 15;
+    if (cur < 90) fill.style.width = Math.min(cur + 0.4, 90) + '%';
+  }
 }
 
 function bdiOnDone(data) {
-  var btn      = document.getElementById('bdi-btn');
-  var statusEl = document.getElementById('bdi-status');
-  btn.disabled = false;
-  btn.textContent = '💿  SCANNER';
+  var btn    = document.getElementById('bdi-btn');
+  var prog   = document.getElementById('bdi-progress');
+  var banner = document.getElementById('bdi-done-banner');
+  var fill   = document.getElementById('bdi-progress-fill');
+  var label  = document.getElementById('bdi-progress-label');
+
+  btn.disabled  = false;
+  btn.innerHTML = '💿 &nbsp;SCANNER';
+
   if (data.ok) {
-    statusEl.style.display = 'block';
-    statusEl.style.borderColor = 'var(--green)';
-    statusEl.innerHTML = '✅ &nbsp;<strong style="color:var(--green)">NFO généré</strong> &nbsp;→&nbsp; '
-      + '<span style="color:var(--orange)">BDINFO/' + data.nfo_name + '</span>'
-      + ' &nbsp;<span style="color:var(--text-dim)">(' + data.lines + ' lignes)</span>';
+    fill.style.width  = '100%';
+    fill.style.background = 'var(--green)';
+    label.textContent = '✅  NFO GÉNÉRÉ — ' + data.nfo_name;
+    label.style.color = 'var(--green)';
+    document.getElementById('bdi-nfo-label').textContent = 'BDINFO/' + data.nfo_name;
+    banner.innerHTML = '<div style="margin-top:14px;padding:10px 14px;border-radius:4px;background:rgba(57,255,20,0.07);border:1px solid rgba(57,255,20,0.3);font-family:var(--mono);font-size:11px;color:var(--green);">'
+      + '💾 &nbsp;BDINFO/' + data.nfo_name
+      + ' &nbsp;<span style="color:var(--text-dim);">(' + data.lines + ' lignes)</span></div>';
+    setTimeout(function(){
+      prog.style.display = 'none';
+      fill.style.width = '0%';
+      fill.style.background = '';
+      label.style.color = '';
+    }, 3000);
   } else {
-    statusEl.style.display = 'block';
-    statusEl.style.borderColor = 'var(--red)';
-    statusEl.innerHTML = '✖ &nbsp;<span style="color:var(--red)">' + (data.error || 'Erreur inconnue') + '</span>';
+    fill.style.width  = '100%';
+    fill.style.background = 'var(--red)';
+    label.textContent = '✖  ' + (data.error || 'Erreur');
+    label.style.color = 'var(--red)';
+    banner.innerHTML = '<div style="margin-top:14px;padding:10px 14px;border-radius:4px;background:rgba(255,51,51,0.07);border:1px solid rgba(255,51,51,0.3);font-family:var(--mono);font-size:11px;color:var(--red);">'
+      + '✖ &nbsp;' + (data.error || 'Erreur inconnue') + '</div>';
   }
 }
 
