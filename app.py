@@ -761,7 +761,7 @@ class API:
     # ──────────────────────────────────────────────────────────────────────────
     def _fetch_via_xmlrpc_exec(self, rt_url, rt_user, rt_pass, base,
                                ftp_host, ftp_port, ftp_user, ftp_pass,
-                               fb_url=""):
+                               fb_url="", announce="", remote_path=""):
         """Récupère le .torrent de session via rtorrent XML-RPC + FTP :
         1. download_list + system.multicall(d.name) → hash du torrent
         2. session.path → chemin de la session rtorrent
@@ -852,23 +852,22 @@ class API:
                 home = "/" + "/".join(parts[:i])
                 break
         if not home:
-            home = "/" + "/".join(parts[:2])  # fallback : 2 premiers composants
+            home = "/" + "/".join(parts[:2])
 
-        # ── 2b. directory.default → vrai répertoire download de rtorrent ────
-        dl_default = home + "/rtorrent"        # fallback
+        # ── 2b. d.base_path → répertoire réel du contenu sur le serveur ─────
+        base_path_srv = ""
         try:
-            r_dd = requests.post(
+            r_bp = requests.post(
                 rpc_url,
                 data=('<?xml version="1.0"?><methodCall>'
-                      '<methodName>directory.default</methodName>'
-                      '<params></params></methodCall>'),
+                      '<methodName>d.base_path</methodName>'
+                      '<params><param><value><string>' + found_hash
+                      + '</string></value></param></params></methodCall>'),
                 auth=(rt_user, rt_pass), verify=False, timeout=10)
-            dd_val = _xrpc.loads(r_dd.text)[0][0].rstrip("/")
-            if dd_val:
-                dl_default = dd_val
-            self._log("  [XRPC] directory.default : " + dl_default)
-        except Exception as e_dd:
-            self._log("  [XRPC] directory.default : " + str(e_dd))
+            base_path_srv = _xrpc.loads(r_bp.text)[0][0]
+            self._log("  [XRPC] d.base_path : " + base_path_srv)
+        except Exception as e_bp:
+            self._log("  [XRPC] d.base_path : " + str(e_bp))
 
         # ── 2c. d.tied_to_file → chemin exact du .torrent chargé ────────────
         tied_file = ""
@@ -877,160 +876,175 @@ class API:
                 rpc_url,
                 data=('<?xml version="1.0"?><methodCall>'
                       '<methodName>d.tied_to_file</methodName>'
-                      '<params><param><value><string>'
-                      + found_hash +
-                      '</string></value></param></params></methodCall>'),
+                      '<params><param><value><string>' + found_hash
+                      + '</string></value></param></params></methodCall>'),
                 auth=(rt_user, rt_pass), verify=False, timeout=10)
             tied_file = _xrpc.loads(r_ttf.text)[0][0]
-            self._log("  [XRPC] d.tied_to_file : " + tied_file)
+            self._log("  [XRPC] d.tied_to_file : " + (tied_file or "(vide)"))
         except Exception as e_ttf:
             self._log("  [XRPC] d.tied_to_file : " + str(e_ttf))
 
-        tmp_name  = "temp_" + found_hash[:16] + ".torrent"
-        dest_file = dl_default + "/" + tmp_name
+        tmp_name = "temp_" + found_hash[:16] + ".torrent"
+        # Destination dans tmp/ (accessible via FTP et Filebrowser)
+        tmp_dest = home.rstrip("/") + "/tmp/" + tmp_name
+        self._log("  [XRPC] home=" + home + "  tmp_dest=" + tmp_dest)
 
-        # Dériver le chemin FTP relatif à partir de dl_default et home
-        ftp_dir = "rtorrent"       # fallback
-        home_rel = home.strip("/")
-        dl_rel   = dl_default.strip("/")
-        if dl_rel.startswith(home_rel + "/"):
-            ftp_dir = dl_rel[len(home_rel) + 1:]
-        self._log("  [XRPC] dest : " + dest_file + "  (FTP: " + ftp_dir + "/)")
+        # Helper : échappement XML (& → &amp; pour éviter -503 malformed XML)
+        def _xe(s):
+            return (s.replace("&", "&amp;")
+                     .replace("<", "&lt;")
+                     .replace(">", "&gt;"))
 
-        # Sources à essayer pour la copie (tied_to_file en priorité, session en fallback)
-        src_session = session_path + "/" + found_hash + ".torrent"
-        sources = []
-        if tied_file:
-            sources.append(tied_file)
-        sources.append(src_session)
-
-        # ── 3. /bin/sh -c "cp SRC DST && chmod 644 DST" ─────────────────────
-        # Execute via shell pour chaîner cp+chmod en une commande atomique,
-        # et tenter plusieurs sources si la première n'existe pas.
-        exec_ok = False
-        for src in sources:
-            shell_cmd = ("cp '" + src + "' '" + dest_file + "' "
-                         "&& chmod 644 '" + dest_file + "'")
-            self._log("  [XRPC] sh -c : " + shell_cmd)
-            for exec_method in ("execute.nothrow.bg", "execute.nothrow", "execute"):
+        def _exec_sh(cmd_str, label="sh"):
+            """Lance /bin/sh -c cmd_str via execute.nothrow.bg.
+            Retourne True si HTTP 200 sans fault XML."""
+            cmd_xml = _xe(cmd_str)
+            self._log("  [XRPC] " + label + " : " + cmd_str[:120])
+            for exec_method in ("execute.nothrow.bg", "execute.nothrow"):
                 for with_target in (True, False):
                     try:
                         target_xml = ('<param><value><string></string></value></param>'
                                       if with_target else "")
-                        r_exec = requests.post(
+                        r = requests.post(
                             rpc_url,
                             data=('<?xml version="1.0"?><methodCall>'
                                   '<methodName>' + exec_method + '</methodName><params>'
                                   + target_xml +
                                   '<param><value><string>/bin/sh</string></value></param>'
                                   '<param><value><string>-c</string></value></param>'
-                                  '<param><value><string>' + shell_cmd + '</string></value></param>'
+                                  '<param><value><string>' + cmd_xml
+                                  + '</string></value></param>'
                                   '</params></methodCall>'),
-                            auth=(rt_user, rt_pass), verify=False, timeout=20)
-                        resp = r_exec.text[:200].replace("\n", " ")
+                            auth=(rt_user, rt_pass), verify=False, timeout=30)
+                        resp = r.text[:200].replace("\n", " ")
                         self._log("  [XRPC] " + exec_method
                                   + (" +t" if with_target else "")
-                                  + " : HTTP " + str(r_exec.status_code)
-                                  + " — " + resp)
-                        if r_exec.status_code == 200 and "<fault>" not in r_exec.text:
-                            exec_ok = True
-                            break
-                    except Exception as e_exec:
-                        self._log("  [XRPC] " + exec_method + " : " + str(e_exec))
+                                  + " → HTTP " + str(r.status_code) + " " + resp)
+                        if r.status_code == 200 and "<fault>" not in r.text:
+                            return True
+                    except Exception as e_sh:
+                        self._log("  [XRPC] " + exec_method + " : " + str(e_sh))
+            return False
+
+        # ── 3a. mktorrent direct → tmp/temp_HASH.torrent ────────────────────
+        # Créer le .torrent directement dans tmp/ (accessible FTP+FB) sans
+        # passer par la session rtorrent. L'announce ne modifie pas l'infohash.
+        exec_ok = False
+        if announce and base_path_srv:
+            # Source = base_path_srv (répertoire ou fichier du contenu)
+            # Si c'est un fichier, prendre le parent (pour nom correct)
+            import os as _os
+            content_dir = (base_path_srv if _os.path.basename(base_path_srv) == base
+                           else _os.path.dirname(base_path_srv) or base_path_srv)
+            for mkt_bin in ("/usr/bin/mktorrent", "/usr/local/bin/mktorrent",
+                            "/bin/mktorrent"):
+                mkt_cmd = ("{mkt} -o '{out}' -a '{ann}' -l 22 -p '{src}'"
+                           .format(mkt=mkt_bin, out=tmp_dest,
+                                   ann=announce, src=base_path_srv))
+                exec_ok = _exec_sh(mkt_cmd, "mktorrent")
                 if exec_ok:
                     break
-            if exec_ok:
-                break
+
+        # ── 3b. cp+chmod depuis tied_to_file ou session → tmp/ ──────────────
         if not exec_ok:
-            self._log("  [XRPC] ⚠ execute bloqué ou toutes sources échouées", "warn")
+            src_session = session_path + "/" + found_hash + ".torrent"
+            sources = []
+            if tied_file:
+                sources.append(tied_file)
+            sources.append(src_session)
+            for src in sources:
+                cp_cmd = ("cp '{s}' '{d}' && chmod 644 '{d}'"
+                          .format(s=src, d=tmp_dest))
+                exec_ok = _exec_sh(cp_cmd, "cp")
+                if exec_ok:
+                    break
+
+        if not exec_ok:
+            self._log("  [XRPC] ⚠ toutes les méthodes execute ont échoué", "warn")
 
         def _cleanup_exec():
-            """Supprime le fichier temporaire via execute.nothrow.bg rm."""
+            """Supprime le fichier temporaire via execute.nothrow.bg."""
             try:
-                for rm_bin in ("/bin/rm", "/usr/bin/rm"):
-                    r_rm = requests.post(
-                        rpc_url,
-                        data=('<?xml version="1.0"?><methodCall>'
-                              '<methodName>execute.nothrow.bg</methodName><params>'
-                              '<param><value><string></string></value></param>'
-                              '<param><value><string>' + rm_bin + '</string></value></param>'
-                              '<param><value><string>' + dest_file + '</string></value></param>'
-                              '</params></methodCall>'),
-                        auth=(rt_user, rt_pass), verify=False, timeout=5)
-                    if r_rm.status_code == 200 and "<fault>" not in r_rm.text:
-                        break
+                _exec_sh("rm -f '" + tmp_dest + "'", "cleanup")
             except Exception:
                 pass
 
-        # ── 4. FTP RETR {ftp_dir}/temp_{hash16}.torrent ──────────────────────
+        # ── 4. FTP RETR — essaie tmp/ en priorité puis rtorrent/ et watch/ ──
+        # tmp/ est le répertoire de sortie de mktorrent, rtorrent/ est le fallback.
+        ftp_dirs_to_try = ["tmp"]
+        for extra in ["rtorrent", "watch", ""]:
+            if extra not in ftp_dirs_to_try:
+                ftp_dirs_to_try.append(extra)
+
         for wait_s in (3, 5, 8, 12):
             time.sleep(wait_s)
             ftp = None
-            try:
-                ftp = ftplib.FTP_TLS()
-                ftp.connect(ftp_host, ftp_port, timeout=15)
-                ftp.login(ftp_user, ftp_pass)
-                ftp.prot_p()
-                if ftp_dir:
-                    for part in [x for x in ftp_dir.split("/") if x]:
-                        ftp.cwd(part)
-                # NLST : vérifier si le fichier est visible
+            for try_dir in ftp_dirs_to_try:
                 try:
-                    nlst = ftp.nlst()
-                    has_file = any(tmp_name in f for f in nlst)
-                    self._log("  [XRPC] " + ftp_dir + "/ NLST : " + str(len(nlst))
-                              + " entrées, " + tmp_name + " présent=" + str(has_file))
-                except Exception as e_nlst:
-                    self._log("  [XRPC] NLST : " + str(e_nlst))
-                buf = io.BytesIO()
-                ftp.retrbinary("RETR " + tmp_name, buf.write)
-                ftp.quit()
-                ftp = None
-                data = buf.getvalue()
-                if data and data.lstrip()[:1] == b"d":
-                    self._log("  [XRPC] ✅ FTP OK (" + str(len(data)) + " o)", "success")
-                    _cleanup_exec()
-                    return data
-                self._log("  [XRPC] FTP reçu non-bencoded (" + str(len(data)) + " o)")
-            except Exception as e_ftp:
-                self._log("  [XRPC] FTP wait=" + str(wait_s) + "s : " + str(e_ftp))
-            finally:
-                if ftp:
+                    ftp = ftplib.FTP_TLS()
+                    ftp.connect(ftp_host, ftp_port, timeout=15)
+                    ftp.login(ftp_user, ftp_pass)
+                    ftp.prot_p()
+                    if try_dir:
+                        for part in [x for x in try_dir.split("/") if x]:
+                            ftp.cwd(part)
+                    # NLST
                     try:
-                        ftp.quit()
-                    except Exception:
-                        pass
+                        nlst = ftp.nlst()
+                        has_file = any(tmp_name in f for f in nlst)
+                        self._log("  [XRPC] FTP " + (try_dir or "/") + "/ NLST : "
+                                  + str(len(nlst)) + " entrées, présent=" + str(has_file))
+                        if not has_file:
+                            ftp.quit(); ftp = None; continue
+                    except Exception as e_nlst:
+                        self._log("  [XRPC] NLST " + (try_dir or "/") + " : " + str(e_nlst))
+                    buf = io.BytesIO()
+                    ftp.retrbinary("RETR " + tmp_name, buf.write)
+                    ftp.quit(); ftp = None
+                    data = buf.getvalue()
+                    if data and data.lstrip()[:1] == b"d":
+                        self._log("  [XRPC] ✅ FTP " + (try_dir or "/")
+                                  + " OK (" + str(len(data)) + " o)", "success")
+                        _cleanup_exec()
+                        return data
+                    self._log("  [XRPC] FTP non-bencoded (" + str(len(data)) + " o)")
+                except Exception as e_ftp:
+                    self._log("  [XRPC] FTP " + (try_dir or "/") + " wait="
+                              + str(wait_s) + "s : " + str(e_ftp))
+                finally:
+                    if ftp:
+                        try: ftp.quit()
+                        except Exception: pass
+                        ftp = None
 
-        # ── 4b. Fallback Filebrowser API (GET /api/raw/rtorrent/temp_*.torrent) ──
-        # Le Filebrowser expose rtorrent/ et peut avoir des droits différents du FTP.
+        # ── 4b. Fallback Filebrowser API — essaie tmp/ et rtorrent/ ─────────
         if fb_url:
             self._log("  [XRPC] Fallback Filebrowser : " + fb_url)
             try:
-                # Login Filebrowser
                 r_login = requests.post(
                     fb_url.rstrip("/") + "/api/login",
                     json={"username": ftp_user, "password": ftp_pass},
                     verify=False, timeout=15)
                 if r_login.status_code == 200:
                     fb_token = r_login.text.strip().strip('"')
-                    fb_path  = "/" + ftp_dir.strip("/") + "/" + tmp_name
-                    r_dl = requests.get(
-                        fb_url.rstrip("/") + "/api/raw" + fb_path,
-                        headers={"X-Auth": fb_token},
-                        params={"auth": fb_token},
-                        verify=False, timeout=30)
-                    self._log("  [XRPC] FB raw GET " + fb_path
-                              + " → HTTP " + str(r_dl.status_code))
-                    if r_dl.status_code == 200:
-                        fb_data = r_dl.content
-                        if fb_data and fb_data.lstrip()[:1] == b"d":
-                            self._log("  [XRPC] ✅ Filebrowser OK ("
-                                      + str(len(fb_data)) + " o)", "success")
-                            _cleanup_exec()
-                            return fb_data
-                        self._log("  [XRPC] FB data non-bencoded ("
-                                  + str(len(fb_data)) + " o) : "
-                                  + fb_data[:60].decode("utf-8", errors="replace"))
+                    for fb_dir in ["tmp", "rtorrent"]:
+                        fb_path = "/" + fb_dir + "/" + tmp_name
+                        r_dl = requests.get(
+                            fb_url.rstrip("/") + "/api/raw" + fb_path,
+                            headers={"X-Auth": fb_token},
+                            params={"auth": fb_token},
+                            verify=False, timeout=30)
+                        self._log("  [XRPC] FB GET " + fb_path
+                                  + " → HTTP " + str(r_dl.status_code))
+                        if r_dl.status_code == 200:
+                            fb_data = r_dl.content
+                            if fb_data and fb_data.lstrip()[:1] == b"d":
+                                self._log("  [XRPC] ✅ Filebrowser OK ("
+                                          + str(len(fb_data)) + " o)", "success")
+                                _cleanup_exec()
+                                return fb_data
+                            self._log("  [XRPC] FB non-bencoded ("
+                                      + str(len(fb_data)) + " o)")
                 else:
                     self._log("  [XRPC] FB login : HTTP " + str(r_login.status_code))
             except Exception as e_fb:
@@ -1469,7 +1483,9 @@ class API:
                     torrent_bytes = self._fetch_via_xmlrpc_exec(
                         rt_url, rt_user, rt_pass, base,
                         ftp_host, ftp_port, ftp_user, ftp_pass,
-                        fb_url=fb_url)
+                        fb_url=fb_url,
+                        announce=announce,
+                        remote_path=remote_path)
                 except Exception as e_xrpc:
                     self._log("  ⚠ [XRPC] " + str(e_xrpc), "warn")
 
