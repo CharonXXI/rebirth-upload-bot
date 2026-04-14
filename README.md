@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.8-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.9-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -251,6 +251,9 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.2.9
+- Fix : **découverte automatique du chemin tasks/ dans Filebrowser** — liste la racine FB et teste plusieurs chemins candidats (skip de 0 à N préfixes) pour trouver `config/rutorrent/share/users/{user}/settings/tasks/` quelle que soit la racine chroot du Filebrowser
 
 ### v2.2.8
 - Fix : **méthode Filebrowser API** — `SFTP_HOST` (URL du Filebrowser seedbox) est utilisé pour lister les tâches et télécharger `temp.torrent` via `POST /api/login` + `GET /api/raw/...`. Aucune dépendance supplémentaire.

@@ -763,14 +763,12 @@ class API:
                               before_ts, timeout=600):
         """Récupère temp.torrent via l'API du Filebrowser (seedbox web).
         POST /api/login → JWT token
-        GET  /api/resources/config/rutorrent/share/users/{user}/settings/tasks/
-        GET  /api/raw/.../{task_id}/temp.torrent
+        Découverte automatique du chemin tasks/ depuis la racine FB.
         """
         import time
-        fb_base      = fb_url.rstrip("/")
-        deadline     = time.time() + timeout
+        fb_base       = fb_url.rstrip("/")
+        deadline      = time.time() + timeout
         poll_interval = 5
-        token        = None
 
         self._log("  [FB] Filebrowser API : " + fb_base)
 
@@ -782,56 +780,81 @@ class API:
                 verify=False, timeout=10
             )
             self._log("  [FB] login : HTTP " + str(r_login.status_code))
-            if r_login.status_code == 200:
-                token = r_login.text.strip().strip('"')
-                self._log("  [FB] token obtenu (" + str(len(token)) + " chars)")
-            else:
-                raise Exception("Login échoué : " + str(r_login.status_code) +
-                                " — " + r_login.text[:100])
+            if r_login.status_code != 200:
+                raise Exception("Login échoué : " + str(r_login.status_code))
+            token = r_login.text.strip().strip('"')
+            self._log("  [FB] token OK (" + str(len(token)) + " chars)")
         except Exception as e_login:
             raise Exception("[FB] " + str(e_login))
 
-        headers      = {"X-Auth": token}
-        tasks_api    = (fb_base + "/api/resources/config/rutorrent/share/users/"
-                        + rt_user + "/settings/tasks/")
+        headers = {"X-Auth": token}
 
-        self._log("  [FB] polling : " + tasks_api)
+        # ── Découverte de la racine Filebrowser ─────────────────────────────
+        # Le FB peut être chroot à différents niveaux.
+        # On liste la racine et on tente plusieurs chemins candidats.
+        tasks_path = None
+        try:
+            r_root = requests.get(fb_base + "/api/resources/",
+                                  headers=headers, verify=False, timeout=10)
+            self._log("  [FB] racine HTTP " + str(r_root.status_code))
+            if r_root.status_code == 200:
+                root_items = [i.get("name", "") for i in r_root.json().get("items", [])]
+                self._log("  [FB] racine : " + str(root_items[:15]))
+        except Exception as e_root:
+            self._log("  [FB] racine : " + str(e_root))
+
+        # Chemin absolu connu : /sdc/wydg/config/rutorrent/share/users/{user}/settings/tasks
+        # Candidats selon la racine du FB (skip des préfixes)
+        tail = "config/rutorrent/share/users/" + rt_user + "/settings/tasks"
+        candidates = [
+            tail,                                              # FB root = /sdc/wydg/
+            "sdc/" + rt_user + "/" + tail,                    # FB root = /
+            rt_user + "/" + tail,                              # FB root = /sdc/
+            tail.replace("config/rutorrent", ".config/rutorrent"),
+        ]
+
+        for cand in candidates:
+            try:
+                r_test = requests.get(fb_base + "/api/resources/" + cand + "/",
+                                      headers=headers, verify=False, timeout=8)
+                self._log("  [FB] test " + cand + " → HTTP " + str(r_test.status_code))
+                if r_test.status_code == 200:
+                    tasks_path = cand
+                    self._log("  [FB] tasks path trouvé : " + tasks_path)
+                    break
+            except Exception as e_cand:
+                self._log("  [FB] " + cand + " : " + str(e_cand))
+
+        if not tasks_path:
+            raise Exception("[FB] Impossible de localiser tasks/ — racine FB inconnue")
+
+        self._log("  [FB] polling " + tasks_path + "/ …")
 
         while time.time() < deadline:
             time.sleep(poll_interval)
             try:
-                r_ls = requests.get(tasks_api, headers=headers,
-                                    verify=False, timeout=10)
-                self._log("  [FB] ls : HTTP " + str(r_ls.status_code))
+                r_ls = requests.get(fb_base + "/api/resources/" + tasks_path + "/",
+                                    headers=headers, verify=False, timeout=10)
                 if r_ls.status_code != 200:
-                    self._log("  [FB] " + r_ls.text[:200])
+                    self._log("  [FB] ls " + str(r_ls.status_code))
                     poll_interval = min(poll_interval + 5, 30)
                     continue
 
-                listing = r_ls.json()
-                items   = listing.get("items", [])
-                # Filtrer les tâches récentes (Modified >= avant le POST)
-                new_tasks = []
-                for item in items:
-                    if not item.get("isDir", False):
-                        continue
-                    modified = item.get("modified", "")
-                    # modified est une date ISO, on prend tout ce qui est récent
-                    name = item.get("name", "")
-                    new_tasks.append(name)
-
-                self._log("  [FB] " + str(len(new_tasks)) + " tâches dans tasks/")
+                items     = r_ls.json().get("items", [])
+                new_tasks = sorted(
+                    [i.get("name", "") for i in items if i.get("isDir", False)],
+                    reverse=True
+                )
+                self._log("  [FB] " + str(len(new_tasks)) + " tâches")
 
                 if not new_tasks:
-                    self._log("  [FB] Attente nouvelle tâche… (" +
+                    self._log("  [FB] Attente… (" +
                               str(int(deadline - time.time())) + "s restantes)")
                     poll_interval = min(poll_interval + 2, 20)
                     continue
 
-                # Essayer la plus récente en premier (nom = timestamp décroissant)
-                for task_id in sorted(new_tasks, reverse=True):
-                    raw_url = (fb_base + "/api/raw/config/rutorrent/share/users/"
-                               + rt_user + "/settings/tasks/"
+                for task_id in new_tasks:
+                    raw_url = (fb_base + "/api/raw/" + tasks_path + "/"
                                + task_id + "/temp.torrent")
                     try:
                         dl = requests.get(raw_url, headers=headers,
@@ -840,16 +863,15 @@ class API:
                                   str(dl.status_code) + " (" +
                                   str(len(dl.content)) + " o)")
                         if dl.content and dl.content.lstrip()[:1] == b"d":
-                            self._log("  [FB] ✅ temp.torrent OK — tâche " +
-                                      task_id + " (" + str(len(dl.content)) +
-                                      " o)", "success")
+                            self._log("  [FB] ✅ temp.torrent OK — tâche "
+                                      + task_id + " (" + str(len(dl.content))
+                                      + " o)", "success")
                             return dl.content
                         if dl.status_code == 200 and len(dl.content) < 10:
-                            self._log("  [FB] tâche " + task_id +
-                                      " : hashage en cours…")
+                            self._log("  [FB] tâche " + task_id + " : hashage en cours…")
                     except Exception as e_dl:
                         self._log("  [FB] tâche " + task_id + " dl : " + str(e_dl))
-                    break   # Une tâche par cycle
+                    break
 
             except Exception as e:
                 self._log("  [FB] erreur : " + str(e))
