@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.9-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.3.0-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -251,6 +251,11 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.3.0
+- Nouveau : **méthode XML-RPC execute + FTP** (Method B) — utilise `execute.nothrow.bg` via l'interface XML-RPC de rtorrent pour copier le `.torrent` depuis le dossier session (inaccessible via FTP) vers `rtorrent/` (accessible via FTP), puis le télécharge en FTP TLS. Aucune dépendance externe supplémentaire.
+- Cascade mise à jour : A) HTTP plugin (bail rapide) → **B) XML-RPC exec + FTP** → C) Filebrowser API → D) SFTP paramiko → E) FTP tasks (si `RUTORRENT_TASKS_PATH` configuré)
+- La méthode B trouve le hash rtorrent par nom (`download_list` + `system.multicall(d.name)`), dérive le home depuis `session.path`, exécute un `cp` via rtorrent, et nettoie le fichier temporaire après récupération
 
 ### v2.2.9
 - Fix : **découverte automatique du chemin tasks/ dans Filebrowser** — liste la racine FB et teste plusieurs chemins candidats (skip de 0 à N préfixes) pour trouver `config/rutorrent/share/users/{user}/settings/tasks/` quelle que soit la racine chroot du Filebrowser

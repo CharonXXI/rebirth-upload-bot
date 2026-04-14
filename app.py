@@ -757,7 +757,171 @@ class API:
         raise Exception("[HTTP] Timeout " + str(timeout) + "s")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Méthode B : Filebrowser API (HTTP, aucune dépendance supplémentaire)
+    # Méthode B : XML-RPC execute.nothrow.bg + FTP (pas de chroot problem)
+    # ──────────────────────────────────────────────────────────────────────────
+    def _fetch_via_xmlrpc_exec(self, rt_url, rt_user, rt_pass, base,
+                               ftp_host, ftp_port, ftp_user, ftp_pass):
+        """Récupère le .torrent de session via rtorrent XML-RPC + FTP :
+        1. download_list + system.multicall(d.name) → hash du torrent
+        2. session.path → chemin de la session rtorrent
+        3. execute.nothrow.bg cp {session}/{hash}.torrent {home}/rtorrent/temp_{hash16}.torrent
+        4. FTP RETR rtorrent/temp_{hash16}.torrent
+        5. execute.nothrow.bg rm {dest}  (nettoyage)
+        Le répertoire rtorrent/ est accessible via FTP (racine Filebrowser confirmée).
+        """
+        import time, ftplib, io
+        import xmlrpc.client as _xrpc
+
+        rpc_url = rt_url.rstrip("/") + "/plugins/httprpc/action.php"
+        self._log("  [XRPC] Attente du torrent dans rtorrent (seeding)…")
+
+        # ── 1. Trouver le hash par nom (retry jusqu'à ce qu'il apparaisse) ──
+        found_hash = None
+        for attempt in range(24):          # max ~2 min
+            time.sleep(5)
+            try:
+                r = requests.post(
+                    rpc_url,
+                    data=('<?xml version="1.0"?><methodCall>'
+                          '<methodName>download_list</methodName>'
+                          '<params><param><value><string></string></value></param>'
+                          '</params></methodCall>'),
+                    auth=(rt_user, rt_pass), verify=False, timeout=15)
+                hashes = _xrpc.loads(r.text)[0][0]
+                self._log("  [XRPC] " + str(len(hashes)) + " torrents")
+
+                calls_xml = "".join(
+                    '<value><struct>'
+                    '<member><name>methodName</name>'
+                    '<value><string>d.name</string></value></member>'
+                    '<member><name>params</name><value><array><data>'
+                    '<value><string>' + h + '</string></value>'
+                    '</data></array></value></member>'
+                    '</struct></value>'
+                    for h in hashes
+                )
+                r_mc = requests.post(
+                    rpc_url,
+                    data=('<?xml version="1.0"?><methodCall>'
+                          '<methodName>system.multicall</methodName><params>'
+                          '<param><value><array><data>'
+                          + calls_xml +
+                          '</data></array></value></param>'
+                          '</params></methodCall>'),
+                    auth=(rt_user, rt_pass), verify=False, timeout=30)
+                results = _xrpc.loads(r_mc.text)[0][0]
+                for i, h in enumerate(hashes):
+                    try:
+                        name = (results[i][0]
+                                if isinstance(results[i], (list, tuple))
+                                else results[i])
+                        if base.lower() in name.lower():
+                            found_hash = h
+                            self._log("  [XRPC] hash : " + h + " (" + name + ")")
+                            break
+                    except Exception:
+                        pass
+                if found_hash:
+                    break
+            except Exception as e_xrpc:
+                self._log("  [XRPC] tentative " + str(attempt + 1) + " : " + str(e_xrpc))
+
+        if not found_hash:
+            raise Exception("[XRPC] hash non trouvé pour '" + base + "'")
+
+        # ── 2. session.path ──────────────────────────────────────────────────
+        try:
+            r_sp = requests.post(
+                rpc_url,
+                data=('<?xml version="1.0"?><methodCall>'
+                      '<methodName>session.path</methodName>'
+                      '<params></params></methodCall>'),
+                auth=(rt_user, rt_pass), verify=False, timeout=10)
+            session_path = _xrpc.loads(r_sp.text)[0][0].rstrip("/")
+            self._log("  [XRPC] session : " + session_path)
+        except Exception as e_sp:
+            raise Exception("[XRPC] session.path : " + str(e_sp))
+
+        # Dériver le home utilisateur depuis session_path
+        # Ex : /sdc/wydg/config/rtorrent/rtorrent_sess → home = /sdc/wydg/
+        parts = session_path.strip("/").split("/")
+        home = "/"
+        for i, p in enumerate(parts):
+            if p.lower() in ("config", ".config"):
+                home = "/" + "/".join(parts[:i]) + "/"
+                break
+
+        src_file  = session_path + "/" + found_hash + ".torrent"
+        tmp_name  = "temp_" + found_hash[:16] + ".torrent"
+        dest_file = home + "rtorrent/" + tmp_name
+        self._log("  [XRPC] cp " + src_file + " → " + dest_file)
+
+        # ── 3. execute.nothrow.bg cp ─────────────────────────────────────────
+        for exec_method in ("execute.nothrow.bg", "execute.nothrow", "execute"):
+            try:
+                r_exec = requests.post(
+                    rpc_url,
+                    data=('<?xml version="1.0"?><methodCall>'
+                          '<methodName>' + exec_method + '</methodName><params>'
+                          '<param><value><string>cp</string></value></param>'
+                          '<param><value><string>' + src_file + '</string></value></param>'
+                          '<param><value><string>' + dest_file + '</string></value></param>'
+                          '</params></methodCall>'),
+                    auth=(rt_user, rt_pass), verify=False, timeout=10)
+                self._log("  [XRPC] " + exec_method + " : HTTP "
+                          + str(r_exec.status_code) + " — "
+                          + r_exec.text[:100].replace("\n", " "))
+                if r_exec.status_code == 200:
+                    break
+            except Exception as e_exec:
+                self._log("  [XRPC] " + exec_method + " : " + str(e_exec))
+
+        # ── 4. FTP RETR rtorrent/temp_{hash16}.torrent ───────────────────────
+        for wait_s in (3, 5, 8, 12):
+            time.sleep(wait_s)
+            ftp = None
+            try:
+                ftp = ftplib.FTP_TLS()
+                ftp.connect(ftp_host, ftp_port, timeout=15)
+                ftp.login(ftp_user, ftp_pass)
+                ftp.prot_p()
+                ftp.cwd("rtorrent")
+                buf = io.BytesIO()
+                ftp.retrbinary("RETR " + tmp_name, buf.write)
+                ftp.quit()
+                ftp = None
+                data = buf.getvalue()
+                if data and data.lstrip()[:1] == b"d":
+                    self._log("  [XRPC] ✅ .torrent OK ("
+                              + str(len(data)) + " o)", "success")
+                    # Nettoyage
+                    try:
+                        requests.post(
+                            rpc_url,
+                            data=('<?xml version="1.0"?><methodCall>'
+                                  '<methodName>execute.nothrow.bg</methodName><params>'
+                                  '<param><value><string>rm</string></value></param>'
+                                  '<param><value><string>' + dest_file
+                                  + '</string></value></param>'
+                                  '</params></methodCall>'),
+                            auth=(rt_user, rt_pass), verify=False, timeout=5)
+                    except Exception:
+                        pass
+                    return data
+                self._log("  [XRPC] FTP reçu non-bencoded (" + str(len(data)) + " o)")
+            except Exception as e_ftp:
+                self._log("  [XRPC] FTP wait=" + str(wait_s) + "s : " + str(e_ftp))
+            finally:
+                if ftp:
+                    try:
+                        ftp.quit()
+                    except Exception:
+                        pass
+
+        raise Exception("[XRPC] impossible de télécharger " + tmp_name + " via FTP")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Méthode C : Filebrowser API (HTTP, aucune dépendance supplémentaire)
     # ──────────────────────────────────────────────────────────────────────────
     def _poll_via_filebrowser(self, fb_url, fb_user, fb_pass, rt_user,
                               before_ts, timeout=600):
@@ -1057,9 +1221,11 @@ class API:
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
         """Crée les torrents via le plugin create de ruTorrent (hash côté seedbox).
         Piece size 4 MiB. Récupère le .torrent en cascade :
-          A) HTTP GET sur le plugin create (aucun accès FTP requis)
-          B) SFTP via paramiko (SSH, pas de chroot)
-          C) FTP tasks dir (si RUTORRENT_TASKS_PATH est configuré dans le .env)
+          A) HTTP GET sur le plugin create (bail rapide si retourne [])
+          B) XML-RPC execute.nothrow.bg — copie session→rtorrent/, récupère via FTP
+          C) Filebrowser API (HTTP, SFTP_HOST = URL Filebrowser)
+          D) SFTP via paramiko (SSH, pas de chroot)
+          E) FTP tasks dir (si RUTORRENT_TASKS_PATH est configuré dans le .env)
         """
         import urllib3, time
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -1133,7 +1299,7 @@ class API:
                     " (vérifier que le plugin 'create' est installé)"
                 )
 
-            # ── 3. Récupération du .torrent (cascade A → B → C) ───────────────
+            # ── 3. Récupération du .torrent (cascade A → B → C → D → E) ─────────
             torrent_bytes = None
 
             # Réponse directe (rare)
@@ -1149,7 +1315,16 @@ class API:
                 except Exception as e_http:
                     self._log("  ⚠ [HTTP] " + str(e_http), "warn")
 
-            # B) Filebrowser API (HTTP, SFTP_HOST = URL Filebrowser)
+            # B) XML-RPC execute.nothrow.bg + FTP rtorrent/ (copie session → rtorrent/)
+            if not torrent_bytes and ftp_host:
+                try:
+                    torrent_bytes = self._fetch_via_xmlrpc_exec(
+                        rt_url, rt_user, rt_pass, base,
+                        ftp_host, ftp_port, ftp_user, ftp_pass)
+                except Exception as e_xrpc:
+                    self._log("  ⚠ [XRPC] " + str(e_xrpc), "warn")
+
+            # C) Filebrowser API (HTTP, SFTP_HOST = URL Filebrowser)
             if not torrent_bytes and fb_url:
                 try:
                     torrent_bytes = self._poll_via_filebrowser(
@@ -1158,7 +1333,7 @@ class API:
                 except Exception as e_fb:
                     self._log("  ⚠ [FB] " + str(e_fb), "warn")
 
-            # C) SFTP via paramiko (SSH host = même host que FTP)
+            # D) SFTP via paramiko (SSH host = même host que FTP)
             if not torrent_bytes and ssh_host:
                 try:
                     torrent_bytes = self._poll_via_sftp(
@@ -1167,7 +1342,7 @@ class API:
                 except Exception as e_sftp:
                     self._log("  ⚠ [SFTP] " + str(e_sftp), "warn")
 
-            # D) FTP tasks dir — seulement si RUTORRENT_TASKS_PATH configuré
+            # E) FTP tasks dir — seulement si RUTORRENT_TASKS_PATH configuré
             if not torrent_bytes and tasks_path_env:
                 try:
                     torrent_bytes = self._poll_via_ftp_tasks(
