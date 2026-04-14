@@ -857,24 +857,44 @@ class API:
         self._log("  [XRPC] cp " + src_file + " → " + dest_file)
 
         # ── 3. execute.nothrow.bg cp ─────────────────────────────────────────
-        for exec_method in ("execute.nothrow.bg", "execute.nothrow", "execute"):
-            try:
-                r_exec = requests.post(
-                    rpc_url,
-                    data=('<?xml version="1.0"?><methodCall>'
-                          '<methodName>' + exec_method + '</methodName><params>'
-                          '<param><value><string>cp</string></value></param>'
-                          '<param><value><string>' + src_file + '</string></value></param>'
-                          '<param><value><string>' + dest_file + '</string></value></param>'
-                          '</params></methodCall>'),
-                    auth=(rt_user, rt_pass), verify=False, timeout=10)
-                self._log("  [XRPC] " + exec_method + " : HTTP "
-                          + str(r_exec.status_code) + " — "
-                          + r_exec.text[:100].replace("\n", " "))
-                if r_exec.status_code == 200:
+        # Cherche /bin/cp ou /usr/bin/cp selon la distrib
+        exec_ok = False
+        for cp_bin in ("/bin/cp", "/usr/bin/cp"):
+            for exec_method in ("execute.nothrow.bg", "execute.nothrow", "execute"):
+                # Format rtorrent : (target="", command, arg1, arg2, ...)
+                # Le premier paramètre est toujours la cible (vide = global)
+                for with_target in (True, False):
+                    try:
+                        target_xml = ('<param><value><string></string></value></param>'
+                                      if with_target else "")
+                        r_exec = requests.post(
+                            rpc_url,
+                            data=('<?xml version="1.0"?><methodCall>'
+                                  '<methodName>' + exec_method + '</methodName><params>'
+                                  + target_xml +
+                                  '<param><value><string>' + cp_bin + '</string></value></param>'
+                                  '<param><value><string>' + src_file + '</string></value></param>'
+                                  '<param><value><string>' + dest_file + '</string></value></param>'
+                                  '</params></methodCall>'),
+                            auth=(rt_user, rt_pass), verify=False, timeout=15)
+                        resp_preview = r_exec.text[:200].replace("\n", " ")
+                        self._log("  [XRPC] " + exec_method
+                                  + (" +target" if with_target else " -target")
+                                  + " " + cp_bin.split("/")[-1]
+                                  + " : HTTP " + str(r_exec.status_code)
+                                  + " — " + resp_preview)
+                        # Succès si HTTP 200 sans fault XML-RPC
+                        if r_exec.status_code == 200 and "<fault>" not in r_exec.text:
+                            exec_ok = True
+                            break
+                    except Exception as e_exec:
+                        self._log("  [XRPC] " + exec_method + " : " + str(e_exec))
+                if exec_ok:
                     break
-            except Exception as e_exec:
-                self._log("  [XRPC] " + exec_method + " : " + str(e_exec))
+            if exec_ok:
+                break
+        if not exec_ok:
+            self._log("  [XRPC] ⚠ execute.nothrow.bg bloqué — tentative FTP directe", "warn")
 
         # ── 4. FTP RETR rtorrent/temp_{hash16}.torrent ───────────────────────
         for wait_s in (3, 5, 8, 12):
@@ -917,6 +937,40 @@ class API:
                         ftp.quit()
                     except Exception:
                         pass
+
+        # ── 4b. Fallback FTP direct sur le dossier session rtorrent ─────────
+        # Si execute était bloqué, tenter d'accéder directement au fichier
+        # config/rtorrent/rtorrent_sess/ via FTP (permissions différentes de rutorrent)
+        sess_rel = session_path.strip("/")  # ex: sdc/wydg/config/rtorrent/rtorrent_sess
+        # Retirer le préfixe home (ex: sdc/wydg/) pour obtenir le chemin relatif FTP
+        home_rel = home.strip("/")          # ex: sdc/wydg
+        if sess_rel.startswith(home_rel + "/"):
+            sess_rel = sess_rel[len(home_rel) + 1:]  # config/rtorrent/rtorrent_sess
+        torrent_filename = found_hash + ".torrent"
+        self._log("  [XRPC] Fallback FTP direct : " + sess_rel + "/" + torrent_filename)
+        ftp2 = None
+        try:
+            ftp2 = ftplib.FTP_TLS()
+            ftp2.connect(ftp_host, ftp_port, timeout=15)
+            ftp2.login(ftp_user, ftp_pass)
+            ftp2.prot_p()
+            for part in [x for x in sess_rel.split("/") if x]:
+                ftp2.cwd(part)
+            buf2 = io.BytesIO()
+            ftp2.retrbinary("RETR " + torrent_filename, buf2.write)
+            ftp2.quit()
+            ftp2 = None
+            data2 = buf2.getvalue()
+            if data2 and data2.lstrip()[:1] == b"d":
+                self._log("  [XRPC] ✅ FTP session direct OK (" + str(len(data2)) + " o)", "success")
+                return data2
+            self._log("  [XRPC] FTP session : données non-bencoded (" + str(len(data2)) + " o)")
+        except Exception as e_fb2:
+            self._log("  [XRPC] FTP session direct : " + str(e_fb2))
+        finally:
+            if ftp2:
+                try: ftp2.quit()
+                except Exception: pass
 
         raise Exception("[XRPC] impossible de télécharger " + tmp_name + " via FTP")
 
