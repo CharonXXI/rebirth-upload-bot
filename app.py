@@ -760,7 +760,8 @@ class API:
     # Méthode B : XML-RPC execute.nothrow.bg + FTP (pas de chroot problem)
     # ──────────────────────────────────────────────────────────────────────────
     def _fetch_via_xmlrpc_exec(self, rt_url, rt_user, rt_pass, base,
-                               ftp_host, ftp_port, ftp_user, ftp_pass):
+                               ftp_host, ftp_port, ftp_user, ftp_pass,
+                               fb_url=""):
         """Récupère le .torrent de session via rtorrent XML-RPC + FTP :
         1. download_list + system.multicall(d.name) → hash du torrent
         2. session.path → chemin de la session rtorrent
@@ -927,6 +928,24 @@ class API:
             if not chmod_done:
                 self._log("  [XRPC] ⚠ chmod 644 échoué — le FTP pourrait refuser la lecture", "warn")
 
+        def _cleanup_exec():
+            """Supprime le fichier temporaire via execute.nothrow.bg rm."""
+            try:
+                for rm_bin in ("/bin/rm", "/usr/bin/rm"):
+                    r_rm = requests.post(
+                        rpc_url,
+                        data=('<?xml version="1.0"?><methodCall>'
+                              '<methodName>execute.nothrow.bg</methodName><params>'
+                              '<param><value><string></string></value></param>'
+                              '<param><value><string>' + rm_bin + '</string></value></param>'
+                              '<param><value><string>' + dest_file + '</string></value></param>'
+                              '</params></methodCall>'),
+                        auth=(rt_user, rt_pass), verify=False, timeout=5)
+                    if r_rm.status_code == 200 and "<fault>" not in r_rm.text:
+                        break
+            except Exception:
+                pass
+
         # ── 4. FTP RETR rtorrent/temp_{hash16}.torrent ───────────────────────
         for wait_s in (3, 5, 8, 12):
             time.sleep(wait_s)
@@ -937,27 +956,22 @@ class API:
                 ftp.login(ftp_user, ftp_pass)
                 ftp.prot_p()
                 ftp.cwd("rtorrent")
+                # Debug NLST : vérifier si le fichier est visible en listing
+                try:
+                    nlst = ftp.nlst()
+                    has_file = any(tmp_name in f for f in nlst)
+                    self._log("  [XRPC] rtorrent/ NLST : " + str(len(nlst))
+                              + " entrées, " + tmp_name + " présent=" + str(has_file))
+                except Exception as e_nlst:
+                    self._log("  [XRPC] NLST : " + str(e_nlst))
                 buf = io.BytesIO()
                 ftp.retrbinary("RETR " + tmp_name, buf.write)
                 ftp.quit()
                 ftp = None
                 data = buf.getvalue()
                 if data and data.lstrip()[:1] == b"d":
-                    self._log("  [XRPC] ✅ .torrent OK ("
-                              + str(len(data)) + " o)", "success")
-                    # Nettoyage
-                    try:
-                        requests.post(
-                            rpc_url,
-                            data=('<?xml version="1.0"?><methodCall>'
-                                  '<methodName>execute.nothrow.bg</methodName><params>'
-                                  '<param><value><string>rm</string></value></param>'
-                                  '<param><value><string>' + dest_file
-                                  + '</string></value></param>'
-                                  '</params></methodCall>'),
-                            auth=(rt_user, rt_pass), verify=False, timeout=5)
-                    except Exception:
-                        pass
+                    self._log("  [XRPC] ✅ FTP OK (" + str(len(data)) + " o)", "success")
+                    _cleanup_exec()
                     return data
                 self._log("  [XRPC] FTP reçu non-bencoded (" + str(len(data)) + " o)")
             except Exception as e_ftp:
@@ -969,16 +983,48 @@ class API:
                     except Exception:
                         pass
 
-        # ── 4b. Fallback FTP direct sur le dossier session rtorrent ─────────
-        # Si execute était bloqué, tenter d'accéder directement au fichier
-        # config/rtorrent/rtorrent_sess/ via FTP (permissions différentes de rutorrent)
-        sess_rel = session_path.strip("/")  # ex: sdc/wydg/config/rtorrent/rtorrent_sess
-        # Retirer le préfixe home (ex: sdc/wydg/) pour obtenir le chemin relatif FTP
-        home_rel = home.strip("/")          # ex: sdc/wydg
+        # ── 4b. Fallback Filebrowser API (GET /api/raw/rtorrent/temp_*.torrent) ──
+        # Le Filebrowser expose rtorrent/ et peut avoir des droits différents du FTP.
+        if fb_url:
+            self._log("  [XRPC] Fallback Filebrowser : " + fb_url)
+            try:
+                # Login Filebrowser
+                r_login = requests.post(
+                    fb_url.rstrip("/") + "/api/login",
+                    json={"username": ftp_user, "password": ftp_pass},
+                    verify=False, timeout=15)
+                if r_login.status_code == 200:
+                    fb_token = r_login.text.strip().strip('"')
+                    fb_path  = "/rtorrent/" + tmp_name
+                    r_dl = requests.get(
+                        fb_url.rstrip("/") + "/api/raw" + fb_path,
+                        headers={"X-Auth": fb_token},
+                        params={"auth": fb_token},
+                        verify=False, timeout=30)
+                    self._log("  [XRPC] FB raw GET " + fb_path
+                              + " → HTTP " + str(r_dl.status_code))
+                    if r_dl.status_code == 200:
+                        fb_data = r_dl.content
+                        if fb_data and fb_data.lstrip()[:1] == b"d":
+                            self._log("  [XRPC] ✅ Filebrowser OK ("
+                                      + str(len(fb_data)) + " o)", "success")
+                            _cleanup_exec()
+                            return fb_data
+                        self._log("  [XRPC] FB data non-bencoded ("
+                                  + str(len(fb_data)) + " o) : "
+                                  + fb_data[:60].decode("utf-8", errors="replace"))
+                else:
+                    self._log("  [XRPC] FB login : HTTP " + str(r_login.status_code))
+            except Exception as e_fb:
+                self._log("  [XRPC] FB fallback : " + str(e_fb))
+
+        # ── 4c. Fallback FTP direct session rtorrent_sess/HASH.torrent ───────
+        sess_rel = session_path.strip("/")
+        home_rel = home.strip("/")
         if sess_rel.startswith(home_rel + "/"):
-            sess_rel = sess_rel[len(home_rel) + 1:]  # config/rtorrent/rtorrent_sess
+            sess_rel = sess_rel[len(home_rel) + 1:]
         torrent_filename = found_hash + ".torrent"
-        self._log("  [XRPC] Fallback FTP direct : " + sess_rel + "/" + torrent_filename)
+        self._log("  [XRPC] Fallback FTP session : " + sess_rel + "/" + torrent_filename)
         ftp2 = None
         try:
             ftp2 = ftplib.FTP_TLS()
@@ -989,21 +1035,20 @@ class API:
                 ftp2.cwd(part)
             buf2 = io.BytesIO()
             ftp2.retrbinary("RETR " + torrent_filename, buf2.write)
-            ftp2.quit()
-            ftp2 = None
+            ftp2.quit(); ftp2 = None
             data2 = buf2.getvalue()
             if data2 and data2.lstrip()[:1] == b"d":
-                self._log("  [XRPC] ✅ FTP session direct OK (" + str(len(data2)) + " o)", "success")
+                self._log("  [XRPC] ✅ FTP session OK (" + str(len(data2)) + " o)", "success")
                 return data2
-            self._log("  [XRPC] FTP session : données non-bencoded (" + str(len(data2)) + " o)")
-        except Exception as e_fb2:
-            self._log("  [XRPC] FTP session direct : " + str(e_fb2))
+            self._log("  [XRPC] FTP session non-bencoded (" + str(len(data2)) + " o)")
+        except Exception as e_fs:
+            self._log("  [XRPC] FTP session : " + str(e_fs))
         finally:
             if ftp2:
                 try: ftp2.quit()
                 except Exception: pass
 
-        raise Exception("[XRPC] impossible de télécharger " + tmp_name + " via FTP")
+        raise Exception("[XRPC] impossible de télécharger " + tmp_name)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Méthode C : Filebrowser API (HTTP, aucune dépendance supplémentaire)
@@ -1405,7 +1450,8 @@ class API:
                 try:
                     torrent_bytes = self._fetch_via_xmlrpc_exec(
                         rt_url, rt_user, rt_pass, base,
-                        ftp_host, ftp_port, ftp_user, ftp_pass)
+                        ftp_host, ftp_port, ftp_user, ftp_pass,
+                        fb_url=fb_url)
                 except Exception as e_xrpc:
                     self._log("  ⚠ [XRPC] " + str(e_xrpc), "warn")
 
