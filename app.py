@@ -895,6 +895,37 @@ class API:
                 break
         if not exec_ok:
             self._log("  [XRPC] ⚠ execute.nothrow.bg bloqué — tentative FTP directe", "warn")
+        else:
+            # ── 3b. chmod 644 sur le fichier copié ──────────────────────────
+            # Le .torrent de session est en mode 600 (rtorrent user) → FTP user
+            # ne peut pas lire. On fixe les permissions juste après le cp.
+            chmod_done = False
+            for chmod_bin in ("/bin/chmod", "/usr/bin/chmod"):
+                for with_target in (True, False):
+                    try:
+                        target_xml = ('<param><value><string></string></value></param>'
+                                      if with_target else "")
+                        r_ch = requests.post(
+                            rpc_url,
+                            data=('<?xml version="1.0"?><methodCall>'
+                                  '<methodName>execute.nothrow.bg</methodName><params>'
+                                  + target_xml +
+                                  '<param><value><string>' + chmod_bin + '</string></value></param>'
+                                  '<param><value><string>644</string></value></param>'
+                                  '<param><value><string>' + dest_file + '</string></value></param>'
+                                  '</params></methodCall>'),
+                            auth=(rt_user, rt_pass), verify=False, timeout=10)
+                        self._log("  [XRPC] chmod 644 : HTTP " + str(r_ch.status_code)
+                                  + " — " + r_ch.text[:100].replace("\n", " "))
+                        if r_ch.status_code == 200 and "<fault>" not in r_ch.text:
+                            chmod_done = True
+                            break
+                    except Exception as e_ch:
+                        self._log("  [XRPC] chmod : " + str(e_ch))
+                if chmod_done:
+                    break
+            if not chmod_done:
+                self._log("  [XRPC] ⚠ chmod 644 échoué — le FTP pourrait refuser la lecture", "warn")
 
         # ── 4. FTP RETR rtorrent/temp_{hash16}.torrent ───────────────────────
         for wait_s in (3, 5, 8, 12):
