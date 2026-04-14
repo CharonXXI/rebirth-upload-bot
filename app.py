@@ -757,9 +757,110 @@ class API:
         raise Exception("[HTTP] Timeout " + str(timeout) + "s")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Méthode B : SFTP via paramiko (SSH, pas de chroot FTP)
+    # Méthode B : Filebrowser API (HTTP, aucune dépendance supplémentaire)
     # ──────────────────────────────────────────────────────────────────────────
-    def _poll_via_sftp(self, sftp_host, ssh_port, sftp_user, sftp_pass,
+    def _poll_via_filebrowser(self, fb_url, fb_user, fb_pass, rt_user,
+                              before_ts, timeout=600):
+        """Récupère temp.torrent via l'API du Filebrowser (seedbox web).
+        POST /api/login → JWT token
+        GET  /api/resources/config/rutorrent/share/users/{user}/settings/tasks/
+        GET  /api/raw/.../{task_id}/temp.torrent
+        """
+        import time
+        fb_base      = fb_url.rstrip("/")
+        deadline     = time.time() + timeout
+        poll_interval = 5
+        token        = None
+
+        self._log("  [FB] Filebrowser API : " + fb_base)
+
+        # ── Authentification ────────────────────────────────────────────────
+        try:
+            r_login = requests.post(
+                fb_base + "/api/login",
+                json={"username": fb_user, "password": fb_pass},
+                verify=False, timeout=10
+            )
+            self._log("  [FB] login : HTTP " + str(r_login.status_code))
+            if r_login.status_code == 200:
+                token = r_login.text.strip().strip('"')
+                self._log("  [FB] token obtenu (" + str(len(token)) + " chars)")
+            else:
+                raise Exception("Login échoué : " + str(r_login.status_code) +
+                                " — " + r_login.text[:100])
+        except Exception as e_login:
+            raise Exception("[FB] " + str(e_login))
+
+        headers      = {"X-Auth": token}
+        tasks_api    = (fb_base + "/api/resources/config/rutorrent/share/users/"
+                        + rt_user + "/settings/tasks/")
+
+        self._log("  [FB] polling : " + tasks_api)
+
+        while time.time() < deadline:
+            time.sleep(poll_interval)
+            try:
+                r_ls = requests.get(tasks_api, headers=headers,
+                                    verify=False, timeout=10)
+                self._log("  [FB] ls : HTTP " + str(r_ls.status_code))
+                if r_ls.status_code != 200:
+                    self._log("  [FB] " + r_ls.text[:200])
+                    poll_interval = min(poll_interval + 5, 30)
+                    continue
+
+                listing = r_ls.json()
+                items   = listing.get("items", [])
+                # Filtrer les tâches récentes (Modified >= avant le POST)
+                new_tasks = []
+                for item in items:
+                    if not item.get("isDir", False):
+                        continue
+                    modified = item.get("modified", "")
+                    # modified est une date ISO, on prend tout ce qui est récent
+                    name = item.get("name", "")
+                    new_tasks.append(name)
+
+                self._log("  [FB] " + str(len(new_tasks)) + " tâches dans tasks/")
+
+                if not new_tasks:
+                    self._log("  [FB] Attente nouvelle tâche… (" +
+                              str(int(deadline - time.time())) + "s restantes)")
+                    poll_interval = min(poll_interval + 2, 20)
+                    continue
+
+                # Essayer la plus récente en premier (nom = timestamp décroissant)
+                for task_id in sorted(new_tasks, reverse=True):
+                    raw_url = (fb_base + "/api/raw/config/rutorrent/share/users/"
+                               + rt_user + "/settings/tasks/"
+                               + task_id + "/temp.torrent")
+                    try:
+                        dl = requests.get(raw_url, headers=headers,
+                                          verify=False, timeout=30)
+                        self._log("  [FB] tâche " + task_id + " : HTTP " +
+                                  str(dl.status_code) + " (" +
+                                  str(len(dl.content)) + " o)")
+                        if dl.content and dl.content.lstrip()[:1] == b"d":
+                            self._log("  [FB] ✅ temp.torrent OK — tâche " +
+                                      task_id + " (" + str(len(dl.content)) +
+                                      " o)", "success")
+                            return dl.content
+                        if dl.status_code == 200 and len(dl.content) < 10:
+                            self._log("  [FB] tâche " + task_id +
+                                      " : hashage en cours…")
+                    except Exception as e_dl:
+                        self._log("  [FB] tâche " + task_id + " dl : " + str(e_dl))
+                    break   # Une tâche par cycle
+
+            except Exception as e:
+                self._log("  [FB] erreur : " + str(e))
+            poll_interval = min(poll_interval + 3, 30)
+
+        raise Exception("[FB] Timeout " + str(timeout) + "s")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Méthode C : SFTP via paramiko (SSH, pas de chroot FTP)
+    # ──────────────────────────────────────────────────────────────────────────
+    def _poll_via_sftp(self, ssh_host, ssh_port, sftp_user, sftp_pass,
                        rt_user, before_ts, timeout=600):
         """Récupère temp.torrent via SFTP (SSH) — accès illimité au filesystem.
         Chemin : {home}/config/rutorrent/share/users/{rt_user}/settings/tasks/
@@ -784,18 +885,17 @@ class API:
             self._log("  [SFTP] paramiko installé ✓")
 
         import time, io
-        deadline = time.time() + timeout
+        deadline     = time.time() + timeout
         poll_interval = 5
-        self._log("  [SFTP] Connexion SSH " + sftp_host + ":" + str(ssh_port) + "…")
+        self._log("  [SFTP] SSH " + ssh_host + ":" + str(ssh_port) + "…")
 
         while time.time() < deadline:
             time.sleep(poll_interval)
             transport = None
             try:
-                transport = paramiko.Transport((sftp_host, ssh_port))
+                transport = paramiko.Transport((ssh_host, ssh_port))
                 transport.connect(username=sftp_user, password=sftp_pass)
-                sftp = paramiko.SFTPClient.from_transport(transport)
-
+                sftp      = paramiko.SFTPClient.from_transport(transport)
                 home      = sftp.normalize(".")
                 tasks_dir = (home + "/config/rutorrent/share/users/"
                              + rt_user + "/settings/tasks")
@@ -809,7 +909,6 @@ class API:
                     poll_interval = min(poll_interval + 3, 30)
                     continue
 
-                # Garder seulement les tâches récentes (mtime >= avant le POST)
                 new_tasks = []
                 for tid in all_ids:
                     try:
@@ -943,15 +1042,16 @@ class API:
         import urllib3, time
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        rt_url    = os.getenv("RUTORRENT_URL", "")
-        rt_user   = os.getenv("RUTORRENT_USER", "")
-        rt_pass   = os.getenv("RUTORRENT_PASS", "")
-        ftp_host  = os.getenv("SFTP_HOST_FTP", "")
-        ftp_port  = int(os.getenv("SFTP_PORT", "21"))
-        ftp_user  = os.getenv("SFTP_USER", "")
-        ftp_pass  = os.getenv("SFTP_PASS", "")
-        sftp_host = os.getenv("SFTP_HOST", "")
-        ssh_port  = int(os.getenv("SFTP_SSH_PORT", "22"))
+        rt_url         = os.getenv("RUTORRENT_URL", "")
+        rt_user        = os.getenv("RUTORRENT_USER", "")
+        rt_pass        = os.getenv("RUTORRENT_PASS", "")
+        ftp_host       = os.getenv("SFTP_HOST_FTP", "")
+        ftp_port       = int(os.getenv("SFTP_PORT", "21"))
+        ftp_user       = os.getenv("SFTP_USER", "")
+        ftp_pass       = os.getenv("SFTP_PASS", "")
+        fb_url         = os.getenv("SFTP_HOST", "")      # Filebrowser URL
+        ssh_host       = ftp_host                         # SSH = même host que FTP
+        ssh_port       = int(os.getenv("SFTP_SSH_PORT", "22"))
         tasks_path_env = os.getenv("RUTORRENT_TASKS_PATH", "")
 
         if not rt_url:
@@ -1019,24 +1119,33 @@ class API:
                 torrent_bytes = r.content
                 self._log("  📦 .torrent reçu directement dans la réponse POST", "success")
 
-            # A) HTTP GET polling du plugin create
+            # A) HTTP GET polling du plugin create (bail rapide si retourne [])
             if not torrent_bytes:
                 try:
                     torrent_bytes = self._poll_via_http_api(
-                        create_url, rt_user, rt_pass, base, timeout=600)
+                        create_url, rt_user, rt_pass, base, timeout=60)
                 except Exception as e_http:
                     self._log("  ⚠ [HTTP] " + str(e_http), "warn")
 
-            # B) SFTP (SSH, pas de chroot) — nécessite paramiko
-            if not torrent_bytes and sftp_host:
+            # B) Filebrowser API (HTTP, SFTP_HOST = URL Filebrowser)
+            if not torrent_bytes and fb_url:
+                try:
+                    torrent_bytes = self._poll_via_filebrowser(
+                        fb_url, ftp_user, ftp_pass,
+                        rt_user, before_ts, timeout=600)
+                except Exception as e_fb:
+                    self._log("  ⚠ [FB] " + str(e_fb), "warn")
+
+            # C) SFTP via paramiko (SSH host = même host que FTP)
+            if not torrent_bytes and ssh_host:
                 try:
                     torrent_bytes = self._poll_via_sftp(
-                        sftp_host, ssh_port, ftp_user, ftp_pass,
+                        ssh_host, ssh_port, ftp_user, ftp_pass,
                         rt_user, before_ts, timeout=600)
                 except Exception as e_sftp:
                     self._log("  ⚠ [SFTP] " + str(e_sftp), "warn")
 
-            # C) FTP tasks dir — seulement si RUTORRENT_TASKS_PATH configuré
+            # D) FTP tasks dir — seulement si RUTORRENT_TASKS_PATH configuré
             if not torrent_bytes and tasks_path_env:
                 try:
                     torrent_bytes = self._poll_via_ftp_tasks(

@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.2.7-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.2.8-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -251,6 +251,11 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.2.8
+- Fix : **méthode Filebrowser API** — `SFTP_HOST` (URL du Filebrowser seedbox) est utilisé pour lister les tâches et télécharger `temp.torrent` via `POST /api/login` + `GET /api/raw/...`. Aucune dépendance supplémentaire.
+- Fix : cascade mise à jour : A) HTTP plugin (bail rapide) → B) Filebrowser API → C) SFTP paramiko → D) FTP tasks (si `RUTORRENT_TASKS_PATH` configuré)
+- SSH host = même que FTP host (`SFTP_HOST_FTP`), port configurable via `SFTP_SSH_PORT` (défaut 22)
 
 ### v2.2.7
 - Fix : **HTTP API bail rapide** — si le plugin create retourne `[]` vide 3 fois de suite, abandon immédiat (le plugin ne supporte pas le GET) pour passer directement à SFTP
