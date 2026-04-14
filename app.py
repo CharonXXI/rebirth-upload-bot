@@ -1380,6 +1380,206 @@ class API:
 
         raise Exception("[FTP] Timeout " + str(timeout) + "s")
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Méthode F : Création locale du .torrent par streaming FTP (fallback ultime)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _bencode(obj):
+        """Encodage bencode minimal (bytes/str/int/list/dict)."""
+        if isinstance(obj, bytes):
+            return str(len(obj)).encode() + b":" + obj
+        if isinstance(obj, str):
+            enc = obj.encode("utf-8")
+            return str(len(enc)).encode() + b":" + enc
+        if isinstance(obj, int):
+            return b"i" + str(obj).encode() + b"e"
+        if isinstance(obj, list):
+            return b"l" + b"".join(API._bencode(i) for i in obj) + b"e"
+        if isinstance(obj, dict):
+            # Les clés doivent être triées en tant que bytes (standard bencode)
+            def _key_bytes(k):
+                return k if isinstance(k, bytes) else k.encode("utf-8")
+            items = sorted(obj.items(), key=lambda x: _key_bytes(x[0]))
+            return b"d" + b"".join(
+                API._bencode(k) + API._bencode(v) for k, v in items
+            ) + b"e"
+        raise TypeError("_bencode: type non supporté : " + type(obj).__name__)
+
+    def _ftp_list_recursive(self, ftp, ftp_abs_path):
+        """Liste récursivement les fichiers sous ftp_abs_path.
+        Retourne liste de (rel_path, ftp_abs_path, size) triée par rel_path.
+        Essaie MLSD en premier, fallback NLST + SIZE.
+        """
+        results = []
+
+        def _recurse(abs_dir, rel_prefix):
+            # ── Essai MLSD (RFC 3659, métadonnées fiables) ──────────────────
+            try:
+                entries = list(ftp.mlsd(abs_dir, ["type", "size"]))
+                for fname, facts in entries:
+                    if fname in (".", ".."):
+                        continue
+                    rel = (rel_prefix + "/" + fname).lstrip("/") if rel_prefix else fname
+                    full = abs_dir.rstrip("/") + "/" + fname
+                    ftype = facts.get("type", "file")
+                    if ftype == "dir":
+                        _recurse(full, rel)
+                    else:
+                        size = int(facts.get("size", 0))
+                        results.append((rel, full, size))
+                return
+            except Exception:
+                pass
+
+            # ── Fallback NLST ────────────────────────────────────────────────
+            try:
+                items = ftp.nlst(abs_dir)
+            except Exception as e_nl:
+                self._log("  [LOCAL] NLST " + abs_dir + " : " + str(e_nl))
+                return
+
+            for item in items:
+                fname = item.rstrip("/").split("/")[-1]
+                if fname in (".", ".."):
+                    continue
+                rel = (rel_prefix + "/" + fname).lstrip("/") if rel_prefix else fname
+                full = abs_dir.rstrip("/") + "/" + fname
+                # Tenter CWD pour détecter dossier
+                try:
+                    ftp.cwd(full)
+                    ftp.cwd("/")            # revenir à la racine
+                    _recurse(full, rel)
+                except Exception:
+                    size = 0
+                    try:
+                        size = ftp.size(full)
+                    except Exception:
+                        pass
+                    results.append((rel, full, size))
+
+        _recurse(ftp_abs_path, "")
+        results.sort(key=lambda x: x[0])
+        return results
+
+    def _create_torrent_local_ftp(self, ftp_host, ftp_port, ftp_user, ftp_pass,
+                                  ftp_content_path, name, announce,
+                                  piece_size=4194304, private=True):
+        """Crée un .torrent localement en streamant le contenu via FTP TLS.
+        Parcourt ftp_content_path, calcule les SHA1 pièce par pièce sans tout
+        stocker en mémoire. Retourne les octets bencoded du .torrent.
+        """
+        import ftplib, hashlib
+
+        self._log("  [LOCAL] Streaming FTP → " + ftp_content_path)
+
+        ftp = ftplib.FTP_TLS()
+        ftp.connect(ftp_host, ftp_port, timeout=30)
+        ftp.login(ftp_user, ftp_pass)
+        ftp.prot_p()
+
+        # ── Construire le chemin absolu FTP ──────────────────────────────────
+        abs_path = "/" + ftp_content_path.strip("/")
+
+        # ── Détecter fichier vs dossier ──────────────────────────────────────
+        is_dir = True
+        try:
+            ftp.cwd(abs_path)
+        except ftplib.error_perm:
+            is_dir = False
+
+        # ── Lister les fichiers ───────────────────────────────────────────────
+        if is_dir:
+            files = self._ftp_list_recursive(ftp, abs_path)
+        else:
+            # Fichier unique — aller dans le parent
+            parts = abs_path.strip("/").split("/")
+            leaf = parts[-1]
+            parent = "/" + "/".join(parts[:-1]) if len(parts) > 1 else "/"
+            size = 0
+            try:
+                ftp.cwd("/")
+                size = ftp.size(abs_path)
+            except Exception:
+                pass
+            files = [(leaf, abs_path, size)]
+
+        if not files:
+            ftp.quit()
+            raise Exception("[LOCAL] Aucun fichier dans " + ftp_content_path)
+
+        total_size = sum(s for _, _, s in files)
+        self._log("  [LOCAL] " + str(len(files)) + " fichier(s), "
+                  + str(total_size) + " o au total")
+
+        # ── Hasher les pièces en streaming ───────────────────────────────────
+        class _PieceHasher:
+            def __init__(self, ps):
+                self.ps     = ps
+                self.buf    = bytearray()
+                self.hashes = b""
+            def feed(self, chunk):
+                self.buf.extend(chunk)
+                while len(self.buf) >= self.ps:
+                    self.hashes += hashlib.sha1(bytes(self.buf[:self.ps])).digest()
+                    del self.buf[:self.ps]
+            def finalize(self):
+                if self.buf:
+                    self.hashes += hashlib.sha1(bytes(self.buf)).digest()
+                return self.hashes
+
+        hasher = _PieceHasher(piece_size)
+        ftp.cwd("/")        # revenir à la racine avant RETR absolus
+
+        for idx, (rel_path, full_path, size) in enumerate(files):
+            self._log("  [LOCAL] [" + str(idx + 1) + "/" + str(len(files))
+                      + "] " + rel_path + " (" + str(size) + " o)")
+            try:
+                ftp.retrbinary("RETR " + full_path, hasher.feed)
+            except Exception as e_retr:
+                ftp.quit()
+                raise Exception("[LOCAL] RETR " + full_path + " : " + str(e_retr))
+
+        piece_hashes = hasher.finalize()
+        ftp.quit()
+
+        self._log("  [LOCAL] " + str(len(piece_hashes) // 20)
+                  + " pièce(s) de " + str(piece_size // 1048576) + " MiB")
+
+        # ── Construire le dictionnaire info (bencode) ─────────────────────────
+        if len(files) == 1 and not is_dir:
+            info = {
+                "length":       files[0][2],
+                "name":         name,
+                "piece length": piece_size,
+                "pieces":       piece_hashes,
+            }
+        else:
+            file_list = []
+            for rel_path, _, size in files:
+                path_parts = [p for p in rel_path.replace("\\", "/").split("/") if p]
+                file_list.append({"length": size, "path": path_parts})
+            info = {
+                "files":        file_list,
+                "name":         name,
+                "piece length": piece_size,
+                "pieces":       piece_hashes,
+            }
+
+        if private:
+            info["private"] = 1
+
+        torrent_dict = {
+            "announce":    announce,
+            "created by":  "REBiRTH",
+            "info":        info,
+        }
+
+        result = self._bencode(torrent_dict)
+        self._log("  [LOCAL] ✅ .torrent créé localement ("
+                  + str(len(result)) + " o)", "success")
+        return result
+
     def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
         """Crée les torrents via le plugin create de ruTorrent (hash côté seedbox).
         Piece size 4 MiB. Récupère le .torrent en cascade :
@@ -1515,6 +1715,19 @@ class API:
                         tasks_path_env, before_tasks, timeout=600)
                 except Exception as e_ftp:
                     self._log("  ⚠ [FTP] " + str(e_ftp), "warn")
+
+            # F) Création locale via streaming FTP (fallback ultime — py3createtorrent)
+            if not torrent_bytes and ftp_host and remote_path:
+                self._log("  [LOCAL] Tentative création locale (streaming FTP)…")
+                try:
+                    # remote_path = chemin FTP relatif vers le contenu
+                    # ex: "rtorrent/REBiRTH/Nom.Du.Film..."
+                    torrent_bytes = self._create_torrent_local_ftp(
+                        ftp_host, ftp_port, ftp_user, ftp_pass,
+                        remote_path, base, announce,
+                        piece_size=4194304, private=bool(private))
+                except Exception as e_local:
+                    self._log("  ⚠ [LOCAL] " + str(e_local), "warn")
 
             # ── 4. Sauvegarde locale ────────────────────────────────────────────
             if torrent_bytes:
