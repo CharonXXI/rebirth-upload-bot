@@ -362,93 +362,118 @@ class API:
         env.setdefault("DOTNET_GCConserveMemory",  "7")   # agressif en conservation
         env.setdefault("DOTNET_GCHighMemPercent",  "90")  # GC déclenché à 90% RAM
 
-        # ── 3. Lancer BDInfoCLI avec réponse automatique aux prompts ─────────
-        # BDInfoCLI demande "Continue scanning? (y/n):" à chaque OOM sur M2TS.
-        # On pipe "yes" en stdin pour répondre "y" automatiquement et laisser
-        # le scan se terminer malgré les erreurs mémoire.
         import shutil, re as _re
 
-        cmd = [dotnet_bin, bdinfo_dll, "-w", scan_root]
-        _status("Scan lancé… (réponse auto aux prompts)")
-
-        # Préparer la source stdin : `yes` sur macOS/Linux, thread sur Windows
         use_yes = shutil.which("yes") is not None
-        proc_yes = None
 
-        try:
-            if use_yes:
-                proc_yes = subprocess.Popen(
-                    ["yes"],
+        def _run_bdinfo(extra_args, label):
+            """Lance BDInfoCLI avec réponse automatique aux prompts OOM.
+            Retourne (output_lines, returncode)."""
+            cmd_run = [dotnet_bin, bdinfo_dll] + extra_args + [scan_root]
+            _status(label)
+            p_yes = None
+            try:
+                if use_yes:
+                    p_yes = subprocess.Popen(
+                        ["yes"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL
+                    )
+                    stdin_src = p_yes.stdout
+                else:
+                    stdin_src = subprocess.PIPE
+
+                p = subprocess.Popen(
+                    cmd_run,
+                    stdin=stdin_src,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.STDOUT,
+                    text=True, encoding="utf-8", errors="replace",
+                    env=env
                 )
-                stdin_src = proc_yes.stdout
-            else:
-                stdin_src = subprocess.PIPE
+                if use_yes:
+                    p_yes.stdout.close()
+                else:
+                    def _feed():
+                        import time
+                        try:
+                            while p.poll() is None:
+                                p.stdin.write("y\n"); p.stdin.flush()
+                                time.sleep(0.2)
+                        except Exception:
+                            pass
+                        finally:
+                            try: p.stdin.close()
+                            except Exception: pass
+                    threading.Thread(target=_feed, daemon=True).start()
 
-            proc = subprocess.Popen(
-                cmd,
-                stdin=stdin_src,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                env=env
+                lines = []
+                for ln in p.stdout:
+                    ln = ln.rstrip()
+                    if "Continue scanning?" not in ln:
+                        lines.append(ln)
+                        _output(ln)
+                p.wait()
+                return lines, p.returncode
+            except Exception as e_run:
+                raise Exception(label + " : " + str(e_run))
+            finally:
+                if p_yes:
+                    try: p_yes.kill()
+                    except Exception: pass
+
+        # ── 3a. --list + yes → récupérer les playlists et leurs durées ───────
+        _status("Listing des playlists…")
+        list_lines = []
+        try:
+            list_lines, _ = _run_bdinfo(["--list"], "Listing…")
+        except Exception as e_list:
+            _status("⚠ --list : " + str(e_list), "warn")
+
+        # Parser le tableau des playlists
+        # Format : "  1   1   00003.MPLS   01:56:03   29 102 850 048   -"
+        playlists = []    # [(id_str, estimated_bytes)]
+        for ln in list_lines:
+            m = _re.search(
+                r'(\d{5})\.MPLS\s+\d+:\d+:\d+\s+([\d\s]+)',
+                ln, _re.IGNORECASE
             )
+            if m:
+                pl_id  = m.group(1)
+                # Retirer les espaces dans le nombre
+                est_bytes = int(_re.sub(r'\s', '', m.group(2)) or "0")
+                playlists.append((pl_id, est_bytes))
 
-            if use_yes:
-                proc_yes.stdout.close()   # laisse le SIGPIPE se propager
-            else:
-                # Thread Windows : envoie "y\n" toutes les 200 ms
-                def _feeder():
-                    import time
-                    try:
-                        while proc.poll() is None:
-                            proc.stdin.write("y\n")
-                            proc.stdin.flush()
-                            time.sleep(0.2)
-                    except Exception:
-                        pass
-                    finally:
-                        try: proc.stdin.close()
-                        except Exception: pass
-                threading.Thread(target=_feeder, daemon=True).start()
+        # ── 3b. Choisir la playlist principale (la plus volumineuse) ─────────
+        if playlists:
+            # Trier par estimated_bytes décroissant → plus gros = film principal
+            playlists.sort(key=lambda x: x[1], reverse=True)
+            main_pl = playlists[0][0]
+            _status("Playlist principale : " + main_pl
+                    + " (" + str(len(playlists)) + " playlists détectées)")
+        else:
+            # Fallback : essayer 00000 ou 00001
+            main_pl = "00000"
+            _status("⚠ Pas de playlist parsée → essai " + main_pl, "warn")
 
-            output_lines = []
-            for line in proc.stdout:
-                line = line.rstrip()
-                # Masquer les lignes "Continue scanning? (y/n):" du preview
-                if "Continue scanning?" not in line:
-                    output_lines.append(line)
-                    _output(line)
-            proc.wait()
+        # Réinitialiser le preview pour le vrai scan
+        self._emit("bdinfo_reset_output", {})
 
-        except Exception as e_proc:
-            _status("✖ " + str(e_proc), "error")
-            self._emit("bdinfo_done", {"ok": False, "error": str(e_proc)})
-            return
-        finally:
-            if proc_yes:
-                try: proc_yes.kill()
-                except Exception: pass
+        # ── 3c. Scan -m <main_playlist> → rapport complet ────────────────────
+        output_lines, rc = _run_bdinfo(["-m", main_pl],
+                                       "Scan -m " + main_pl + "…")
 
         output_text = "\n".join(output_lines)
-        rc = proc.returncode
 
-        # Succès partiel : exit code non-nul mais on a quand même de l'output
+        if rc != 0 and not output_lines:
+            err_msg = ("Mémoire insuffisante" if rc == -9
+                       else "BDInfoCLI exit code " + str(rc))
+            _status("✖ " + err_msg, "error")
+            self._emit("bdinfo_done", {"ok": False, "error": err_msg})
+            return
+
         if rc != 0:
-            if output_lines:
-                _status("⚠ Scan terminé avec erreurs (exit " + str(rc)
-                        + ") — rapport partiel", "warn")
-                # On continue pour sauvegarder le rapport partiel
-            else:
-                err_msg = ("Mémoire insuffisante (SIGKILL -9)"
-                           if rc == -9 else
-                           "BDInfoCLI exit code " + str(rc))
-                _status("✖ " + err_msg, "error")
-                self._emit("bdinfo_done", {"ok": False, "error": err_msg})
-                return
+            _status("⚠ Rapport partiel (exit " + str(rc) + ")", "warn")
 
         # ── 4. Sauvegarder le .nfo ────────────────────────────────────────────
         nfo_dir = BASE_DIR / "BDINFO"

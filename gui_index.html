@@ -646,9 +646,10 @@ window._emit = function(event, data) {
   if (event === 'batch_done')       onBatchDone(data);
   if (event === 'done')             onDone(data);
   if (event === 'error')            onError(data);
-  if (event === 'bdinfo_status')    bdiSetStatus(data.msg, data.level);
-  if (event === 'bdinfo_output')    bdiAddOutput(data.line);
-  if (event === 'bdinfo_done')      bdiOnDone(data);
+  if (event === 'bdinfo_status')       bdiSetStatus(data.msg, data.level);
+  if (event === 'bdinfo_output')       bdiAddOutput(data.line);
+  if (event === 'bdinfo_reset_output') bdiResetOutput();
+  if (event === 'bdinfo_done')         bdiOnDone(data);
 };
 
 // ── BD Info ──────────────────────────────────────────────────────────────────
@@ -707,6 +708,12 @@ function bdiSetStatus(msg, level) {
                  : level === 'warn'    ? '#f0a500'
                  : level === 'success' ? 'var(--green)'
                  : 'var(--text-dim)';
+}
+
+// Reset preview entre le --list et le vrai scan
+function bdiResetOutput() {
+  _bdiOutputLines = [];
+  document.getElementById('bdi-nfo-content').textContent = '';
 }
 
 // Output réel de BDInfoCLI → NFO preview
