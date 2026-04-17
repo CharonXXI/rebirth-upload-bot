@@ -1,8 +1,7 @@
-import os
 import requests
 
 # Votre clé API TMDb
-TMDB_API_KEY = os.getenv("API_KEY", "")
+TMDB_API_KEY = "cab621e2bbe649631974b2ddf2452a5b"
 
 def search_tmdb(title, media_type="movie", language="fr"):
     """

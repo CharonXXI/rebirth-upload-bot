@@ -285,18 +285,17 @@ class API:
         return {"ok": True}
 
     def _bdinfo_worker(self, folder_path: str):
-        import subprocess
+        """Lance makemkvcon --robot info → titre info format MakeMKV.
+        Fallback BDInfoCLI si makemkvcon n'est pas disponible.
+        """
+        import subprocess, re as _re
 
-        # Deux canaux distincts :
-        #   _status(msg)  → statut interne dans la colonne gauche (debug)
-        #   _output(line) → ligne réelle de BDInfoCLI → NFO preview à droite
         def _status(msg, level="info"):
             self._emit("bdinfo_status", {"msg": msg, "level": level})
-
         def _output(line):
             self._emit("bdinfo_output", {"line": line})
 
-        _status("▶ Démarrage — " + Path(folder_path).name)
+        _status("▶ " + Path(folder_path).name)
 
         # ── 1. Trouver le dossier racine contenant BDMV ───────────────────────
         scan_root = folder_path
@@ -304,12 +303,10 @@ class API:
 
         if folder_path_obj.name.upper() == "BDMV":
             scan_root = str(folder_path_obj.parent)
-            _status("BDMV sélectionné → parent : " + Path(scan_root).name)
         else:
             found_bdmv = None
             for depth in range(1, 4):
-                pattern = "/".join(["*"] * depth) + "/BDMV"
-                matches = list(folder_path_obj.glob(pattern))
+                matches = list(folder_path_obj.glob("/".join(["*"]*depth) + "/BDMV"))
                 if matches:
                     found_bdmv = matches[0].parent
                     break
@@ -317,11 +314,107 @@ class API:
                 found_bdmv = folder_path_obj
             if found_bdmv:
                 scan_root = str(found_bdmv)
-                _status("✓ BDMV trouvé dans " + Path(scan_root).name)
-            else:
-                _status("⚠ BDMV introuvable, scan direct", "warn")
 
-        # ── 2. Localiser dotnet et BDInfo.dll ────────────────────────────────
+        # ── 2. Essayer makemkvcon (méthode principale — rapide, pas d'OOM) ────
+        makemkv_bins = [
+            "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon",
+            "/usr/local/bin/makemkvcon",
+            "/usr/bin/makemkvcon",
+            "makemkvcon",
+        ]
+        makemkv_bin = None
+        for mb in makemkv_bins:
+            if mb == "makemkvcon" or Path(mb).exists():
+                makemkv_bin = mb
+                break
+
+        if makemkv_bin:
+            _status("makemkvcon détecté — scan rapide…")
+            try:
+                result = subprocess.run(
+                    [makemkv_bin, "--robot", "info", "file:" + scan_root],
+                    capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
+                    timeout=120
+                )
+                raw = result.stdout
+
+                # ── Parser les TINFO (codes MakeMKV) ─────────────────────────
+                # Codes : 2=Name, 3=SourceFile, 8=Chapters, 9=Duration(µs),
+                #         10=SizeBytes, 11=DurationStr, 27=OutputFile,
+                #         28=SegmentCount, 29=SegmentMap
+                TINFO_LABELS = {
+                    2:  "Name",
+                    3:  "Source file name",
+                    11: "Duration",
+                    8:  "Chapters count",
+                    10: "_size_bytes",   # traitement spécial
+                    27: "File name",
+                    28: "Segment count",
+                    29: "Segment map",
+                }
+
+                # Grouper les TINFO par titre
+                titles = {}   # {title_idx: {code: value}}
+                for line in raw.splitlines():
+                    m = _re.match(r'TINFO:(\d+),(\d+),\d+,"(.*)"', line)
+                    if m:
+                        tid  = int(m.group(1))
+                        code = int(m.group(2))
+                        val  = m.group(3)
+                        titles.setdefault(tid, {})[code] = val
+
+                if not titles:
+                    _status("⚠ Aucun titre trouvé par makemkvcon", "warn")
+                else:
+                    report_lines = []
+                    for tid in sorted(titles.keys()):
+                        info = titles[tid]
+                        report_lines.append("Title information")
+                        for code, label in TINFO_LABELS.items():
+                            val = info.get(code, "")
+                            if not val:
+                                continue
+                            if label == "_size_bytes":
+                                try:
+                                    gb = round(int(val) / 1_073_741_824, 1)
+                                    report_lines.append("Size: " + str(gb) + " GB")
+                                except Exception:
+                                    pass
+                            else:
+                                report_lines.append(label + ": " + val)
+                        report_lines.append("")
+
+                    output_text = "\n".join(report_lines).strip()
+
+                    # Afficher dans preview
+                    for ln in report_lines:
+                        _output(ln)
+
+                    # Sauvegarder .nfo
+                    nfo_dir = BASE_DIR / "BDINFO"
+                    nfo_dir.mkdir(exist_ok=True)
+                    folder_name = Path(scan_root).name or Path(folder_path).name
+                    nfo_path = nfo_dir / (folder_name + ".nfo")
+                    nfo_path.write_text(output_text, encoding="utf-8")
+                    _status("💾 BDINFO/" + nfo_path.name, "success")
+
+                    self._emit("bdinfo_done", {
+                        "ok":       True,
+                        "nfo_path": str(nfo_path),
+                        "nfo_name": nfo_path.name,
+                        "lines":    len(report_lines),
+                        "content":  output_text,
+                    })
+                    return
+
+            except Exception as e_mkv:
+                _status("⚠ makemkvcon : " + str(e_mkv) + " → fallback BDInfoCLI", "warn")
+
+        # ── 3 (fallback). BDInfoCLI ────────────────────────────────────────────
+        _status("BDInfoCLI…")
+
+        # ── 2b (ancien §2). Localiser dotnet et BDInfo.dll ───────────────────
         bdinfo_dll = os.getenv("BDINFO_CLI_PATH", "")
         if not bdinfo_dll:
             candidates = [
