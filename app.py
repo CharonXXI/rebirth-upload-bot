@@ -404,14 +404,14 @@ class API:
                 dotnet_bin = dc
                 break
 
-        # DOTNET_ROOT Homebrew (sans GCHeapHardLimit qui provoque lui-même le SIGKILL)
+        # DOTNET_ROOT Homebrew — pas de limites GC pour permettre la lecture M2TS
         env = os.environ.copy()
         if "DOTNET_ROOT" not in env:
             dotnet_root = "/opt/homebrew/opt/dotnet@8/libexec"
             if Path(dotnet_root).exists():
                 env["DOTNET_ROOT"] = dotnet_root
-        env.setdefault("DOTNET_GCConserveMemory",  "7")   # agressif en conservation
-        env.setdefault("DOTNET_GCHighMemPercent",  "90")  # GC déclenché à 90% RAM
+        # Laisser .NET gérer la mémoire librement (pas de GCConserveMemory ni GCHeapHardLimit)
+        # pour que TSStreamBuffer puisse allouer les buffers nécessaires à la lecture M2TS.
 
         import shutil, re as _re
 
