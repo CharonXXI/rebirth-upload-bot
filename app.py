@@ -519,11 +519,11 @@ class API:
         # ── 3d. Scan -m 00003.MPLS <disc> <output.nfo> → rapport complet ─────
         # Le stdout contient seulement la progression/erreurs.
         # Le vrai rapport est écrit dans nfo_path.
-        def _run_bdinfo_to_file(extra_args, out_path, label):
-            """Comme _run_bdinfo mais passe out_path en 2e arg positionnel."""
+        def _run_bdinfo_to_file(extra_args, out_dir, label):
+            """Comme _run_bdinfo mais passe out_dir (dossier sortie) en 2e arg positionnel."""
             cmd_run = ([dotnet_bin, bdinfo_dll]
                        + extra_args
-                       + [scan_root, str(out_path)])
+                       + [scan_root, str(out_dir)])
             _status(label)
             p_yes = None
             try:
@@ -575,20 +575,33 @@ class API:
                     try: p_yes.kill()
                     except Exception: pass
 
-        rc = _run_bdinfo_to_file(["-m", main_pl], nfo_path,
+        # BDInfoCLI attend un DOSSIER (pas un fichier) comme 2e arg positionnel.
+        # Il crée lui-même le fichier rapport à l'intérieur.
+        import glob as _glob, time as _time
+
+        # Snapshot des fichiers existants dans nfo_dir avant le scan
+        before = set(_glob.glob(str(nfo_dir / "*.txt")) + _glob.glob(str(nfo_dir / "*.nfo")))
+
+        rc = _run_bdinfo_to_file(["-m", main_pl], nfo_dir,
                                  "Scan -m " + main_pl + "…")
 
         # ── 4. Lire le rapport généré par BDInfoCLI ───────────────────────────
-        # BDInfoCLI écrit le rapport dans nfo_path (ou dans scan_root si le
-        # chemin de sortie n'est pas supporté — on cherche alors le fichier créé)
+        # BDInfoCLI écrit le rapport dans nfo_dir — trouver le fichier créé.
+        _time.sleep(1)
         output_text = ""
-        if nfo_path.exists() and nfo_path.stat().st_size > 100:
-            output_text = nfo_path.read_text(encoding="utf-8", errors="replace")
+
+        # 4a. Chercher dans nfo_dir le fichier apparu après le scan
+        after = set(_glob.glob(str(nfo_dir / "*.txt")) + _glob.glob(str(nfo_dir / "*.nfo")))
+        new_files = sorted(after - before, key=lambda f: Path(f).stat().st_mtime, reverse=True)
+        if new_files:
+            src = Path(new_files[0])
+            output_text = src.read_text(encoding="utf-8", errors="replace")
+            # Renommer/copier vers le nom canonique si différent
+            if src != nfo_path:
+                nfo_path.write_text(output_text, encoding="utf-8")
             _status("💾 BDINFO/" + nfo_path.name, "success")
         else:
-            # Fallback : chercher le fichier rapport créé dans scan_root
-            import glob as _glob, time as _time
-            _time.sleep(1)
+            # 4b. Fallback : chercher aussi dans scan_root (certaines versions l'écrivent là)
             candidates = sorted(
                 _glob.glob(str(Path(scan_root) / "*.txt"))
                 + _glob.glob(str(Path(scan_root) / "BDINFO*.txt")),
