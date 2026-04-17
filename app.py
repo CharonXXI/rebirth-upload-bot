@@ -287,37 +287,39 @@ class API:
     def _bdinfo_worker(self, folder_path: str):
         import subprocess
 
-        def _log(msg, level="info"):
-            self._emit("bdinfo_log", {"msg": msg, "level": level})
+        # Deux canaux distincts :
+        #   _status(msg)  → statut interne dans la colonne gauche (debug)
+        #   _output(line) → ligne réelle de BDInfoCLI → NFO preview à droite
+        def _status(msg, level="info"):
+            self._emit("bdinfo_status", {"msg": msg, "level": level})
 
-        _log("▶ Démarrage BD Info — " + folder_path)
+        def _output(line):
+            self._emit("bdinfo_output", {"line": line})
+
+        _status("▶ Démarrage — " + Path(folder_path).name)
 
         # ── 1. Trouver le dossier racine contenant BDMV ───────────────────────
         scan_root = folder_path
         folder_path_obj = Path(folder_path)
 
-        # Si l'utilisateur a sélectionné BDMV directement → prendre le parent
         if folder_path_obj.name.upper() == "BDMV":
             scan_root = str(folder_path_obj.parent)
-            _log("  BDMV détecté → scan root : " + scan_root)
+            _status("BDMV sélectionné → parent : " + Path(scan_root).name)
         else:
-            # Chercher BDMV dans les sous-dossiers (profondeur max 3)
             found_bdmv = None
             for depth in range(1, 4):
                 pattern = "/".join(["*"] * depth) + "/BDMV"
                 matches = list(folder_path_obj.glob(pattern))
                 if matches:
-                    found_bdmv = matches[0].parent   # parent de BDMV
+                    found_bdmv = matches[0].parent
                     break
-            # Aussi vérifier BDMV directement dans folder_path
             if not found_bdmv and (folder_path_obj / "BDMV").exists():
                 found_bdmv = folder_path_obj
             if found_bdmv:
                 scan_root = str(found_bdmv)
-                _log("  BDMV trouvé → scan root : " + scan_root)
+                _status("✓ BDMV trouvé dans " + Path(scan_root).name)
             else:
-                _log("  ⚠ Aucun dossier BDMV trouvé dans " + folder_path, "warn")
-                _log("  Scan lancé sur le dossier sélectionné quand même…", "warn")
+                _status("⚠ BDMV introuvable, scan direct", "warn")
 
         # ── 2. Localiser dotnet et BDInfo.dll ────────────────────────────────
         bdinfo_dll = os.getenv("BDINFO_CLI_PATH", "")
@@ -331,15 +333,13 @@ class API:
             for c in candidates:
                 if c.exists():
                     bdinfo_dll = str(c)
-                    _log("  BDInfo.dll : " + bdinfo_dll)
                     break
 
         if not bdinfo_dll:
-            _log("  ✖ BDInfo.dll introuvable. Configurez BDINFO_CLI_PATH dans le .env", "error")
+            _status("✖ BDInfo.dll introuvable — configurez BDINFO_CLI_PATH", "error")
             self._emit("bdinfo_done", {"ok": False, "error": "BDInfo.dll introuvable"})
             return
 
-        # dotnet : chercher dans Homebrew d'abord (PyWebView n'hérite pas du PATH user)
         dotnet_candidates = [
             "/opt/homebrew/opt/dotnet@8/bin/dotnet",
             "/opt/homebrew/bin/dotnet",
@@ -353,23 +353,18 @@ class API:
                 dotnet_bin = dc
                 break
 
-        _log("  dotnet : " + dotnet_bin)
-
-        # DOTNET_ROOT pour Homebrew + mémoire augmentée (évite OutOfMemoryException)
+        # DOTNET_ROOT Homebrew (sans GCHeapHardLimit qui provoque lui-même le SIGKILL)
         env = os.environ.copy()
         if "DOTNET_ROOT" not in env:
             dotnet_root = "/opt/homebrew/opt/dotnet@8/libexec"
             if Path(dotnet_root).exists():
                 env["DOTNET_ROOT"] = dotnet_root
-        # Allouer jusqu'à 4 GiB au GC .NET (UHD COMPLETE BLURAY = gros fichiers)
-        env.setdefault("DOTNET_GCHeapHardLimit",      str(4 * 1024 * 1024 * 1024))
-        env.setdefault("DOTNET_GCConserveMemory",     "5")   # 0-9, équilibre perf/mémoire
-        env.setdefault("DOTNET_GCHighMemPercent",     "95")  # déclenche GC à 95% RAM
-        env.setdefault("COMPlus_GCConserveMemory",    "5")   # compat runtime plus ancien
+        env.setdefault("DOTNET_GCConserveMemory",  "7")   # agressif en conservation
+        env.setdefault("DOTNET_GCHighMemPercent",  "90")  # GC déclenché à 90% RAM
 
         # ── 3. Lancer BDInfoCLI ───────────────────────────────────────────────
         cmd = [dotnet_bin, bdinfo_dll, "-w", scan_root]
-        _log("  CMD : " + " ".join(cmd))
+        _status("Scan lancé…")
 
         try:
             proc = subprocess.Popen(
@@ -385,17 +380,35 @@ class API:
             for line in proc.stdout:
                 line = line.rstrip()
                 output_lines.append(line)
-                _log(line)
+                _output(line)           # → NFO preview uniquement
             proc.wait()
         except Exception as e_proc:
-            _log("  ✖ Erreur subprocess : " + str(e_proc), "error")
+            _status("✖ " + str(e_proc), "error")
             self._emit("bdinfo_done", {"ok": False, "error": str(e_proc)})
             return
 
         output_text = "\n".join(output_lines)
+        rc = proc.returncode
 
-        if proc.returncode != 0:
-            _log("  ⚠ BDInfoCLI exit code " + str(proc.returncode), "warn")
+        # Exit code -9 = SIGKILL (OOM), tout code non-nul = échec
+        if rc != 0:
+            err_msg = ("Mémoire insuffisante (SIGKILL -9) — "
+                       "essayez avec un disque moins volumineux"
+                       if rc == -9 else
+                       "BDInfoCLI exit code " + str(rc))
+            _status("✖ " + err_msg, "error")
+            # Sauvegarder quand même ce qu'on a (partiel)
+            if output_lines:
+                nfo_dir = BASE_DIR / "BDINFO"
+                nfo_dir.mkdir(exist_ok=True)
+                folder_name = Path(scan_root).name or Path(folder_path).name
+                nfo_path = nfo_dir / (folder_name + ".nfo")
+                try:
+                    nfo_path.write_text(output_text, encoding="utf-8")
+                except Exception:
+                    pass
+            self._emit("bdinfo_done", {"ok": False, "error": err_msg})
+            return
 
         # ── 4. Sauvegarder le .nfo ────────────────────────────────────────────
         nfo_dir = BASE_DIR / "BDINFO"
@@ -404,9 +417,9 @@ class API:
         nfo_path = nfo_dir / (folder_name + ".nfo")
         try:
             nfo_path.write_text(output_text, encoding="utf-8")
-            _log("  💾 NFO sauvegardé → BDINFO/" + nfo_path.name, "success")
+            _status("💾 BDINFO/" + nfo_path.name, "success")
         except Exception as e_nfo:
-            _log("  ⚠ Impossible d'écrire le NFO : " + str(e_nfo), "warn")
+            _status("⚠ Écriture NFO : " + str(e_nfo), "warn")
 
         self._emit("bdinfo_done", {
             "ok":       True,

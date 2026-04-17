@@ -565,6 +565,9 @@ html.light body::before {
             Rapport sauvegardé dans <span style="color:var(--orange);">BDINFO/*.nfo</span>
           </div>
 
+          <!-- Statut interne (debug, discret) -->
+          <div id="bdi-status-line" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:10px;min-height:16px;transition:color .2s;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+
           <!-- Bouton scanner -->
           <button id="bdi-btn" onclick="bdiScan()"
                   style="width:100%;padding:13px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
@@ -643,14 +646,15 @@ window._emit = function(event, data) {
   if (event === 'batch_done')       onBatchDone(data);
   if (event === 'done')             onDone(data);
   if (event === 'error')            onError(data);
-  if (event === 'bdinfo_log')       bdiAddLog(data.msg, data.level);
+  if (event === 'bdinfo_status')    bdiSetStatus(data.msg, data.level);
+  if (event === 'bdinfo_output')    bdiAddOutput(data.line);
   if (event === 'bdinfo_done')      bdiOnDone(data);
 };
 
 // ── BD Info ──────────────────────────────────────────────────────────────────
 
-var _bdiFolder = '';
-var _bdiLines  = [];
+var _bdiFolder      = '';
+var _bdiOutputLines = [];
 
 async function bdiBrowse() {
   const res = await window.pywebview.api.browse_folder_bdinfo();
@@ -661,6 +665,7 @@ async function bdiBrowse() {
     drop.classList.add('has-file');
     document.getElementById('bdi-drop-label').textContent = 'DOSSIER SÉLECTIONNÉ';
     document.getElementById('bdi-drop-name').textContent  = name;
+    bdiSetStatus('');
   }
 }
 
@@ -672,34 +677,50 @@ async function bdiScan() {
     return;
   }
   // Reset UI
-  _bdiLines = [];
+  _bdiOutputLines = [];
   document.getElementById('bdi-nfo-content').textContent = '';
   document.getElementById('bdi-nfo-label').textContent   = '';
   document.getElementById('bdi-done-banner').innerHTML   = '';
+  bdiSetStatus('Initialisation…');
 
   var btn  = document.getElementById('bdi-btn');
   var prog = document.getElementById('bdi-progress');
-  btn.disabled      = true;
-  btn.innerHTML     = '⏳ &nbsp;SCAN EN COURS…';
+  var fill = document.getElementById('bdi-progress-fill');
+  var plbl = document.getElementById('bdi-progress-label');
+  btn.disabled       = true;
+  btn.innerHTML      = '⏳ &nbsp;SCAN EN COURS…';
   prog.style.display = 'block';
-  document.getElementById('bdi-progress-fill').style.width = '15%';
-  document.getElementById('bdi-progress-label').textContent = 'ANALYSE EN COURS…';
+  fill.style.width   = '8%';
+  fill.style.background = '';
+  plbl.textContent   = 'ANALYSE EN COURS…';
+  plbl.style.color   = '';
 
   await window.pywebview.api.run_bdinfo_scan(_bdiFolder);
 }
 
-function bdiAddLog(msg, level) {
-  // Accumuler les lignes → afficher dans la preview
-  _bdiLines.push(msg);
-  document.getElementById('bdi-nfo-content').textContent = _bdiLines.join('\n');
-  var pre = document.getElementById('bdi-nfo-content');
-  pre.scrollTop = pre.scrollHeight;
+// Statut interne (debug) → ligne discrète dans la colonne gauche
+function bdiSetStatus(msg, level) {
+  var el = document.getElementById('bdi-status-line');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = level === 'error'   ? 'var(--red)'
+                 : level === 'warn'    ? '#f0a500'
+                 : level === 'success' ? 'var(--green)'
+                 : 'var(--text-dim)';
+}
 
-  // Faire avancer la barre de progression (simulation)
+// Output réel de BDInfoCLI → NFO preview
+function bdiAddOutput(line) {
+  _bdiOutputLines.push(line);
+  var pre = document.getElementById('bdi-nfo-content');
+  pre.textContent = _bdiOutputLines.join('\n');
+  pre.scrollTop   = pre.scrollHeight;
+
+  // Avancer la barre de progression (simulation)
   var fill = document.getElementById('bdi-progress-fill');
   if (fill) {
-    var cur = parseFloat(fill.style.width) || 15;
-    if (cur < 90) fill.style.width = Math.min(cur + 0.4, 90) + '%';
+    var cur = parseFloat(fill.style.width) || 8;
+    if (cur < 88) fill.style.width = Math.min(cur + 0.3, 88) + '%';
   }
 }
 
@@ -708,33 +729,46 @@ function bdiOnDone(data) {
   var prog   = document.getElementById('bdi-progress');
   var banner = document.getElementById('bdi-done-banner');
   var fill   = document.getElementById('bdi-progress-fill');
-  var label  = document.getElementById('bdi-progress-label');
+  var plbl   = document.getElementById('bdi-progress-label');
+  var pre    = document.getElementById('bdi-nfo-content');
 
   btn.disabled  = false;
   btn.innerHTML = '💿 &nbsp;SCANNER';
 
+  // Forcer le contenu final complet dans la preview
+  if (data.content) {
+    pre.textContent = data.content;
+    pre.scrollTop = 0;   // revenir en haut pour lire depuis le début
+  }
+
   if (data.ok) {
-    fill.style.width  = '100%';
+    fill.style.width      = '100%';
     fill.style.background = 'var(--green)';
-    label.textContent = '✅  NFO GÉNÉRÉ — ' + data.nfo_name;
-    label.style.color = 'var(--green)';
+    plbl.textContent      = '✅  ' + data.nfo_name;
+    plbl.style.color      = 'var(--green)';
     document.getElementById('bdi-nfo-label').textContent = 'BDINFO/' + data.nfo_name;
-    banner.innerHTML = '<div style="margin-top:14px;padding:10px 14px;border-radius:4px;background:rgba(57,255,20,0.07);border:1px solid rgba(57,255,20,0.3);font-family:var(--mono);font-size:11px;color:var(--green);">'
+    banner.innerHTML = '<div style="margin-top:14px;padding:10px 14px;border-radius:4px;'
+      + 'background:rgba(57,255,20,0.07);border:1px solid rgba(57,255,20,0.3);'
+      + 'font-family:var(--mono);font-size:11px;color:var(--green);">'
       + '💾 &nbsp;BDINFO/' + data.nfo_name
       + ' &nbsp;<span style="color:var(--text-dim);">(' + data.lines + ' lignes)</span></div>';
+    bdiSetStatus('💾 BDINFO/' + data.nfo_name, 'success');
     setTimeout(function(){
-      prog.style.display = 'none';
-      fill.style.width = '0%';
+      prog.style.display    = 'none';
+      fill.style.width      = '0%';
       fill.style.background = '';
-      label.style.color = '';
-    }, 3000);
+      plbl.style.color      = '';
+    }, 4000);
   } else {
-    fill.style.width  = '100%';
+    fill.style.width      = '100%';
     fill.style.background = 'var(--red)';
-    label.textContent = '✖  ' + (data.error || 'Erreur');
-    label.style.color = 'var(--red)';
-    banner.innerHTML = '<div style="margin-top:14px;padding:10px 14px;border-radius:4px;background:rgba(255,51,51,0.07);border:1px solid rgba(255,51,51,0.3);font-family:var(--mono);font-size:11px;color:var(--red);">'
+    plbl.textContent      = '✖  ' + (data.error || 'Erreur');
+    plbl.style.color      = 'var(--red)';
+    banner.innerHTML = '<div style="margin-top:14px;padding:10px 14px;border-radius:4px;'
+      + 'background:rgba(255,51,51,0.07);border:1px solid rgba(255,51,51,0.3);'
+      + 'font-family:var(--mono);font-size:11px;color:var(--red);">'
       + '✖ &nbsp;' + (data.error || 'Erreur inconnue') + '</div>';
+    bdiSetStatus('✖ ' + (data.error || 'Erreur'), 'error');
   }
 }
 
