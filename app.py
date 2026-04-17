@@ -453,36 +453,114 @@ class API:
             main_pl = "00000.MPLS"
             _status("⚠ Pas de playlist parsée → essai " + main_pl, "warn")
 
-        # Réinitialiser le preview pour le vrai scan
-        self._emit("bdinfo_reset_output", {})
-
-        # ── 3c. Scan -m 00003.MPLS → rapport complet ─────────────────────────
-        output_lines, rc = _run_bdinfo(["-m", main_pl],
-                                       "Scan -m " + main_pl + "…")
-
-        output_text = "\n".join(output_lines)
-
-        if rc != 0 and not output_lines:
-            err_msg = ("Mémoire insuffisante" if rc == -9
-                       else "BDInfoCLI exit code " + str(rc))
-            _status("✖ " + err_msg, "error")
-            self._emit("bdinfo_done", {"ok": False, "error": err_msg})
-            return
-
-        if rc != 0:
-            _status("⚠ Rapport partiel (exit " + str(rc) + ")", "warn")
-
-        # ── 4. Sauvegarder le .nfo ────────────────────────────────────────────
+        # ── 3c. Préparer le fichier de sortie NFO ────────────────────────────
+        # BDInfoCLI sauvegarde le rapport dans un fichier, pas sur stdout.
+        # On lui passe le chemin exact comme 2e argument positionnel.
         nfo_dir = BASE_DIR / "BDINFO"
         nfo_dir.mkdir(exist_ok=True)
         folder_name = Path(scan_root).name or Path(folder_path).name
         nfo_path = nfo_dir / (folder_name + ".nfo")
-        try:
-            nfo_path.write_text(output_text, encoding="utf-8")
-            _status("💾 BDINFO/" + nfo_path.name, "success")
-        except Exception as e_nfo:
-            _status("⚠ Écriture NFO : " + str(e_nfo), "warn")
 
+        # Réinitialiser le preview pour le vrai scan
+        self._emit("bdinfo_reset_output", {})
+
+        # ── 3d. Scan -m 00003.MPLS <disc> <output.nfo> → rapport complet ─────
+        # Le stdout contient seulement la progression/erreurs.
+        # Le vrai rapport est écrit dans nfo_path.
+        def _run_bdinfo_to_file(extra_args, out_path, label):
+            """Comme _run_bdinfo mais passe out_path en 2e arg positionnel."""
+            cmd_run = ([dotnet_bin, bdinfo_dll]
+                       + extra_args
+                       + [scan_root, str(out_path)])
+            _status(label)
+            p_yes = None
+            try:
+                if use_yes:
+                    p_yes = subprocess.Popen(
+                        ["yes"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL
+                    )
+                    stdin_src = p_yes.stdout
+                else:
+                    stdin_src = subprocess.PIPE
+
+                p = subprocess.Popen(
+                    cmd_run,
+                    stdin=stdin_src,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True, encoding="utf-8", errors="replace",
+                    env=env
+                )
+                if use_yes:
+                    p_yes.stdout.close()
+                else:
+                    def _feed2():
+                        import time
+                        try:
+                            while p.poll() is None:
+                                p.stdin.write("y\n"); p.stdin.flush()
+                                time.sleep(0.2)
+                        except Exception:
+                            pass
+                        finally:
+                            try: p.stdin.close()
+                            except Exception: pass
+                    threading.Thread(target=_feed2, daemon=True).start()
+
+                # Afficher la progression (stdout = erreurs/status, pas le rapport)
+                for ln in p.stdout:
+                    ln = ln.rstrip()
+                    if "Continue scanning?" not in ln and ln:
+                        _output(ln)
+                p.wait()
+                return p.returncode
+            except Exception as e2:
+                raise Exception(label + " : " + str(e2))
+            finally:
+                if p_yes:
+                    try: p_yes.kill()
+                    except Exception: pass
+
+        rc = _run_bdinfo_to_file(["-m", main_pl], nfo_path,
+                                 "Scan -m " + main_pl + "…")
+
+        # ── 4. Lire le rapport généré par BDInfoCLI ───────────────────────────
+        # BDInfoCLI écrit le rapport dans nfo_path (ou dans scan_root si le
+        # chemin de sortie n'est pas supporté — on cherche alors le fichier créé)
+        output_text = ""
+        if nfo_path.exists() and nfo_path.stat().st_size > 100:
+            output_text = nfo_path.read_text(encoding="utf-8", errors="replace")
+            _status("💾 BDINFO/" + nfo_path.name, "success")
+        else:
+            # Fallback : chercher le fichier rapport créé dans scan_root
+            import glob as _glob, time as _time
+            _time.sleep(1)
+            candidates = sorted(
+                _glob.glob(str(Path(scan_root) / "*.txt"))
+                + _glob.glob(str(Path(scan_root) / "BDINFO*.txt")),
+                key=lambda f: Path(f).stat().st_mtime, reverse=True
+            )
+            if candidates:
+                src = Path(candidates[0])
+                output_text = src.read_text(encoding="utf-8", errors="replace")
+                nfo_path.write_text(output_text, encoding="utf-8")
+                _status("💾 BDINFO/" + nfo_path.name
+                        + " (depuis " + src.name + ")", "success")
+
+        if not output_text:
+            err_msg = "BDInfoCLI n'a produit aucun rapport"
+            _status("✖ " + err_msg, "error")
+            self._emit("bdinfo_done", {"ok": False, "error": err_msg})
+            return
+
+        # Envoyer le contenu dans la preview (remplace la progression)
+        self._emit("bdinfo_reset_output", {})
+        for ln in output_text.splitlines():
+            _output(ln)
+
+        output_lines = output_text.splitlines()
         self._emit("bdinfo_done", {
             "ok":       True,
             "nfo_path": str(nfo_path),
