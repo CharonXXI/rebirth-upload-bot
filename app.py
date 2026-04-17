@@ -362,9 +362,42 @@ class API:
         env.setdefault("DOTNET_GCConserveMemory",  "7")   # agressif en conservation
         env.setdefault("DOTNET_GCHighMemPercent",  "90")  # GC déclenché à 90% RAM
 
-        # ── 3. Lancer BDInfoCLI ───────────────────────────────────────────────
-        cmd = [dotnet_bin, bdinfo_dll, "-w", scan_root]
-        _status("Scan lancé…")
+        # ── 3a. --list pour récupérer les playlists disponibles ─────────────
+        _status("Listing des playlists…")
+        playlists = []
+        try:
+            r_list = subprocess.run(
+                [dotnet_bin, bdinfo_dll, "--list", scan_root],
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+                env=env, timeout=60
+            )
+            for line in r_list.stdout.splitlines():
+                # Lignes du type "  00001.MPLS  2:15:32  ..." ou "00001"
+                stripped = line.strip()
+                import re as _re
+                m = _re.search(r'\b(\d{5})\.?[Mm][Pp][Ll][Ss]\b', stripped)
+                if m:
+                    playlists.append(m.group(1))
+            playlists = list(dict.fromkeys(playlists))   # dédoublonner
+            if playlists:
+                _status("Playlists : " + ", ".join(playlists[:8])
+                        + ("…" if len(playlists) > 8 else ""))
+        except Exception as e_list:
+            _status("⚠ --list échoué : " + str(e_list), "warn")
+
+        # Si aucune playlist détectée → fallback -w (scan complet)
+        if not playlists:
+            _status("Aucune playlist détectée → scan complet (-w)…", "warn")
+            scan_args = ["-w"]
+        else:
+            # Construire -m 00001,00002,... (toutes les playlists en une passe)
+            scan_args = ["-m", ",".join(playlists)]
+            _status("Scan -m " + ",".join(playlists[:5])
+                    + ("…" if len(playlists) > 5 else "") + " lancé…")
+
+        # ── 3b. Lancer BDInfoCLI ──────────────────────────────────────────────
+        cmd = [dotnet_bin, bdinfo_dll] + scan_args + [scan_root]
 
         try:
             proc = subprocess.Popen(
