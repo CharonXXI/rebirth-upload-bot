@@ -432,34 +432,31 @@ class API:
 
         # Parser le tableau des playlists
         # Format : "  1   1   00003.MPLS   01:56:03   29 102 850 048   -"
-        playlists = []    # [(id_str, estimated_bytes)]
+        playlists = []    # [(full_name, estimated_bytes)]  ex: ("00003.MPLS", 29102850048)
         for ln in list_lines:
             m = _re.search(
-                r'(\d{5})\.MPLS\s+\d+:\d+:\d+\s+([\d\s]+)',
+                r'(\d{5}\.MPLS)\s+\d+:\d+:\d+\s+([\d\s]+)',
                 ln, _re.IGNORECASE
             )
             if m:
-                pl_id  = m.group(1)
-                # Retirer les espaces dans le nombre
+                pl_name   = m.group(1).upper()   # "00003.MPLS"
                 est_bytes = int(_re.sub(r'\s', '', m.group(2)) or "0")
-                playlists.append((pl_id, est_bytes))
+                playlists.append((pl_name, est_bytes))
 
         # ── 3b. Choisir la playlist principale (la plus volumineuse) ─────────
         if playlists:
-            # Trier par estimated_bytes décroissant → plus gros = film principal
             playlists.sort(key=lambda x: x[1], reverse=True)
-            main_pl = playlists[0][0]
-            _status("Playlist principale : " + main_pl
-                    + " (" + str(len(playlists)) + " playlists détectées)")
+            main_pl = playlists[0][0]            # ex: "00003.MPLS"
+            _status("Playlist : " + main_pl
+                    + " (" + str(len(playlists)) + " trouvées)")
         else:
-            # Fallback : essayer 00000 ou 00001
-            main_pl = "00000"
+            main_pl = "00000.MPLS"
             _status("⚠ Pas de playlist parsée → essai " + main_pl, "warn")
 
         # Réinitialiser le preview pour le vrai scan
         self._emit("bdinfo_reset_output", {})
 
-        # ── 3c. Scan -m <main_playlist> → rapport complet ────────────────────
+        # ── 3c. Scan -m 00003.MPLS → rapport complet ─────────────────────────
         output_lines, rc = _run_bdinfo(["-m", main_pl],
                                        "Scan -m " + main_pl + "…")
 
