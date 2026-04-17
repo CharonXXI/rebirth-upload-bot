@@ -620,6 +620,36 @@ class API:
             self._emit("bdinfo_done", {"ok": False, "error": err_msg})
             return
 
+        # ── 5. Filtrer : garder uniquement DISC INFO → FILES (exclu) ─────────
+        # On extrait le contenu entre "DISC INFO:" et "FILES:" dans le bloc
+        # [code]…[/code] du rapport BDInfoCLI.
+        def _extract_disc_info(text):
+            lines = text.splitlines()
+            result = []
+            inside = False
+            # Sections à exclure une fois dans le bloc utile
+            stop_sections = {"FILES:", "CHAPTERS:", "STREAM DIAGNOSTICS:"}
+            for ln in lines:
+                stripped = ln.strip()
+                if not inside:
+                    if stripped == "DISC INFO:":
+                        inside = True
+                        result.append(ln)
+                else:
+                    if stripped in stop_sections:
+                        break
+                    result.append(ln)
+            # Retirer les lignes vides en fin de bloc
+            while result and not result[-1].strip():
+                result.pop()
+            return "\n".join(result)
+
+        filtered = _extract_disc_info(output_text)
+        if filtered:
+            output_text = filtered
+            # Réécrire le .nfo avec la version filtrée
+            nfo_path.write_text(output_text, encoding="utf-8")
+
         # Envoyer le contenu dans la preview (remplace la progression)
         self._emit("bdinfo_reset_output", {})
         for ln in output_text.splitlines():
