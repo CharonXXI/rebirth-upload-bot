@@ -640,6 +640,110 @@ class API:
         if filtered:
             output_text = filtered
 
+        # ── 6. Patcher taille + bitrates si valeurs = 0 (OOM M2TS) ──────────
+        def _patch_zeros(text):
+            """Calcule taille/bitrate depuis le filesystem + ffprobe si dispo."""
+            # Trouver le fichier M2TS correspondant au MPLS principal
+            mpls_stem = Path(main_pl).stem          # "00000"
+            m2ts_candidates = [
+                Path(scan_root) / "BDMV" / "STREAM" / (mpls_stem + ".M2TS"),
+                Path(scan_root) / "BDMV" / "BACKUP" / "STREAM" / (mpls_stem + ".M2TS"),
+            ]
+            m2ts = next((p for p in m2ts_candidates if p.exists()), None)
+            if not m2ts:
+                return text
+
+            m2ts_size = m2ts.stat().st_size   # octets
+
+            # Durée depuis le rapport BDInfo "Length:  1:38:26.901 (h:m:s.ms)"
+            dur_m = _re.search(r'Length:\s+(\d+):(\d+):([\d.]+)', text)
+            duration_s = 0.0
+            if dur_m:
+                duration_s = (int(dur_m.group(1)) * 3600
+                              + int(dur_m.group(2)) * 60
+                              + float(dur_m.group(3)))
+
+            # Bitrate total = taille_octets * 8 / durée_secondes (en Mbps)
+            total_mbps = ((m2ts_size * 8) / duration_s / 1_000_000
+                          if duration_s > 0 else 0.0)
+
+            # ── Bitrates par stream via ffprobe (optionnel) ──────────────────
+            video_kbps_list = []
+            audio_kbps_list = []
+            ffprobe_bin = shutil.which("ffprobe")
+            if ffprobe_bin:
+                try:
+                    fp = subprocess.run(
+                        [ffprobe_bin, "-v", "quiet",
+                         "-print_format", "json",
+                         "-show_streams", "-show_format",
+                         "-analyzeduration", "200000000",
+                         "-probesize",      "200000000",
+                         str(m2ts)],
+                        capture_output=True, text=True, timeout=90
+                    )
+                    import json as _json2
+                    fp_data = _json2.loads(fp.stdout)
+                    for st in fp_data.get("streams", []):
+                        br = int(st.get("bit_rate", 0) or 0) // 1000  # kbps
+                        if st.get("codec_type") == "video" and br > 0:
+                            video_kbps_list.append(br)
+                        elif st.get("codec_type") == "audio" and br > 0:
+                            audio_kbps_list.append(br)
+                    _status("ffprobe : bitrates lus", "info")
+                except Exception as e_fp:
+                    _status("⚠ ffprobe : " + str(e_fp), "warn")
+
+            # ── Patcher ligne par ligne ───────────────────────────────────────
+            lines = text.splitlines()
+            patched = []
+            section = None
+            video_idx = 0
+            audio_idx = 0
+            in_playlist = False
+
+            for ln in lines:
+                s = ln.strip()
+
+                # Suivi de section
+                if s == "PLAYLIST REPORT:":
+                    in_playlist = True; section = "PLAYLIST"
+                elif s == "VIDEO:":
+                    in_playlist = False; section = "VIDEO"
+                elif s == "AUDIO:":
+                    section = "AUDIO"
+                elif s in ("SUBTITLES:", "FILES:", "CHAPTERS:"):
+                    section = s.rstrip(":")
+
+                # Total Bitrate
+                if "Total Bitrate:" in ln and "0.00 Mbps" in ln and total_mbps > 0:
+                    ln = ln.replace("0.00 Mbps", f"{total_mbps:.2f} Mbps")
+
+                # Size dans PLAYLIST REPORT
+                elif in_playlist and s.startswith("Size:") and "0 bytes" in ln:
+                    ln = ln.replace("0 bytes", f"{m2ts_size:,} bytes")
+
+                # Bitrate vidéo
+                elif section == "VIDEO" and "0 kbps" in ln:
+                    if video_kbps_list and video_idx < len(video_kbps_list):
+                        ln = ln.replace("0 kbps", f"{video_kbps_list[video_idx]:,} kbps", 1)
+                        video_idx += 1
+
+                # Bitrate audio
+                elif section == "AUDIO" and "0 kbps" in ln:
+                    if audio_kbps_list and audio_idx < len(audio_kbps_list):
+                        ln = ln.replace("0 kbps", f"{audio_kbps_list[audio_idx]:,} kbps", 1)
+                        audio_idx += 1
+
+                patched.append(ln)
+
+            return "\n".join(patched)
+
+        # Appliquer le patch uniquement si des zéros sont présents
+        if "0.00 Mbps" in output_text or "0 bytes" in output_text:
+            _status("Calcul bitrates depuis filesystem…")
+            output_text = _patch_zeros(output_text)
+
         # Réécrire .nfo ET le fichier source (.txt ou autre) avec la version filtrée
         nfo_path.write_text(output_text, encoding="utf-8")
         if src_file and src_file != nfo_path:
