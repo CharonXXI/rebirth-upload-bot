@@ -593,13 +593,11 @@ class API:
         # 4a. Chercher dans nfo_dir le fichier apparu après le scan
         after = set(_glob.glob(str(nfo_dir / "*.txt")) + _glob.glob(str(nfo_dir / "*.nfo")))
         new_files = sorted(after - before, key=lambda f: Path(f).stat().st_mtime, reverse=True)
+        src_file = None
         if new_files:
-            src = Path(new_files[0])
-            output_text = src.read_text(encoding="utf-8", errors="replace")
-            # Renommer/copier vers le nom canonique si différent
-            if src != nfo_path:
-                nfo_path.write_text(output_text, encoding="utf-8")
-            _status("💾 BDINFO/" + nfo_path.name, "success")
+            src_file = Path(new_files[0])
+            output_text = src_file.read_text(encoding="utf-8", errors="replace")
+            _status("💾 BDINFO/" + src_file.name, "success")
         else:
             # 4b. Fallback : chercher aussi dans scan_root (certaines versions l'écrivent là)
             candidates = sorted(
@@ -608,11 +606,9 @@ class API:
                 key=lambda f: Path(f).stat().st_mtime, reverse=True
             )
             if candidates:
-                src = Path(candidates[0])
-                output_text = src.read_text(encoding="utf-8", errors="replace")
-                nfo_path.write_text(output_text, encoding="utf-8")
-                _status("💾 BDINFO/" + nfo_path.name
-                        + " (depuis " + src.name + ")", "success")
+                src_file = Path(candidates[0])
+                output_text = src_file.read_text(encoding="utf-8", errors="replace")
+                _status("💾 depuis " + src_file.name, "success")
 
         if not output_text:
             err_msg = "BDInfoCLI n'a produit aucun rapport"
@@ -621,13 +617,10 @@ class API:
             return
 
         # ── 5. Filtrer : garder uniquement DISC INFO → FILES (exclu) ─────────
-        # On extrait le contenu entre "DISC INFO:" et "FILES:" dans le bloc
-        # [code]…[/code] du rapport BDInfoCLI.
         def _extract_disc_info(text):
             lines = text.splitlines()
             result = []
             inside = False
-            # Sections à exclure une fois dans le bloc utile
             stop_sections = {"FILES:", "CHAPTERS:", "STREAM DIAGNOSTICS:"}
             for ln in lines:
                 stripped = ln.strip()
@@ -639,7 +632,6 @@ class API:
                     if stripped in stop_sections:
                         break
                     result.append(ln)
-            # Retirer les lignes vides en fin de bloc
             while result and not result[-1].strip():
                 result.pop()
             return "\n".join(result)
@@ -647,8 +639,11 @@ class API:
         filtered = _extract_disc_info(output_text)
         if filtered:
             output_text = filtered
-            # Réécrire le .nfo avec la version filtrée
-            nfo_path.write_text(output_text, encoding="utf-8")
+
+        # Réécrire .nfo ET le fichier source (.txt ou autre) avec la version filtrée
+        nfo_path.write_text(output_text, encoding="utf-8")
+        if src_file and src_file != nfo_path:
+            src_file.write_text(output_text, encoding="utf-8")
 
         # Envoyer le contenu dans la preview (remplace la progression)
         self._emit("bdinfo_reset_output", {})
