@@ -355,12 +355,17 @@ class API:
 
         _log("  dotnet : " + dotnet_bin)
 
-        # DOTNET_ROOT pour Homebrew (évite l'erreur "No usable version of libssl")
+        # DOTNET_ROOT pour Homebrew + mémoire augmentée (évite OutOfMemoryException)
         env = os.environ.copy()
         if "DOTNET_ROOT" not in env:
             dotnet_root = "/opt/homebrew/opt/dotnet@8/libexec"
             if Path(dotnet_root).exists():
                 env["DOTNET_ROOT"] = dotnet_root
+        # Allouer jusqu'à 4 GiB au GC .NET (UHD COMPLETE BLURAY = gros fichiers)
+        env.setdefault("DOTNET_GCHeapHardLimit",      str(4 * 1024 * 1024 * 1024))
+        env.setdefault("DOTNET_GCConserveMemory",     "5")   # 0-9, équilibre perf/mémoire
+        env.setdefault("DOTNET_GCHighMemPercent",     "95")  # déclenche GC à 95% RAM
+        env.setdefault("COMPlus_GCConserveMemory",    "5")   # compat runtime plus ancien
 
         # ── 3. Lancer BDInfoCLI ───────────────────────────────────────────────
         cmd = [dotnet_bin, bdinfo_dll, "-w", scan_root]
