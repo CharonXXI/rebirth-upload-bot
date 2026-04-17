@@ -362,46 +362,33 @@ class API:
         env.setdefault("DOTNET_GCConserveMemory",  "7")   # agressif en conservation
         env.setdefault("DOTNET_GCHighMemPercent",  "90")  # GC déclenché à 90% RAM
 
-        # ── 3a. --list pour récupérer les playlists disponibles ─────────────
-        _status("Listing des playlists…")
-        playlists = []
-        try:
-            r_list = subprocess.run(
-                [dotnet_bin, bdinfo_dll, "--list", scan_root],
-                capture_output=True, text=True,
-                encoding="utf-8", errors="replace",
-                env=env, timeout=60
-            )
-            for line in r_list.stdout.splitlines():
-                # Lignes du type "  00001.MPLS  2:15:32  ..." ou "00001"
-                stripped = line.strip()
-                import re as _re
-                m = _re.search(r'\b(\d{5})\.?[Mm][Pp][Ll][Ss]\b', stripped)
-                if m:
-                    playlists.append(m.group(1))
-            playlists = list(dict.fromkeys(playlists))   # dédoublonner
-            if playlists:
-                _status("Playlists : " + ", ".join(playlists[:8])
-                        + ("…" if len(playlists) > 8 else ""))
-        except Exception as e_list:
-            _status("⚠ --list échoué : " + str(e_list), "warn")
+        # ── 3. Lancer BDInfoCLI avec réponse automatique aux prompts ─────────
+        # BDInfoCLI demande "Continue scanning? (y/n):" à chaque OOM sur M2TS.
+        # On pipe "yes" en stdin pour répondre "y" automatiquement et laisser
+        # le scan se terminer malgré les erreurs mémoire.
+        import shutil, re as _re
 
-        # Si aucune playlist détectée → fallback -w (scan complet)
-        if not playlists:
-            _status("Aucune playlist détectée → scan complet (-w)…", "warn")
-            scan_args = ["-w"]
-        else:
-            # Construire -m 00001,00002,... (toutes les playlists en une passe)
-            scan_args = ["-m", ",".join(playlists)]
-            _status("Scan -m " + ",".join(playlists[:5])
-                    + ("…" if len(playlists) > 5 else "") + " lancé…")
+        cmd = [dotnet_bin, bdinfo_dll, "-w", scan_root]
+        _status("Scan lancé… (réponse auto aux prompts)")
 
-        # ── 3b. Lancer BDInfoCLI ──────────────────────────────────────────────
-        cmd = [dotnet_bin, bdinfo_dll] + scan_args + [scan_root]
+        # Préparer la source stdin : `yes` sur macOS/Linux, thread sur Windows
+        use_yes = shutil.which("yes") is not None
+        proc_yes = None
 
         try:
+            if use_yes:
+                proc_yes = subprocess.Popen(
+                    ["yes"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL
+                )
+                stdin_src = proc_yes.stdout
+            else:
+                stdin_src = subprocess.PIPE
+
             proc = subprocess.Popen(
                 cmd,
+                stdin=stdin_src,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -409,39 +396,59 @@ class API:
                 errors="replace",
                 env=env
             )
+
+            if use_yes:
+                proc_yes.stdout.close()   # laisse le SIGPIPE se propager
+            else:
+                # Thread Windows : envoie "y\n" toutes les 200 ms
+                def _feeder():
+                    import time
+                    try:
+                        while proc.poll() is None:
+                            proc.stdin.write("y\n")
+                            proc.stdin.flush()
+                            time.sleep(0.2)
+                    except Exception:
+                        pass
+                    finally:
+                        try: proc.stdin.close()
+                        except Exception: pass
+                threading.Thread(target=_feeder, daemon=True).start()
+
             output_lines = []
             for line in proc.stdout:
                 line = line.rstrip()
-                output_lines.append(line)
-                _output(line)           # → NFO preview uniquement
+                # Masquer les lignes "Continue scanning? (y/n):" du preview
+                if "Continue scanning?" not in line:
+                    output_lines.append(line)
+                    _output(line)
             proc.wait()
+
         except Exception as e_proc:
             _status("✖ " + str(e_proc), "error")
             self._emit("bdinfo_done", {"ok": False, "error": str(e_proc)})
             return
+        finally:
+            if proc_yes:
+                try: proc_yes.kill()
+                except Exception: pass
 
         output_text = "\n".join(output_lines)
         rc = proc.returncode
 
-        # Exit code -9 = SIGKILL (OOM), tout code non-nul = échec
+        # Succès partiel : exit code non-nul mais on a quand même de l'output
         if rc != 0:
-            err_msg = ("Mémoire insuffisante (SIGKILL -9) — "
-                       "essayez avec un disque moins volumineux"
-                       if rc == -9 else
-                       "BDInfoCLI exit code " + str(rc))
-            _status("✖ " + err_msg, "error")
-            # Sauvegarder quand même ce qu'on a (partiel)
             if output_lines:
-                nfo_dir = BASE_DIR / "BDINFO"
-                nfo_dir.mkdir(exist_ok=True)
-                folder_name = Path(scan_root).name or Path(folder_path).name
-                nfo_path = nfo_dir / (folder_name + ".nfo")
-                try:
-                    nfo_path.write_text(output_text, encoding="utf-8")
-                except Exception:
-                    pass
-            self._emit("bdinfo_done", {"ok": False, "error": err_msg})
-            return
+                _status("⚠ Scan terminé avec erreurs (exit " + str(rc)
+                        + ") — rapport partiel", "warn")
+                # On continue pour sauvegarder le rapport partiel
+            else:
+                err_msg = ("Mémoire insuffisante (SIGKILL -9)"
+                           if rc == -9 else
+                           "BDInfoCLI exit code " + str(rc))
+                _status("✖ " + err_msg, "error")
+                self._emit("bdinfo_done", {"ok": False, "error": err_msg})
+                return
 
         # ── 4. Sauvegarder le .nfo ────────────────────────────────────────────
         nfo_dir = BASE_DIR / "BDINFO"
