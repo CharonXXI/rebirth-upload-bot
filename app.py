@@ -573,105 +573,184 @@ class API:
         _pl_number = str(_all_mpls.index(main_pl) + 1) if main_pl in _all_mpls else "1"
         _status("Playlist #%s sur %d (%s)" % (_pl_number, len(_all_mpls), main_pl))
 
-        # ── Scan interactif sans -m : sélection par numéro + "y" au scan bitrate ─
-        def _run_bdinfo_interactive(label):
+        # ── Scan via PTY : Console.KeyAvailable exige un vrai terminal ───────────
+        # BDInfoCLI utilise Console.KeyAvailable() pour lire les choix interactifs.
+        # Avec un pipe classique stdin, .NET lève InvalidOperationException.
+        # Solution : PTY (pseudo-terminal) → le process pense parler à un terminal.
+        def _run_bdinfo_pty(label):
             """
-            Lance BDInfoCLI SANS -m.
-            Répond au prompt de sélection de playlist avec le bon numéro,
-            puis répond 'y' au prompt "Continue scanning?" pour déclencher
-            le scan bitrate réel depuis le M2TS (même logique que le bouton
-            'Scan Bitrate' du GUI Windows).
-            Lecture caractère par caractère pour détecter les prompts sans \\n.
+            Lance BDInfoCLI via PTY (macOS/Linux).
+            - Envoie le numéro de la playlist cible à la sélection
+            - Répond 'y' à 'Continue scanning?' pour déclencher le scan M2TS
+            - Filtre le listing de la preview (envoyé dans le status à la place)
             """
+            import pty as _pty, os as _os, select as _sel
+            try:
+                import termios as _termios
+                _has_termios = True
+            except ImportError:
+                _has_termios = False
+
+            master_fd, slave_fd = _pty.openpty()
+
+            # Désactiver l'écho (sinon les entrées reviennent en sortie)
+            if _has_termios:
+                try:
+                    t = _termios.tcgetattr(slave_fd)
+                    t[3] &= ~_termios.ECHO
+                    _termios.tcsetattr(slave_fd, _termios.TCSANOW, t)
+                except Exception:
+                    pass
+
             cmd = [dotnet_bin, bdinfo_dll, scan_root, str(nfo_dir)]
             _status(label)
 
-            p = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace",
-                env=env
-            )
+            try:
+                p = subprocess.Popen(
+                    cmd,
+                    stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+                    close_fds=True, env=env
+                )
+                _os.close(slave_fd)
+            except Exception as e_pty:
+                _os.close(slave_fd)
+                _os.close(master_fd)
+                raise e_pty
 
-            line_q = _queue.Queue()
-
-            def _char_reader():
-                buf = ""
-                try:
-                    while True:
-                        ch = p.stdout.read(1)
-                        if not ch:
-                            break
-                        if ch == "\n":
-                            line_q.put(("line", buf.rstrip("\r")))
-                            buf = ""
-                        else:
-                            buf += ch
-                            # Flush si ça ressemble à un prompt (finit par ': ' ou '? ')
-                            if len(buf) > 3 and (buf.endswith(": ") or buf.endswith("? ")):
-                                line_q.put(("prompt", buf.strip()))
-                                buf = ""
-                except Exception:
-                    pass
-                if buf.strip():
-                    line_q.put(("line", buf.strip()))
-                line_q.put(None)
-
-            threading.Thread(target=_char_reader, daemon=True).start()
-
+            buf            = b""
+            playlist_index = None   # numéro réel trouvé dans le listing
             selection_sent = False
 
             while True:
+                if p.poll() is not None:
+                    # Lire ce qui reste
+                    try:
+                        r2, _, _ = _sel.select([master_fd], [], [], 2)
+                        if r2:
+                            buf += _os.read(master_fd, 65536)
+                    except OSError:
+                        pass
+                    break
+
                 try:
-                    item = line_q.get(timeout=300)
-                except _queue.Empty:
-                    break
-                if item is None:
+                    r, _, _ = _sel.select([master_fd], [], [], 120)
+                except (ValueError, OSError):
                     break
 
-                kind, ln = item
-                ln_low = ln.lower()
+                if not r:
+                    # Timeout : BDInfoCLI attend probablement une entrée
+                    if not selection_sent:
+                        choice = playlist_index or _pl_number
+                        try:
+                            _os.write(master_fd, (choice + "\n").encode())
+                            selection_sent = True
+                            _status("→ #" + choice + " (" + main_pl + ") [timeout]")
+                        except OSError:
+                            pass
+                    continue
 
-                # Prompt de sélection de playlist
-                if not selection_sent and (
-                    "enter" in ln_low or "select" in ln_low
-                    or "playlist" in ln_low or "number" in ln_low
-                    or kind == "prompt"
-                ):
-                    try:
-                        p.stdin.write(_pl_number + "\n")
-                        p.stdin.flush()
-                        selection_sent = True
-                        _status("→ Envoi numéro playlist : " + _pl_number)
-                    except Exception:
-                        pass
+                try:
+                    data = _os.read(master_fd, 8192)
+                except OSError:
+                    break
+                if not data:
+                    break
 
-                # Prompt "Continue scanning?" = scan bitrate M2TS
-                elif "continue" in ln_low and ("scan" in ln_low or "?" in ln):
-                    try:
-                        p.stdin.write("y\n")
-                        p.stdin.flush()
-                        _status("→ Scan bitrate M2TS lancé…")
-                    except Exception:
-                        pass
+                buf += data
+                text = buf.decode("utf-8", errors="replace")
+                buf  = b""
 
-                # Afficher les lignes de rapport/progression (sauf les prompts répétitifs)
-                elif kind == "line" and ln and "continue scanning?" not in ln_low:
-                    _output(ln)
+                # Supprimer séquences ANSI et CR
+                text = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+                text = text.replace("\r", "")
+
+                lines = text.split("\n")
+                buf   = lines[-1].encode()   # fragment de ligne en cours
+
+                for ln in lines[:-1]:
+                    ln     = ln.rstrip()
+                    ln_low = ln.lower()
+                    if not ln:
+                        continue
+
+                    # Chercher notre MPLS dans le listing pour noter son index
+                    # Format observé : "N  M  XXXXX.MPLS  duration  size  -"
+                    if not selection_sent and main_pl.upper() in ln.upper():
+                        nums = _re.findall(r"\b(\d+)\b", ln)
+                        if nums:
+                            # Prendre le dernier nombre AVANT le nom du MPLS
+                            mpls_pos = ln.upper().index(main_pl.upper())
+                            pre_nums = _re.findall(r"\b(\d+)\b", ln[:mpls_pos])
+                            playlist_index = pre_nums[-1] if pre_nums else nums[0]
+                            _status("Playlist #" + playlist_index + " = " + main_pl)
+
+                    # Prompt de sélection de playlist
+                    if not selection_sent and any(kw in ln_low for kw in
+                            ("enter", "select", "choose", "number", "index", "playlist")):
+                        choice = playlist_index or _pl_number
+                        try:
+                            _os.write(master_fd, (choice + "\n").encode())
+                            selection_sent = True
+                            _status("→ Sélection #" + choice + " (" + main_pl + ")")
+                        except OSError:
+                            pass
+
+                    # "Continue scanning?" → scan bitrate M2TS
+                    elif "continue" in ln_low and ("scan" in ln_low or "?" in ln):
+                        try:
+                            _os.write(master_fd, b"y\n")
+                            _status("→ Scan bitrate M2TS en cours…")
+                        except OSError:
+                            pass
+
+                    # Affichage : listing → status gauche, reste → preview droite
+                    is_listing = (not selection_sent
+                                  and bool(_re.search(r"^\s*\d+\s+\d+\s+\d{5}\.MPLS", ln, _re.IGNORECASE)))
+                    if is_listing:
+                        _status(ln)          # listing dans le panneau debug
+                    elif "continue scanning?" not in ln_low:
+                        _output(ln)          # rapport dans le preview
+
+                # Vérifier le fragment courant pour les prompts sans \\n
+                if buf:
+                    frag = buf.decode("utf-8", errors="replace")
+                    frag_low = frag.lower()
+                    if not selection_sent and any(kw in frag_low for kw in
+                            ("enter", "select", "number", "index")):
+                        choice = playlist_index or _pl_number
+                        try:
+                            _os.write(master_fd, (choice + "\n").encode())
+                            selection_sent = True
+                            buf = b""
+                            _status("→ Sélection #" + choice + " (" + main_pl + ") [prompt]")
+                        except OSError:
+                            pass
+                    elif "continue" in frag_low and "?" in frag:
+                        try:
+                            _os.write(master_fd, b"y\n")
+                            buf = b""
+                            _status("→ Scan bitrate M2TS (prompt partiel)…")
+                        except OSError:
+                            pass
 
             try:
-                p.stdin.close()
-            except Exception:
+                _os.close(master_fd)
+            except OSError:
                 pass
-            p.wait()
+            if p.poll() is None:
+                p.wait()
             return p.returncode
 
         # Timestamp AVANT le scan pour trouver les fichiers créés/modifiés après
         scan_start = _time.time()
 
-        rc = _run_bdinfo_interactive("Scan interactif " + main_pl + "…")
+        try:
+            rc = _run_bdinfo_pty("Scan " + main_pl + " via PTY…")
+        except ImportError:
+            # Windows : pas de module pty → fallback -m + patch bitrates
+            _status("⚠ PTY non dispo (Windows) → -m + calcul bitrates")
+            rc = _run_bdinfo_to_file(["-m", main_pl], nfo_dir,
+                                     "Scan -m " + main_pl + "…")
 
         # ── 4. Lire le rapport généré par BDInfoCLI ───────────────────────────
         # Chercher le fichier le plus récent dans nfo_dir modifié APRÈS scan_start
