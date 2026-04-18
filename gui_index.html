@@ -703,6 +703,12 @@ async function bdiScan() {
   document.getElementById('bdi-nfo-content').textContent = '';
   document.getElementById('bdi-nfo-label').textContent   = '';
   document.getElementById('bdi-done-banner').innerHTML   = '';
+  document.getElementById('bdi-upload-section').style.display = 'none';
+  document.getElementById('bdi-upload-status').textContent    = '';
+  ['bdi-btn-bzhv','bdi-btn-gofile'].forEach(function(id){
+    var b = document.getElementById(id);
+    b.disabled = false; b.classList.remove('active');
+  });
   bdiSetStatus('Initialisation…');
 
   var btn  = document.getElementById('bdi-btn');
