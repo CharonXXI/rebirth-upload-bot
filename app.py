@@ -642,9 +642,7 @@ class API:
                     if not selection_sent:
                         choice = playlist_index or _pl_number
                         try:
-                            # Double \n : numéro + Enter pour sortir de la boucle
-                            # multi-sélection de BDInfoCLI
-                            _os.write(master_fd, (choice + "\n\n").encode())
+                            _os.write(master_fd, (choice + "\n").encode())
                             selection_sent = True
                             _status("→ #" + choice + " (" + main_pl + ") [timeout]")
                         except OSError:
@@ -672,6 +670,9 @@ class API:
                 for ln in lines[:-1]:
                     ln     = ln.rstrip()
                     ln_low = ln.lower()
+                    # DEBUG : afficher toutes les lignes après la sélection
+                    if selection_sent and ln:
+                        _status("[PTY] " + ln[:120])
                     if not ln:
                         continue
 
@@ -696,22 +697,21 @@ class API:
                          bool(_re.search(r"\[\s*\d+", ln)))
                     )
                     if not selection_sent and _is_sel_prompt:
-                        # Première sélection : envoyer "numéro\n\n"
-                        # Le double \n : 1er termine l'entrée du numéro,
-                        # 2e sort de la boucle multi-sélection de BDInfoCLI
+                        # Première sélection : envoyer seulement le numéro
                         choice = playlist_index or _pl_number
                         try:
-                            _os.write(master_fd, (choice + "\n\n").encode())
+                            _os.write(master_fd, (choice + "\n").encode())
                             selection_sent = True
                             _status("→ Sélection #" + choice + " (" + main_pl + ")")
                         except OSError:
                             pass
 
-                    elif selection_sent and _is_sel_prompt:
-                        # 2e invite (sécurité si le \n\n n'a pas suffi) → Enter
+                    # Après sélection : "another? [y/N]" ou "add another" → N
+                    elif selection_sent and any(
+                            kw in ln_low for kw in ("another", "add more", "more playlist")):
                         try:
-                            _os.write(master_fd, b"\n")
-                            _status("→ Enter (fin de sélection)")
+                            _os.write(master_fd, b"N\n")
+                            _status("→ N (pas d'autre playlist)")
                         except OSError:
                             pass
 
@@ -739,19 +739,18 @@ class API:
                             ("enter", "select", "number", "index")):
                         choice = playlist_index or _pl_number
                         try:
-                            _os.write(master_fd, (choice + "\n\n").encode())
+                            _os.write(master_fd, (choice + "\n").encode())
                             selection_sent = True
                             buf = b""
                             _status("→ Sélection #" + choice + " (" + main_pl + ") [prompt]")
                         except OSError:
                             pass
                     elif selection_sent and any(kw in frag_low for kw in
-                            ("enter", "select", "number", "index")):
-                        # 2e invite multi-sélection → Enter
+                            ("another", "add more", "more playlist")):
                         try:
-                            _os.write(master_fd, b"\n")
+                            _os.write(master_fd, b"N\n")
                             buf = b""
-                            _status("→ Enter (fin sélection) [frag]")
+                            _status("→ N (fin sélection) [frag]")
                         except OSError:
                             pass
                     elif "continue" in frag_low and "?" in frag:
