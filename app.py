@@ -427,49 +427,59 @@ class API:
         main_pl = None
 
         def _pick_mpls_by_stream_size(root):
+            """
+            Lit les MPLS binaires, cherche les clips "XXXXXM2TS",
+            additionne les tailles M2TS dans BDMV/STREAM/.
+            Retourne (mpls_name, total_bytes, [m2ts_paths_triés]).
+            """
             import re as _re2
             playlist_dir = Path(root) / "BDMV" / "PLAYLIST"
             stream_dir   = Path(root) / "BDMV" / "STREAM"
             if not playlist_dir.exists() or not stream_dir.exists():
-                return None
+                return None, 0, []
 
-            # Index des tailles M2TS  {"00800": 36349261824, ...}
-            m2ts_sizes = {}
+            # Index M2TS : {"00800": (size, Path), ...}
+            m2ts_info = {}
             for f in stream_dir.iterdir():
                 if f.suffix.upper() == ".M2TS":
-                    m2ts_sizes[f.stem.upper()] = f.stat().st_size
+                    m2ts_info[f.stem.upper()] = (f.stat().st_size, f)
 
-            if not m2ts_sizes:
-                return None
+            if not m2ts_info:
+                return None, 0, []
 
-            best_name, best_size = None, -1
+            best_name, best_size, best_clips = None, -1, []
             candidates_list = []
             for mpls_file in sorted(playlist_dir.iterdir()):
                 if mpls_file.suffix.upper() != ".MPLS":
                     continue
                 try:
-                    data = mpls_file.read_bytes()
-                    # Pattern "XXXXXM2TS" dans le binaire MPLS
+                    data  = mpls_file.read_bytes()
                     clips = set(_re2.findall(rb'([0-9]{5})M2TS', data))
-                    total = sum(m2ts_sizes.get(c.decode(), 0) for c in clips)
+                    total = sum(m2ts_info[c.decode()][0]
+                                for c in clips if c.decode() in m2ts_info)
+                    paths = sorted(m2ts_info[c.decode()][1]
+                                   for c in clips if c.decode() in m2ts_info)
                     candidates_list.append((mpls_file.name.upper(), total))
                     if total > best_size:
-                        best_size = total
-                        best_name = mpls_file.name.upper()
+                        best_size  = total
+                        best_name  = mpls_file.name.upper()
+                        best_clips = paths
                 except Exception:
                     continue
 
             if best_name:
-                # Log des 3 plus grosses playlists pour info
                 candidates_list.sort(key=lambda x: x[1], reverse=True)
                 for pl, sz in candidates_list[:3]:
                     _status("  %s → %.2f GB" % (pl, sz / 1_073_741_824))
 
-            return best_name
+            return best_name, best_size, best_clips
 
         _status("Identification de la playlist principale…")
+        main_pl       = None
+        main_pl_bytes = 0
+        main_pl_clips = []
         try:
-            main_pl = _pick_mpls_by_stream_size(scan_root)
+            main_pl, main_pl_bytes, main_pl_clips = _pick_mpls_by_stream_size(scan_root)
             if main_pl:
                 _status("Playlist principale : " + main_pl)
             else:
@@ -621,6 +631,109 @@ class API:
         filtered = _extract_disc_info(output_text)
         if filtered:
             output_text = filtered
+
+        # ── 5b. Injecter taille + bitrates si BDInfoCLI les a laissés à 0 ─────
+        # BDInfoCLI -m lit les CLPI pour la structure (codec/langue/résolution)
+        # mais ne scanne pas le flux M2TS → bitrates = 0.
+        # On calcule depuis les tailles réelles des M2TS + durée du rapport.
+        def _patch_bitrates(text, total_bytes, m2ts_paths):
+            import re as _re2, json as _json2
+
+            lines = text.splitlines()
+
+            # 1. Extraire la durée "Length: H:MM:SS.ms"
+            duration_sec = 0.0
+            for ln in lines:
+                dm = _re2.search(r'Length:\s+(\d+):(\d+):([\d.]+)', ln)
+                if dm:
+                    duration_sec = (int(dm.group(1)) * 3600
+                                    + int(dm.group(2)) * 60
+                                    + float(dm.group(3)))
+                    break
+
+            if not duration_sec or not total_bytes:
+                return text
+
+            total_mbps = total_bytes * 8 / duration_sec / 1_000_000
+            size_str   = "{:,}".format(total_bytes)
+
+            # 2. Bitrates par stream via ffprobe (si dispo)
+            #    video_kbps[i] et audio_kbps[i] indexés par ordre d'apparition
+            video_kbps, audio_kbps = [], []
+            ffp = shutil.which("ffprobe")
+            if ffp and m2ts_paths:
+                try:
+                    r = subprocess.run(
+                        [ffp, "-v", "quiet", "-print_format", "json",
+                         "-show_streams", str(m2ts_paths[0])],
+                        capture_output=True, text=True, timeout=60
+                    )
+                    if r.returncode == 0:
+                        for s in _json2.loads(r.stdout).get("streams", []):
+                            br = int(s.get("bit_rate", 0)) // 1000  # bps→kbps
+                            if s.get("codec_type") == "video":
+                                video_kbps.append(br)
+                            elif s.get("codec_type") == "audio":
+                                audio_kbps.append(br)
+                except Exception:
+                    pass
+
+            # 3. Patcher les lignes
+            result    = []
+            section   = ""   # "VIDEO" | "AUDIO" | "SUBTITLES" | ""
+            vid_idx   = 0
+            aud_idx   = 0
+
+            for ln in lines:
+                s = ln.strip()
+
+                # Suivi de section
+                if s in ("VIDEO:", "AUDIO:", "SUBTITLES:"):
+                    section = s.rstrip(":")
+                elif s in ("DISC INFO:", "PLAYLIST REPORT:"):
+                    section = ""
+
+                # Size: 0 bytes → taille réelle (avec virgules US)
+                if _re2.search(r'\bSize:\s+0 bytes', ln):
+                    ln = _re2.sub(
+                        r'\bSize:\s+0 bytes',
+                        lambda mo: mo.group(0).replace("0 bytes", size_str + " bytes"),
+                        ln
+                    )
+
+                # Total Bitrate: 0.00 Mbps
+                elif _re2.search(r'Total Bitrate:\s+0\.00 Mbps', ln):
+                    ln = _re2.sub(
+                        r'Total Bitrate:\s+0\.00 Mbps',
+                        lambda mo: mo.group(0).replace(
+                            "0.00 Mbps", "%.2f Mbps" % total_mbps
+                        ),
+                        ln
+                    )
+
+                # Bitrate "0 kbps" dans une ligne de stream (colonnes alignées)
+                # Pattern : "0 kbps" suivi d'au moins 2 espaces
+                elif section in ("VIDEO", "AUDIO") and _re2.search(r'\b0 kbps\s{2,}', ln):
+                    if section == "VIDEO" and vid_idx < len(video_kbps) and video_kbps[vid_idx]:
+                        ln = _re2.sub(r'\b0 kbps', str(video_kbps[vid_idx]) + " kbps", ln, count=1)
+                        vid_idx += 1
+                    elif section == "AUDIO" and aud_idx < len(audio_kbps) and audio_kbps[aud_idx]:
+                        ln = _re2.sub(r'\b0 kbps', str(audio_kbps[aud_idx]) + " kbps", ln, count=1)
+                        aud_idx += 1
+
+                result.append(ln)
+
+            return "\n".join(result)
+
+        # Appliquer si BDInfoCLI a laissé taille ou bitrate à 0
+        import re as _re_check
+        _needs_patch = (main_pl_bytes > 0 and (
+            _re_check.search(r'\bSize:\s+0 bytes', output_text) or
+            _re_check.search(r'Total Bitrate:\s+0\.00 Mbps', output_text)
+        ))
+        if _needs_patch:
+            _status("Calcul bitrates depuis fichiers M2TS…")
+            output_text = _patch_bitrates(output_text, main_pl_bytes, main_pl_clips)
 
         # Réécrire .nfo ET le fichier source (.txt ou autre) avec la version filtrée
         nfo_path.write_text(output_text, encoding="utf-8")
