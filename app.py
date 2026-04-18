@@ -674,7 +674,9 @@ class API:
         })
 
     def upload_bdinfo_nfo(self, platform: str):
-        """Upload dossier film + NFO BD Info vers Gofile ('g') ou BuzzHeavier ('b')."""
+        """Compresse dossier film + NFO en ZIP puis upload vers Gofile/BuzzHeavier."""
+        import zipfile as _zipfile
+
         def _worker():
             nfo    = getattr(self, "_bdi_last_nfo",    "")
             folder = getattr(self, "_bdi_last_folder", "")
@@ -685,40 +687,76 @@ class API:
                 })
                 return
 
-            # Collecter tous les fichiers du dossier film
-            # Exclure fichiers cachés (.DS_Store, ._*, etc.) et dossier BACKUP
-            files = []
+            # ── Collecter les fichiers (dossier + NFO) ────────────────────────
+            files = []   # list of (abs_path, arcname)
+            folder_name = Path(folder).name if folder else "BLURAY"
+
             if folder and Path(folder).exists():
                 for f in sorted(Path(folder).rglob("*")):
                     if not f.is_file():
                         continue
-                    # Ignorer fichiers système macOS
                     if f.name.startswith(".") or f.name.startswith("._"):
                         continue
-                    # Ignorer le dossier BACKUP (redondant avec BDMV)
                     if "BACKUP" in f.parts:
                         continue
-                    files.append(str(f))
+                    rel = f.relative_to(Path(folder).parent)   # inclut le dossier parent
+                    files.append((str(f), str(rel)))
 
-            # Ajouter le NFO (s'il n'est pas déjà dans le dossier)
-            if nfo not in files:
-                files.append(nfo)
+            # NFO dans le dossier racine de l'archive
+            nfo_arc = folder_name + "/" + Path(nfo).name
+            files.append((nfo, nfo_arc))
 
-            label = platform == 'b' and "BuzzHeavier" or "Gofile"
+            # ── Créer le ZIP (ZIP_STORED — M2TS déjà compressé) ──────────────
+            zip_path = BASE_DIR / "BDINFO" / (folder_name + ".zip")
+            total_size  = sum(Path(f).stat().st_size for f, _ in files)
+            done_size   = 0
+            CHUNK       = 4 * 1024 * 1024   # 4 MB
+
             self._emit("bdinfo_upload_status", {
-                "msg": f"Upload {len(files)} fichier(s) vers {label}…"
+                "msg": f"Compression… 0 % — {len(files)} fichiers"
             })
+
+            try:
+                with _zipfile.ZipFile(str(zip_path), "w",
+                                      compression=_zipfile.ZIP_STORED,
+                                      allowZip64=True) as zf:
+                    for abs_path, arc_name in files:
+                        file_size = Path(abs_path).stat().st_size
+                        with open(abs_path, "rb") as fh:
+                            zinfo = _zipfile.ZipInfo(arc_name)
+                            zinfo.compress_type = _zipfile.ZIP_STORED
+                            with zf.open(zinfo, "w", force_zip64=True) as dest:
+                                while True:
+                                    chunk = fh.read(CHUNK)
+                                    if not chunk:
+                                        break
+                                    dest.write(chunk)
+                                    done_size += len(chunk)
+                                    pct = int(done_size * 100 / total_size) if total_size else 0
+                                    self._emit("bdinfo_upload_status", {
+                                        "msg": f"Compression… {pct} %"
+                                    })
+            except Exception as e_zip:
+                self._emit("bdinfo_upload_done", {
+                    "ok": False, "error": "ZIP : " + str(e_zip)
+                })
+                return
+
+            # ── Upload du ZIP ─────────────────────────────────────────────────
+            label = "BuzzHeavier" if platform == "b" else "Gofile"
+            self._emit("bdinfo_upload_status", {"msg": f"Upload vers {label}…"})
 
             try:
                 if platform == "g":
                     urls = gofile_upload(
-                        path=files, to_single_folder=True,
+                        path=[str(zip_path)], to_single_folder=True,
                         verbose=False, progress_fn=None
                     )
                     url = urls[0] if urls else ""
                 else:
                     bzhv_id = os.getenv("BUZZHEAVIER_ACC_ID", "")
-                    url = self._upload_bzhv(files, bzhv_id)
+                    url = self._upload_bzhv([str(zip_path)], bzhv_id)
+
                 self._emit("bdinfo_upload_done", {
                     "ok": True, "url": url, "platform": platform
                 })
@@ -726,6 +764,13 @@ class API:
                 self._emit("bdinfo_upload_done", {
                     "ok": False, "error": str(e_up)
                 })
+            finally:
+                # Supprimer le ZIP après upload
+                try:
+                    zip_path.unlink()
+                except Exception:
+                    pass
+
         threading.Thread(target=_worker, daemon=True).start()
         return {"ok": True}
 
