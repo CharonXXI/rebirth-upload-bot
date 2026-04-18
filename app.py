@@ -357,16 +357,27 @@ class API:
                         titles.setdefault(tid, {})[code] = val
 
                 if titles:
-                    # Trouver le titre le plus lourd
-                    def _size(info):
-                        try: return int(info.get(10, "0"))
-                        except: return 0
-                    best = max(titles.values(), key=_size)
-                    src_file = best.get(3, "")   # "00000.mpls"
+                    # Trouver le titre le plus long (code 9 = durée "H:MM:SS.ms")
+                    # Le code 10 est la taille du disque entier (identique pour tous les
+                    # titres), donc inutilisable pour discriminer. La durée est fiable.
+                    def _duration_sec(info):
+                        raw = info.get(9, "0:00:00")
+                        try:
+                            parts = raw.split(":")
+                            h = int(parts[0]) if len(parts) > 2 else 0
+                            m = int(parts[-2]) if len(parts) >= 2 else 0
+                            s = float(parts[-1]) if parts else 0
+                            return h * 3600 + m * 60 + s
+                        except:
+                            return 0
+                    best = max(titles.values(), key=_duration_sec)
+                    src_file = best.get(3, "")   # "00000.mpls" (peut être "a.mpls,b.mpls")
                     if src_file:
-                        # Normaliser : "00000.mpls" → "00000.MPLS"
-                        main_pl = Path(src_file).name.upper()
-                        _status("MPLS détecté via makemkvcon : " + main_pl)
+                        # Prendre le premier MPLS de la liste (code 3 peut en lister plusieurs)
+                        first_pl = src_file.split(",")[0].strip()
+                        main_pl = Path(first_pl).name.upper()
+                        dur_str = best.get(9, "?")
+                        _status("MPLS détecté via makemkvcon : " + main_pl + " (" + dur_str + ")")
                     else:
                         _status("⚠ makemkvcon : code 3 absent → fallback --list", "warn")
                 else:
