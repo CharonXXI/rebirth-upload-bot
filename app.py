@@ -318,75 +318,7 @@ class API:
             if found_bdmv:
                 scan_root = str(found_bdmv)
 
-        # ── 2. Identifier le MPLS principal ──────────────────────────────────
-        # Méthode A : makemkvcon --robot info → code 3 (Source file name) du
-        #             titre avec la plus grosse taille (code 10).
-        # Méthode B (fallback) : BDInfoCLI --list → plus gros par estimated bytes.
-        main_pl = None   # ex: "00000.MPLS"
-
-        makemkv_bins = [
-            "/Applications/MakeMKV.app/Contents/MacOS/makemkvcon",
-            "/usr/local/bin/makemkvcon",
-            "/usr/bin/makemkvcon",
-            "makemkvcon",
-        ]
-        makemkv_bin = None
-        for mb in makemkv_bins:
-            if mb == "makemkvcon" or Path(mb).exists():
-                makemkv_bin = mb
-                break
-
-        if makemkv_bin:
-            _status("makemkvcon — identification du MPLS principal…")
-            try:
-                result = subprocess.run(
-                    [makemkv_bin, "--robot", "info", "file:" + scan_root],
-                    capture_output=True, text=True,
-                    encoding="utf-8", errors="replace",
-                    timeout=120
-                )
-                # TINFO code 3 = Source file name (ex: "00000.mpls")
-                # TINFO code 10 = taille en octets → choisir le titre le plus lourd
-                titles = {}   # {tid: {code: value}}
-                for line in result.stdout.splitlines():
-                    m = _re.match(r'TINFO:(\d+),(\d+),\d+,"(.*)"', line)
-                    if m:
-                        tid  = int(m.group(1))
-                        code = int(m.group(2))
-                        val  = m.group(3)
-                        titles.setdefault(tid, {})[code] = val
-
-                if titles:
-                    # Trouver le titre le plus long (code 9 = durée "H:MM:SS.ms")
-                    # Le code 10 est la taille du disque entier (identique pour tous les
-                    # titres), donc inutilisable pour discriminer. La durée est fiable.
-                    def _duration_sec(info):
-                        raw = info.get(9, "0:00:00")
-                        try:
-                            parts = raw.split(":")
-                            h = int(parts[0]) if len(parts) > 2 else 0
-                            m = int(parts[-2]) if len(parts) >= 2 else 0
-                            s = float(parts[-1]) if parts else 0
-                            return h * 3600 + m * 60 + s
-                        except:
-                            return 0
-                    best = max(titles.values(), key=_duration_sec)
-                    src_file = best.get(3, "")   # "00000.mpls" (peut être "a.mpls,b.mpls")
-                    if src_file:
-                        # Prendre le premier MPLS de la liste (code 3 peut en lister plusieurs)
-                        first_pl = src_file.split(",")[0].strip()
-                        main_pl = Path(first_pl).name.upper()
-                        dur_str = best.get(9, "?")
-                        _status("MPLS détecté via makemkvcon : " + main_pl + " (" + dur_str + ")")
-                    else:
-                        _status("⚠ makemkvcon : code 3 absent → fallback --list", "warn")
-                else:
-                    _status("⚠ makemkvcon : aucun TINFO → fallback --list", "warn")
-
-            except Exception as e_mkv:
-                _status("⚠ makemkvcon : " + str(e_mkv) + " → fallback --list", "warn")
-
-        # ── 3. Localiser dotnet et BDInfo.dll ────────────────────────────────
+        # ── 2. Localiser dotnet et BDInfo.dll ────────────────────────────────
         bdinfo_dll = os.getenv("BDINFO_CLI_PATH", "")
         if not bdinfo_dll:
             candidates = [
@@ -487,37 +419,39 @@ class API:
                     try: p_yes.kill()
                     except Exception: pass
 
-        # ── 3a. Fallback --list si main_pl pas encore connu ──────────────────
-        if not main_pl:
-            _status("Listing des playlists via BDInfoCLI --list…")
-            list_lines = []
-            try:
-                list_lines, _ = _run_bdinfo(["--list"], "Listing…")
-            except Exception as e_list:
-                _status("⚠ --list : " + str(e_list), "warn")
+        # ── 3. Identifier le MPLS principal via BDInfoCLI --list ─────────────
+        # BDInfoCLI lit les fichiers CLPI du disque et calcule la taille réelle
+        # de chaque playlist — c'est la même logique que BDInfo GUI.
+        # On prend la playlist avec les estimated bytes les plus élevés.
+        main_pl = None
+        _status("Identification de la playlist principale (BDInfoCLI --list)…")
+        list_lines = []
+        try:
+            list_lines, _ = _run_bdinfo(["--list"], "Listing playlists…")
+        except Exception as e_list:
+            _status("⚠ --list : " + str(e_list), "warn")
 
-            # Format : "  1   1   00003.MPLS   01:56:03   29 102 850 048   -"
-            playlists = []
-            for ln in list_lines:
-                m = _re.search(
-                    r'(\d{5}\.MPLS)\s+\d+:\d+:\d+\s+([\d\s]+)',
-                    ln, _re.IGNORECASE
-                )
-                if m:
-                    pl_name   = m.group(1).upper()
-                    est_bytes = int(_re.sub(r'\s', '', m.group(2)) or "0")
-                    playlists.append((pl_name, est_bytes))
+        # Format : "  1   1   00800.MPLS   01:49:22   36 349 261 824   -"
+        playlists = []
+        for ln in list_lines:
+            m = _re.search(
+                r'(\d{5}\.MPLS)\s+\d+:\d+:\d+\s+([\d\s]+)',
+                ln, _re.IGNORECASE
+            )
+            if m:
+                pl_name   = m.group(1).upper()
+                est_bytes = int(_re.sub(r'\s', '', m.group(2)) or "0")
+                playlists.append((pl_name, est_bytes))
 
-            if playlists:
-                playlists.sort(key=lambda x: x[1], reverse=True)
-                main_pl = playlists[0][0]
-                _status("Playlist : " + main_pl
-                        + " (" + str(len(playlists)) + " trouvées)")
-            else:
-                main_pl = "00000.MPLS"
-                _status("⚠ Pas de playlist parsée → essai " + main_pl, "warn")
+        if playlists:
+            playlists.sort(key=lambda x: x[1], reverse=True)
+            main_pl = playlists[0][0]
+            size_gb = playlists[0][1] / 1_073_741_824
+            _status("Playlist principale : " + main_pl
+                    + " (%d playlists, %.2f GB)" % (len(playlists), size_gb))
         else:
-            _status("Scan BDInfo sur " + main_pl + "…")
+            main_pl = "00000.MPLS"
+            _status("⚠ Pas de playlist parsée → essai " + main_pl, "warn")
 
         # ── 3c. Préparer le fichier de sortie NFO ────────────────────────────
         # BDInfoCLI sauvegarde le rapport dans un fichier, pas sur stdout.
