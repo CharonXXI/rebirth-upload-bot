@@ -561,13 +561,117 @@ class API:
 
         # BDInfoCLI attend un DOSSIER (pas un fichier) comme 2e arg positionnel.
         # Il crée lui-même le fichier rapport à l'intérieur.
-        import glob as _glob, time as _time
+        import glob as _glob, time as _time, queue as _queue
+
+        # ── Numéro alphabétique du MPLS (BDInfoCLI liste par ordre alphabétique) ─
+        # Sans -m, BDInfoCLI affiche la liste et attend un numéro (1, 2, 3...).
+        # Avec -m, il saute le prompt "Continue scanning?" → bitrates = 0.
+        # On calcule le numéro depuis le tri alphabétique du dossier PLAYLIST/.
+        _pl_dir = Path(scan_root) / "BDMV" / "PLAYLIST"
+        _all_mpls = sorted(f.name.upper() for f in _pl_dir.iterdir()
+                           if f.suffix.upper() == ".MPLS") if _pl_dir.exists() else []
+        _pl_number = str(_all_mpls.index(main_pl) + 1) if main_pl in _all_mpls else "1"
+        _status("Playlist #%s sur %d (%s)" % (_pl_number, len(_all_mpls), main_pl))
+
+        # ── Scan interactif sans -m : sélection par numéro + "y" au scan bitrate ─
+        def _run_bdinfo_interactive(label):
+            """
+            Lance BDInfoCLI SANS -m.
+            Répond au prompt de sélection de playlist avec le bon numéro,
+            puis répond 'y' au prompt "Continue scanning?" pour déclencher
+            le scan bitrate réel depuis le M2TS (même logique que le bouton
+            'Scan Bitrate' du GUI Windows).
+            Lecture caractère par caractère pour détecter les prompts sans \\n.
+            """
+            cmd = [dotnet_bin, bdinfo_dll, scan_root, str(nfo_dir)]
+            _status(label)
+
+            p = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace",
+                env=env
+            )
+
+            line_q = _queue.Queue()
+
+            def _char_reader():
+                buf = ""
+                try:
+                    while True:
+                        ch = p.stdout.read(1)
+                        if not ch:
+                            break
+                        if ch == "\n":
+                            line_q.put(("line", buf.rstrip("\r")))
+                            buf = ""
+                        else:
+                            buf += ch
+                            # Flush si ça ressemble à un prompt (finit par ': ' ou '? ')
+                            if len(buf) > 3 and (buf.endswith(": ") or buf.endswith("? ")):
+                                line_q.put(("prompt", buf.strip()))
+                                buf = ""
+                except Exception:
+                    pass
+                if buf.strip():
+                    line_q.put(("line", buf.strip()))
+                line_q.put(None)
+
+            threading.Thread(target=_char_reader, daemon=True).start()
+
+            selection_sent = False
+
+            while True:
+                try:
+                    item = line_q.get(timeout=300)
+                except _queue.Empty:
+                    break
+                if item is None:
+                    break
+
+                kind, ln = item
+                ln_low = ln.lower()
+
+                # Prompt de sélection de playlist
+                if not selection_sent and (
+                    "enter" in ln_low or "select" in ln_low
+                    or "playlist" in ln_low or "number" in ln_low
+                    or kind == "prompt"
+                ):
+                    try:
+                        p.stdin.write(_pl_number + "\n")
+                        p.stdin.flush()
+                        selection_sent = True
+                        _status("→ Envoi numéro playlist : " + _pl_number)
+                    except Exception:
+                        pass
+
+                # Prompt "Continue scanning?" = scan bitrate M2TS
+                elif "continue" in ln_low and ("scan" in ln_low or "?" in ln):
+                    try:
+                        p.stdin.write("y\n")
+                        p.stdin.flush()
+                        _status("→ Scan bitrate M2TS lancé…")
+                    except Exception:
+                        pass
+
+                # Afficher les lignes de rapport/progression (sauf les prompts répétitifs)
+                elif kind == "line" and ln and "continue scanning?" not in ln_low:
+                    _output(ln)
+
+            try:
+                p.stdin.close()
+            except Exception:
+                pass
+            p.wait()
+            return p.returncode
 
         # Timestamp AVANT le scan pour trouver les fichiers créés/modifiés après
         scan_start = _time.time()
 
-        rc = _run_bdinfo_to_file(["-m", main_pl], nfo_dir,
-                                 "Scan -m " + main_pl + "…")
+        rc = _run_bdinfo_interactive("Scan interactif " + main_pl + "…")
 
         # ── 4. Lire le rapport généré par BDInfoCLI ───────────────────────────
         # Chercher le fichier le plus récent dans nfo_dir modifié APRÈS scan_start
