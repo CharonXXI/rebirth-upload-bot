@@ -295,6 +295,9 @@ class API:
         def _output(line):
             self._emit("bdinfo_output", {"line": line})
 
+        # Mémoriser le dossier source pour l'upload ultérieur
+        self._bdi_last_folder = folder_path
+
         _status("▶ " + Path(folder_path).name)
 
         # ── 1. Trouver le dossier racine contenant BDMV ───────────────────────
@@ -663,25 +666,43 @@ class API:
         })
 
     def upload_bdinfo_nfo(self, platform: str):
-        """Upload le dernier NFO BD Info vers Gofile ('g') ou BuzzHeavier ('b')."""
+        """Upload dossier film + NFO BD Info vers Gofile ('g') ou BuzzHeavier ('b')."""
         def _worker():
-            nfo = getattr(self, "_bdi_last_nfo", "")
+            nfo    = getattr(self, "_bdi_last_nfo",    "")
+            folder = getattr(self, "_bdi_last_folder", "")
+
             if not nfo or not Path(nfo).exists():
                 self._emit("bdinfo_upload_done", {
                     "ok": False, "error": "Aucun NFO disponible — lancez d'abord un scan"
                 })
                 return
+
+            # Collecter tous les fichiers du dossier film
+            files = []
+            if folder and Path(folder).exists():
+                for f in sorted(Path(folder).rglob("*")):
+                    if f.is_file():
+                        files.append(str(f))
+
+            # Ajouter le NFO (s'il n'est pas déjà dans le dossier)
+            if nfo not in files:
+                files.append(nfo)
+
+            label = platform == 'b' and "BuzzHeavier" or "Gofile"
+            self._emit("bdinfo_upload_status", {
+                "msg": f"Upload {len(files)} fichier(s) vers {label}…"
+            })
+
             try:
-                self._emit("bdinfo_upload_status", {"msg": "Upload en cours…"})
                 if platform == "g":
                     urls = gofile_upload(
-                        path=[nfo], to_single_folder=True,
+                        path=files, to_single_folder=True,
                         verbose=False, progress_fn=None
                     )
                     url = urls[0] if urls else ""
                 else:
                     bzhv_id = os.getenv("BUZZHEAVIER_ACC_ID", "")
-                    url = self._upload_bzhv([nfo], bzhv_id)
+                    url = self._upload_bzhv(files, bzhv_id)
                 self._emit("bdinfo_upload_done", {
                     "ok": True, "url": url, "platform": platform
                 })
