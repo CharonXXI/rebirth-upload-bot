@@ -650,6 +650,9 @@ class API:
         for ln in output_text.splitlines():
             _output(ln)
 
+        # Mémoriser le dernier NFO pour l'upload
+        self._bdi_last_nfo = str(nfo_path)
+
         output_lines = output_text.splitlines()
         self._emit("bdinfo_done", {
             "ok":       True,
@@ -658,6 +661,36 @@ class API:
             "lines":    len(output_lines),
             "content":  output_text,
         })
+
+    def upload_bdinfo_nfo(self, platform: str):
+        """Upload le dernier NFO BD Info vers Gofile ('g') ou BuzzHeavier ('b')."""
+        def _worker():
+            nfo = getattr(self, "_bdi_last_nfo", "")
+            if not nfo or not Path(nfo).exists():
+                self._emit("bdinfo_upload_done", {
+                    "ok": False, "error": "Aucun NFO disponible — lancez d'abord un scan"
+                })
+                return
+            try:
+                self._emit("bdinfo_upload_status", {"msg": "Upload en cours…"})
+                if platform == "g":
+                    urls = gofile_upload(
+                        path=[nfo], to_single_folder=True,
+                        verbose=False, progress_fn=None
+                    )
+                    url = urls[0] if urls else ""
+                else:
+                    bzhv_id = os.getenv("BUZZHEAVIER_ACC_ID", "")
+                    url = self._upload_bzhv([nfo], bzhv_id)
+                self._emit("bdinfo_upload_done", {
+                    "ok": True, "url": url, "platform": platform
+                })
+            except Exception as e_up:
+                self._emit("bdinfo_upload_done", {
+                    "ok": False, "error": str(e_up)
+                })
+        threading.Thread(target=_worker, daemon=True).start()
+        return {"ok": True}
 
     def _emit(self, event: str, data):
         payload = json.dumps(data).replace("'", "\\'")

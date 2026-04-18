@@ -585,6 +585,25 @@ html.light body::before {
           <!-- Bannière de fin -->
           <div id="bdi-done-banner"></div>
 
+          <!-- Boutons upload (visibles après scan réussi) -->
+          <div id="bdi-upload-section" style="display:none;margin-top:16px;">
+            <div class="section-label" style="margin-bottom:10px;">Envoyer le NFO</div>
+            <div class="platform-toggle">
+              <button class="plat-btn" id="bdi-btn-bzhv"
+                onclick="bdiUpload('b')"
+                style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                BuzzHeavier
+              </button>
+              <button class="plat-btn" id="bdi-btn-gofile"
+                onclick="bdiUpload('g')"
+                style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                Gofile
+              </button>
+            </div>
+            <div id="bdi-upload-status"
+                 style="font-family:var(--mono);font-size:10px;color:var(--text-dim);min-height:16px;transition:color .2s;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+          </div>
+
         </div>
 
         <!-- ── Colonne droite : NFO Preview ───────────────────────────────── -->
@@ -646,10 +665,12 @@ window._emit = function(event, data) {
   if (event === 'batch_done')       onBatchDone(data);
   if (event === 'done')             onDone(data);
   if (event === 'error')            onError(data);
-  if (event === 'bdinfo_status')       bdiSetStatus(data.msg, data.level);
-  if (event === 'bdinfo_output')       bdiAddOutput(data.line);
-  if (event === 'bdinfo_reset_output') bdiResetOutput();
-  if (event === 'bdinfo_done')         bdiOnDone(data);
+  if (event === 'bdinfo_status')        bdiSetStatus(data.msg, data.level);
+  if (event === 'bdinfo_output')        bdiAddOutput(data.line);
+  if (event === 'bdinfo_reset_output')  bdiResetOutput();
+  if (event === 'bdinfo_done')          bdiOnDone(data);
+  if (event === 'bdinfo_upload_status') bdiUploadStatus(data.msg, 'info');
+  if (event === 'bdinfo_upload_done')   bdiUploadDone(data);
 };
 
 // ── BD Info ──────────────────────────────────────────────────────────────────
@@ -760,6 +781,13 @@ function bdiOnDone(data) {
       + '💾 &nbsp;BDINFO/' + data.nfo_name
       + ' &nbsp;<span style="color:var(--text-dim);">(' + data.lines + ' lignes)</span></div>';
     bdiSetStatus('💾 BDINFO/' + data.nfo_name, 'success');
+    // Afficher la section upload
+    document.getElementById('bdi-upload-section').style.display = 'block';
+    document.getElementById('bdi-upload-status').textContent = '';
+    ['bdi-btn-bzhv','bdi-btn-gofile'].forEach(function(id){
+      var b = document.getElementById(id);
+      b.disabled = false; b.classList.remove('active');
+    });
     setTimeout(function(){
       prog.style.display    = 'none';
       fill.style.width      = '0%';
@@ -776,6 +804,39 @@ function bdiOnDone(data) {
       + 'font-family:var(--mono);font-size:11px;color:var(--red);">'
       + '✖ &nbsp;' + (data.error || 'Erreur inconnue') + '</div>';
     bdiSetStatus('✖ ' + (data.error || 'Erreur'), 'error');
+  }
+}
+
+async function bdiUpload(platform) {
+  var btnId = platform === 'b' ? 'bdi-btn-bzhv' : 'bdi-btn-gofile';
+  var btn   = document.getElementById(btnId);
+  btn.disabled = true;
+  btn.classList.add('active');
+  bdiUploadStatus('Upload en cours…', 'info');
+  await window.pywebview.api.upload_bdinfo_nfo(platform);
+}
+
+function bdiUploadStatus(msg, level) {
+  var el = document.getElementById('bdi-upload-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = level === 'success' ? 'var(--green)'
+                 : level === 'error'   ? 'var(--red)'
+                 : 'var(--text-dim)';
+}
+
+function bdiUploadDone(data) {
+  ['bdi-btn-bzhv','bdi-btn-gofile'].forEach(function(id){
+    var b = document.getElementById(id);
+    b.disabled = false; b.classList.remove('active');
+  });
+  if (data.ok) {
+    var label = data.platform === 'b' ? 'BuzzHeavier' : 'Gofile';
+    bdiUploadStatus('✅ ' + label + ' — ' + data.url, 'success');
+    // Copier l'URL dans le presse-papier
+    try { navigator.clipboard.writeText(data.url); } catch(e) {}
+  } else {
+    bdiUploadStatus('✖ ' + (data.error || 'Erreur'), 'error');
   }
 }
 
