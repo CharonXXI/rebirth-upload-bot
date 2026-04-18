@@ -6,7 +6,6 @@
 - Python 3.10+ ([python.org](https://www.python.org/downloads/))
   - Cocher **"Add Python to PATH"** pendant l'installation
 - Git ([git-scm.com](https://git-scm.com/)) *(optionnel, pour cloner)*
-- .NET Framework 4.5+ *(déjà présent sur Windows 10/11)*
 
 > **Note :** MediaInfo CLI n'est **pas** nécessaire sur Windows.
 > Le bot utilise directement la librairie Python `pymediainfo` qui embarque MediaInfo.dll.
@@ -43,7 +42,32 @@ pip install -r NFO_CUSTOM\requirements.txt
 
 > 💡 `$env:PYTHONUTF8="1"` est nécessaire pour que `parse-torrent-name` compile correctement sur Python 3.12. Sans cette ligne, le build du package échoue avec une erreur d'encodage.
 
-### 4. Configurer le fichier `.env`
+### 4. BDInfoCLI (optionnel — pour l'onglet BD Info)
+
+L'onglet **BD Info** nécessite BDInfoCLI et .NET 8.
+
+```powershell
+# 1. Installer .NET 8 SDK
+# Télécharger depuis https://dotnet.microsoft.com/download/dotnet/8.0
+
+# 2. Vérifier l'installation
+dotnet --version
+
+# 3. Cloner et compiler BDInfoCLI (fork tetrahydroc)
+git clone https://github.com/zoffline/BDInfoCLI-ng.git %USERPROFILE%\BDInfoCLI
+cd %USERPROFILE%\BDInfoCLI\BDInfo
+dotnet build -c Release -r win-x64
+```
+
+Le bot détecte automatiquement `BDInfo.exe` dans `~/BDInfoCLI/`. Si besoin, renseigner le chemin manuellement dans `V1.env` :
+
+```env
+BDINFO_CLI_PATH=C:\Users\TonUser\BDInfoCLI\BDInfo\bin\Release\net8.0\win-x64\BDInfo.exe
+```
+
+> 💡 **MakeMKV** (facultatif mais recommandé) : si installé, le bot l'utilise pour identifier automatiquement le MPLS principal avant de lancer BDInfoCLI.
+
+### 5. Configurer le fichier `.env`
 
 Copier `V1.env` et remplir les variables :
 
@@ -74,6 +98,9 @@ TRACKER_TOS=https://tos.com/announce/PASSKEY
 TRACKER_C411=https://c411.com/announce/PASSKEY
 TRACKER_TORR9=https://torr9.com/announce/PASSKEY
 TRACKER_LACALE=https://lacale.com/announce/PASSKEY
+
+# BD Info (optionnel — chemin auto-détecté si absent)
+# BDINFO_CLI_PATH=C:\Users\TonUser\BDInfoCLI\BDInfo\bin\Release\net8.0\win-x64\BDInfo.exe
 ```
 
 ---
@@ -106,7 +133,8 @@ dist\
     ├── V1.env          ← config persistante
     ├── FILMS\          ← déposer les .mkv ici
     ├── FINAL\          ← généré automatiquement
-    └── TORRENTS\       ← généré automatiquement
+    ├── TORRENTS\       ← généré automatiquement
+    └── BDINFO\         ← rapports BD Info (.nfo)
 ```
 
 > **Important :** Ne pas déplacer `REBiRTH.exe` hors du dossier `dist\REBiRTH\`.
@@ -134,4 +162,7 @@ Pour partager le bot, zipper l'intégralité de `dist\REBiRTH\` (sans le `.env` 
 | `Fatal error in launcher` | Le venv est corrompu — le recréer : `python -m venv venv` |
 | Erreur NFO vide | Vérifier que le fichier `.mkv` est accessible |
 | FTP timeout | Vérifier host, port et identifiants seedbox |
-| Torrent SB : erreur HTTP 4xx | Vérifier que le plugin `create` est installé sur ruTorrent, et que l'URL/credentials sont corrects |
+| Torrent SB : erreur HTTP 4xx | ⚠️ Fonctionnalité non fonctionnelle actuellement — à reprendre ultérieurement |
+| BD Info : `BDInfoCLI introuvable` | Vérifier que `dotnet build` a bien produit `BDInfo.exe` dans `bin\Release\net8.0\win-x64\`, ou renseigner `BDINFO_CLI_PATH` dans `V1.env` |
+| BD Info : bitrates à 0 | Limitation mémoire (BDInfoCLI a besoin de beaucoup de RAM pour scanner les gros M2TS) — la structure du rapport reste correcte |
+| BD Info : `does not exist or is not a directory` | Vérifier que le dossier sélectionné contient bien un sous-dossier `BDMV\` |

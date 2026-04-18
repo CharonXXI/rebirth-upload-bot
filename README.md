@@ -45,7 +45,7 @@
 | 💬 **Discord** | Notification automatique avec embed TMDB |
 | 📁 **FINAL/** | Création automatique avec le bon NFO par tracker |
 | 🌱 **Seedbox** | Upload complet via FTP TLS |
-| 🧲 **Torrent SB** | Création côté seedbox via plugin ruTorrent (hash SB), .torrent sauvegardé dans `TORRENTS/` |
+| 🧲 **Torrent SB** | ⚠️ *En attente — non fonctionnel actuellement* — création côté seedbox via plugin ruTorrent |
 | 💿 **BD Info** | Scan COMPLETE BLURAY via BDInfoCLI — rapport DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
 | 🎛️ **Trackers** | Page dédiée pour gérer les announces URL |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
@@ -199,13 +199,6 @@ Choisir plateforme : Gofile / BuzzHeavier / Ignorer
         ├─ [DISCORD]  Notification embed (si actif)
         ├─ [FINAL]    Creation FINAL/nom_film/ (MKV + NFO)
         └─ [FTP]      Upload seedbox via FTP TLS
-                           │
-                           ▼
-              Aller sur page Torrent SB
-                           │
-        └─ [TORRENT SB]  Creation torrents via plugin ruTorrent
-                          Seeding démarre immédiatement
-                          .torrent sauvegardé dans TORRENTS/
 
 ─────────────────────────────────────────────
 Workflow BD Info (indépendant)
@@ -223,6 +216,8 @@ Onglet BD INFO → Sélectionner dossier COMPLETE BLURAY
         Choisir BuzzHeavier / Gofile → ENVOYER
         └─ ZIP (dossier + NFO) uploadé en un seul fichier
 ```
+
+> ⚠️ **Torrent SB** : la page est présente dans l'interface mais la fonctionnalité est actuellement **en attente / non fonctionnelle**. Les différentes méthodes de récupération du `.torrent` depuis ruTorrent n'ont pas abouti à une solution stable. À reprendre ultérieurement.
 
 ---
 
@@ -245,14 +240,13 @@ Onglet BD INFO → Sélectionner dossier COMPLETE BLURAY
 - Upload automatique du dossier FINAL via FTP TLS
 - Création automatique du sous-dossier `nom_film`
 
-### 🧲 Torrent SB
+### 🧲 Torrent SB *(en attente — non fonctionnel)*
 - Page dédiée à la création de torrents, indépendante du workflow Upload
 - Sélectionne un dossier déjà présent sur la seedbox dans la liste FTP, ou saisie manuelle
 - Les cases trackers se **synchronisent automatiquement** depuis la page Upload à l'ouverture
 - Création côté seedbox via le plugin `create` de ruTorrent (hash serveur, aucun fichier local requis)
 - Piece size **4 MiB**, flag **Privé** coché par défaut (modifiable)
-- Seeding démarre immédiatement sur ruTorrent
-- Le fichier `.torrent` binaire retourné par le plugin est sauvegardé dans `TORRENTS/`
+- **⚠️ Actuellement non fonctionnel** — la récupération du fichier `.torrent` généré par ruTorrent n'est pas stable. Plusieurs méthodes testées (XML-RPC, FTP session, Filebrowser API, SFTP, streaming FTP local) sans résultat concluant. À reprendre ultérieurement.
 
 ### 💿 BD Info
 - Onglet dédié pour les releases COMPLETE BLURAY
@@ -299,82 +293,162 @@ rebirth-upload-bot/
 ## 📝 Changelog
 
 ### v2.5.9
+- Bump version 2.3.6 → 2.5.9 dans `build_mac.spec`, `version_win.txt`, `gui_index.html`
 - Feat : **onglet BD Info complet** — scan COMPLETE BLURAY, rapport BDInfoCLI filtré (DISC INFO/VIDEO/AUDIO/SUBTITLES), upload ZIP vers Gofile/BuzzHeavier
-- Feat : **identification MPLS intelligente** — `makemkvcon --robot info` détecte le titre principal (TINFO code 3), fallback sur `BDInfoCLI --list` si MakeMKV absent
-- Feat : **upload ZIP BD Info** — compresse dossier film + NFO en `ZIP_STORED` (rapide, M2TS déjà compressé) et upload en un seul fichier ; ZIP supprimé après upload
+- Feat : **identification MPLS intelligente** — `makemkvcon --robot info` détecte le titre principal (TINFO code 3, plus grand fichier), fallback sur `BDInfoCLI --list` si MakeMKV absent
+- Feat : **upload ZIP BD Info** — compresse dossier film + NFO en `ZIP_STORED` (rapide, M2TS déjà compressé) ; upload en un seul fichier ; ZIP supprimé après upload
 - Feat : **UI BD Info** — deux colonnes (gauche : scan + statut ; droite : NFO preview), toggle BuzzHeavier/Gofile + bouton ENVOYER, URL copiée dans le presse-papier
-- Fix : **détection rapport sur rescan** — timestamp avant scan pour trouver les fichiers modifiés (fix set-diff vide sur rescan même film)
-- Fix : **output path BDInfoCLI** — passe le dossier `BDINFO/` (pas un chemin `.nfo`) comme 2e argument positionnel
+- Fix : **reset section upload au démarrage d'un nouveau scan** — les boutons et statut sont réinitialisés à chaque SCANNER
+- Fix : **détection rapport sur rescan** — timestamp avant scan, détection par `mtime` (fix set-diff vide sur rescan du même film)
+- Fix : **upload 400 BuzzHeavier** — exclusion des fichiers `.DS_Store`, `._*` et du dossier `BACKUP/` lors du rglob
+- Fix : **output path BDInfoCLI** — passage du dossier `BDINFO/` (pas d'un chemin `.nfo`) comme 2e argument positionnel
 - Fix : **OOM BDInfoCLI** — pipe `yes` vers stdin pour répondre automatiquement aux prompts "Continue scanning ?"
-- Feat : **Méthode F Torrent SB** — création locale `.torrent` via streaming FTP (calcul SHA1 pièce par pièce sans chargement en mémoire)
+- Feat : **Méthode F Torrent SB** — création locale `.torrent` via streaming FTP SHA1 pièce par pièce (non concluant, en attente)
+
+### v2.5.8
+- Fix : **upload 400** — filtrage `.DS_Store` / `._*` / `BACKUP/` dans le ZIP
+- Feat : **UI upload BD Info** — toggle BuzzHeavier/Gofile et bouton ENVOYER dédié (au lieu de cliquer sur le logo de la plateforme)
+
+### v2.5.7
+- Fix : **détection rapport sur rescan** — timestamp `scan_start` avant le scan, comparaison `mtime >= scan_start - 2` au lieu du set-diff
+
+### v2.5.6
+- Fix : **section upload non réinitialisée** entre deux scans — `bdiScan()` remet à zéro le bouton ENVOYER et le statut upload
+
+### v2.5.5
+- Feat : **upload BD Info inclut le dossier film complet** (`rglob` du dossier COMPLETE BLURAY) + NFO dans le ZIP
+
+### v2.5.4
+- Feat : **upload BD Info** — envoi du `.nfo` seul vers Gofile ou BuzzHeavier avec affichage URL
+
+### v2.5.3
+- Revert : **retour à la version v2.5.0** — suppression des patches bitrates (ffprobe + filesystem) qui ne corrigeaient pas le problème OOM
+
+### v2.5.2
+- Tentative fix bitrates à 0 : patch taille/bitrate depuis filesystem + ffprobe (revert en v2.5.3)
+
+### v2.5.1
+- Tentative fix bitrates à 0 : suppression des limites GC .NET (revert en v2.5.3)
+
+### v2.5.0
+- Fix : **filtrage rapport** — `.txt` source filtré également (pas seulement le `.nfo`) + fix tracking `src_file`
+
+### v2.4.9
+- Feat : **filtrage rapport BDInfoCLI** — extraction des sections DISC INFO → SUBTITLES uniquement (stop avant FILES:, CHAPTERS:, STREAM DIAGNOSTICS:)
+
+### v2.4.8
+- Fix : **output path BDInfoCLI** — passage du dossier (pas du chemin `.nfo`) comme 2e argument
+
+### v2.4.7
+- Feat : **flow makemkvcon → BDInfoCLI** — `makemkvcon --robot info` identifie le MPLS principal (TINFO code 3, titre avec la plus grande taille code 10), puis `BDInfoCLI -m XXXXX.MPLS` scanne uniquement cette playlist
+
+### v2.4.6
+- Feat : **makemkvcon comme méthode principale** d'identification du MPLS (avant BDInfoCLI --list)
+
+### v2.4.5
+- Fix : **lecture du fichier rapport** généré par BDInfoCLI au lieu de lire stdout (qui est vide en mode fichier)
+
+### v2.4.4
+- Fix : **format argument `-m`** — `00003.MPLS` au lieu de `00003` (BDInfoCLI attend le nom de fichier avec extension)
+
+### v2.4.3
+- Feat : **auto-sélection playlist principale** via `BDInfoCLI --list` puis scan avec `-m`
+
+### v2.4.2
+- Fix : **réponse automatique aux prompts OOM** de BDInfoCLI — pipe `yes` vers stdin
+
+### v2.4.1
+- Fix : **éviter l'OOM sur `-w`** (scan complet) — utilisation de `--list` puis `-m` sur la playlist principale uniquement
+
+### v2.4.0
+- Feat : **séparation des canaux** — `bdinfo_status` (debug, colonne gauche) vs `bdinfo_output` (contenu NFO, colonne droite)
+- Fix : **erreur exit code -9** (SIGKILL OOM) interceptée proprement
+
+### v2.3.9
+- Fix : **layout BD Info** — correction des colonnes left/right
+- Fix : **OutOfMemoryException** BDInfoCLI interceptée
+
+### v2.3.8
+- Feat : **layout BD Info en deux colonnes** — gauche statut debug, droite preview NFO
+
+### v2.3.7
+- Feat : **onglet BD Info** — intégration BDInfoCLI, scan COMPLETE BLURAY, sauvegarde `.nfo`
+
+### v2.3.6
+- Feat : **Méthode F Torrent SB** — tentative création locale `.torrent` via streaming FTP (calcul SHA1 pièce par pièce sans chargement en mémoire) — non concluant
+
+### v2.3.5
+- Fix Torrent SB : XML escape + mktorrent direct + répertoire `tmp/`
+
+### v2.3.4
+- Fix Torrent SB : `directory.default` + `d.tied_to_file` + `/bin/sh -c` dans execute
+
+### v2.3.3
+- Fix Torrent SB : NLST debug + fallback Filebrowser API pour download `.torrent`
+
+### v2.3.2
+- Fix Torrent SB : `chmod 644` après `cp` pour corriger les permissions FTP
+
+### v2.3.1
+- Fix Torrent SB : format `execute.nothrow.bg` + fallback FTP session
 
 ### v2.3.0
-- Nouveau : **méthode XML-RPC execute + FTP** (Method B) — utilise `execute.nothrow.bg` via l'interface XML-RPC de rtorrent pour copier le `.torrent` depuis le dossier session (inaccessible via FTP) vers `rtorrent/` (accessible via FTP), puis le télécharge en FTP TLS. Aucune dépendance externe supplémentaire.
-- Cascade mise à jour : A) HTTP plugin (bail rapide) → **B) XML-RPC exec + FTP** → C) Filebrowser API → D) SFTP paramiko → E) FTP tasks (si `RUTORRENT_TASKS_PATH` configuré)
-- La méthode B trouve le hash rtorrent par nom (`download_list` + `system.multicall(d.name)`), dérive le home depuis `session.path`, exécute un `cp` via rtorrent, et nettoie le fichier temporaire après récupération
+- Feat Torrent SB : **méthode XML-RPC execute + FTP** (Method B) — `execute.nothrow.bg` pour copier le `.torrent` depuis le dossier session vers un chemin FTP accessible
+- Cascade mise à jour : A) HTTP plugin → B) XML-RPC exec + FTP → C) Filebrowser API → D) SFTP paramiko → E) FTP tasks
 
 ### v2.2.9
-- Fix : **découverte automatique du chemin tasks/ dans Filebrowser** — liste la racine FB et teste plusieurs chemins candidats (skip de 0 à N préfixes) pour trouver `config/rutorrent/share/users/{user}/settings/tasks/` quelle que soit la racine chroot du Filebrowser
+- Fix Torrent SB : **découverte automatique du chemin `tasks/`** dans Filebrowser — test de plusieurs chemins candidats quelle que soit la racine chroot
 
 ### v2.2.8
-- Fix : **méthode Filebrowser API** — `SFTP_HOST` (URL du Filebrowser seedbox) est utilisé pour lister les tâches et télécharger `temp.torrent` via `POST /api/login` + `GET /api/raw/...`. Aucune dépendance supplémentaire.
-- Fix : cascade mise à jour : A) HTTP plugin (bail rapide) → B) Filebrowser API → C) SFTP paramiko → D) FTP tasks (si `RUTORRENT_TASKS_PATH` configuré)
-- SSH host = même que FTP host (`SFTP_HOST_FTP`), port configurable via `SFTP_SSH_PORT` (défaut 22)
+- Fix Torrent SB : **méthode Filebrowser API** — `POST /api/login` + `GET /api/raw/...` depuis `SFTP_HOST`
+- Cascade : A) HTTP plugin → B) Filebrowser API → C) SFTP paramiko → D) FTP tasks
 
 ### v2.2.7
-- Fix : **HTTP API bail rapide** — si le plugin create retourne `[]` vide 3 fois de suite, abandon immédiat (le plugin ne supporte pas le GET) pour passer directement à SFTP
-- Fix : **auto-install paramiko** — si `paramiko` n'est pas installé, le bot l'installe automatiquement via `pip` avant la tentative SFTP
+- Fix Torrent SB : **HTTP bail rapide** — abandon après 3 réponses `[]` vides
+- Fix Torrent SB : **auto-install `paramiko`** via pip si absent
 
 ### v2.2.6
-- Fix : **`config/` inaccessible via FTP** — le répertoire tasks/ de ruTorrent est chroot-bloqué pour le FTP. Nouvelle cascade de récupération :
-  - **A) HTTP GET** sur `plugins/create/action.php` — poll le statut des tâches et télécharge quand terminé (aucun FTP requis)
-  - **B) SFTP (SSH)** via `paramiko` — accès direct au filesystem sans restriction chroot
-  - **C) FTP tasks/** — fallback si `RUTORRENT_TASKS_PATH` est configuré manuellement dans le .env
-- Ajout variable d'env optionnelle `SFTP_SSH_PORT` (défaut 22) pour le port SSH
-- Ajout variable d'env optionnelle `RUTORRENT_TASKS_PATH` pour chemin FTP custom
+- Fix Torrent SB : **cascade HTTP/SFTP/FTP** — le répertoire `config/` étant inaccessible via FTP, ajout SFTP (paramiko) et FTP tasks (`RUTORRENT_TASKS_PATH`)
+- Ajout variables opt. `SFTP_SSH_PORT` et `RUTORRENT_TASKS_PATH`
 
 ### v2.2.5
-- Fix : **stratégie de récupération du .torrent entièrement repensée** — snapshot tasks/ avant création, poll FTP toutes les 5 s jusqu'à `temp.torrent` valide (timeout 10 min)
-- Suppression de toute la logique XML-RPC devenue inutile
+- Fix Torrent SB : **stratégie récupération `.torrent` entièrement repensée** — snapshot `tasks/` + poll FTP toutes les 5 s jusqu'à `temp.torrent` valide (timeout 10 min)
 
 ### v2.2.4
-- Fix : **FTP session path** — navigation itérative avec reconnexion FTP ; skip des N premiers composants du chemin absolu jusqu'à trouver le chemin relatif correct depuis la racine chroot
+- Fix Torrent SB : **navigation FTP itérative** — skip des N premiers composants du chemin absolu pour trouver le chemin relatif depuis la racine chroot
 
 ### v2.2.3
-- Fix : **FTP chroot** — navigation dossier par dossier au lieu du chemin absolu
-- Fix : log du contenu des réponses HTTP pour identifier l'endpoint correct
-- Ajout endpoint `/export/HASH.torrent` dans les tentatives HTTP
+- Fix Torrent SB : **FTP chroot** — navigation dossier par dossier au lieu du chemin absolu
+- Fix : log des réponses HTTP + endpoint `/export/HASH.torrent`
 
 ### v2.2.2
-- Fix : **`-506 Method not defined`** — abandon de `d.multicall`/`d.multicall2` ; nouvelle stratégie : `download_list` → `system.multicall(d.name)` → match nom → `session.path` + FTP
-- Fallback `d.name` individuel si `system.multicall` échoue
+- Fix Torrent SB : **`-506 Method not defined`** — abandon `d.multicall2` ; stratégie `download_list` → `system.multicall(d.name)` → match nom → `session.path` + FTP
 
 ### v2.2.1
-- Fix : **XML-RPC `-503 Wrong object type`** — `d.multicall` avec méthodes comme `<param>` séparés
+- Fix Torrent SB : **XML-RPC `-503 Wrong object type`** — méthodes `d.multicall` avec `<param>` séparés
 
 ### v2.2.0
-- Fix : **parsing XML-RPC corrigé** — utilisation de `xmlrpc.client.loads()` (stdlib Python)
-- Fix : **recherche par nom** dans ruTorrent — match exact puis fallback partiel
-- Fix : délai augmenté à 5 s pour laisser rtorrent terminer le hashing
+- Fix Torrent SB : **parsing XML-RPC** corrigé via `xmlrpc.client.loads()` (stdlib Python)
+- Fix : recherche torrent par nom dans ruTorrent (match exact puis partiel)
 
 ### v2.1.9
-- Fix : **logs de diagnostic complets** dans Torrent SB
-- Fix : **`_tsbRunning` bloqué** — auto-resetté au prochain clic
+- Fix Torrent SB : **logs de diagnostic complets**
+- Fix : `_tsbRunning` bloqué → auto-reset au prochain clic
 
 ### v2.1.8
-- Fix : **récupération du .torrent via XML-RPC** après création
-- Le fichier `.torrent` est maintenant **systématiquement sauvegardé** dans `TORRENTS/`
+- Fix Torrent SB : **récupération du `.torrent` via XML-RPC** après création
+- Le `.torrent` est **systématiquement sauvegardé** dans `TORRENTS/`
 
 ### v2.1.7
 - Refactor : **création de torrents retirée du workflow Upload** — exclusivement via la page Torrent SB
 
 ### v2.1.6
-- Feat : **sauvegarde .torrent en local** dans `TORRENTS/`
-- Feat : **sync trackers Upload → Torrent SB**
+- Feat : **sauvegarde `.torrent` en local** dans `TORRENTS/`
+- Feat : **sync trackers Upload → Torrent SB** à l'ouverture de la page
 
 ### v2.1.5
 - Feat : **torrent privé coché par défaut**, piece size 4 MiB
-- Feat : **sauvegarde automatique du .torrent** dans `TORRENTS/`
+- Feat : **sauvegarde automatique du `.torrent`** dans `TORRENTS/`
 
 ### v2.1.4
 - Feat : **mode TORRENT SB** — création des torrents directement depuis la seedbox via le plugin `create` de ruTorrent
@@ -426,6 +500,7 @@ rebirth-upload-bot/
 - Le bot empêche automatiquement la mise en veille pendant l'upload
 - Le `V1.env` n'est jamais publié sur GitHub
 - BD Info nécessite BDInfoCLI compilé en local (voir section Installation)
+- Torrent SB est présent dans l'interface mais **non fonctionnel** — à reprendre ultérieurement
 
 ---
 
