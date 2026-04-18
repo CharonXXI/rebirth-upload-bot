@@ -582,36 +582,44 @@ class API:
         # Il crée lui-même le fichier rapport à l'intérieur.
         import glob as _glob, time as _time
 
-        # Snapshot des fichiers existants dans nfo_dir avant le scan
-        before = set(_glob.glob(str(nfo_dir / "*.txt")) + _glob.glob(str(nfo_dir / "*.nfo")))
+        # Timestamp AVANT le scan pour trouver les fichiers créés/modifiés après
+        scan_start = _time.time()
 
         rc = _run_bdinfo_to_file(["-m", main_pl], nfo_dir,
                                  "Scan -m " + main_pl + "…")
 
         # ── 4. Lire le rapport généré par BDInfoCLI ───────────────────────────
-        # BDInfoCLI écrit le rapport dans nfo_dir — trouver le fichier créé.
+        # Chercher le fichier le plus récent dans nfo_dir modifié APRÈS scan_start
+        # (gère aussi le cas où le fichier existait déjà — rescan du même film)
         _time.sleep(1)
         output_text = ""
-
-        # 4a. Chercher dans nfo_dir le fichier apparu après le scan
-        after = set(_glob.glob(str(nfo_dir / "*.txt")) + _glob.glob(str(nfo_dir / "*.nfo")))
-        new_files = sorted(after - before, key=lambda f: Path(f).stat().st_mtime, reverse=True)
         src_file = None
-        if new_files:
-            src_file = Path(new_files[0])
-            output_text = src_file.read_text(encoding="utf-8", errors="replace")
-            _status("💾 BDINFO/" + src_file.name, "success")
-        else:
-            # 4b. Fallback : chercher aussi dans scan_root (certaines versions l'écrivent là)
-            candidates = sorted(
+
+        # 4a. Fichier modifié après scan_start dans nfo_dir
+        candidates_nfo = sorted(
+            _glob.glob(str(nfo_dir / "*.txt")) + _glob.glob(str(nfo_dir / "*.nfo")),
+            key=lambda f: Path(f).stat().st_mtime, reverse=True
+        )
+        for c in candidates_nfo:
+            if Path(c).stat().st_mtime >= scan_start - 2:   # -2s de marge
+                src_file = Path(c)
+                output_text = src_file.read_text(encoding="utf-8", errors="replace")
+                _status("💾 BDINFO/" + src_file.name, "success")
+                break
+
+        if not src_file:
+            # 4b. Fallback : chercher dans scan_root
+            candidates_root = sorted(
                 _glob.glob(str(Path(scan_root) / "*.txt"))
                 + _glob.glob(str(Path(scan_root) / "BDINFO*.txt")),
                 key=lambda f: Path(f).stat().st_mtime, reverse=True
             )
-            if candidates:
-                src_file = Path(candidates[0])
-                output_text = src_file.read_text(encoding="utf-8", errors="replace")
-                _status("💾 depuis " + src_file.name, "success")
+            for c in candidates_root:
+                if Path(c).stat().st_mtime >= scan_start - 2:
+                    src_file = Path(c)
+                    output_text = src_file.read_text(encoding="utf-8", errors="replace")
+                    _status("💾 depuis " + src_file.name, "success")
+                    break
 
         if not output_text:
             err_msg = "BDInfoCLI n'a produit aucun rapport"
