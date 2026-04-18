@@ -419,39 +419,65 @@ class API:
                     try: p_yes.kill()
                     except Exception: pass
 
-        # ── 3. Identifier le MPLS principal via BDInfoCLI --list ─────────────
-        # BDInfoCLI lit les fichiers CLPI du disque et calcule la taille réelle
-        # de chaque playlist — c'est la même logique que BDInfo GUI.
-        # On prend la playlist avec les estimated bytes les plus élevés.
+        # ── 3. Identifier le MPLS principal (lecture directe des binaires) ──────
+        # Les fichiers MPLS contiennent les références de clips sous la forme
+        # "00800M2TS" (5 chiffres ASCII + "M2TS"). On cherche ces patterns,
+        # on somme les tailles des M2TS dans BDMV/STREAM/, et on prend le plus
+        # gros. Aucun outil externe — même logique que BDInfo en interne.
         main_pl = None
-        _status("Identification de la playlist principale (BDInfoCLI --list)…")
-        list_lines = []
+
+        def _pick_mpls_by_stream_size(root):
+            import re as _re2
+            playlist_dir = Path(root) / "BDMV" / "PLAYLIST"
+            stream_dir   = Path(root) / "BDMV" / "STREAM"
+            if not playlist_dir.exists() or not stream_dir.exists():
+                return None
+
+            # Index des tailles M2TS  {"00800": 36349261824, ...}
+            m2ts_sizes = {}
+            for f in stream_dir.iterdir():
+                if f.suffix.upper() == ".M2TS":
+                    m2ts_sizes[f.stem.upper()] = f.stat().st_size
+
+            if not m2ts_sizes:
+                return None
+
+            best_name, best_size = None, -1
+            candidates_list = []
+            for mpls_file in sorted(playlist_dir.iterdir()):
+                if mpls_file.suffix.upper() != ".MPLS":
+                    continue
+                try:
+                    data = mpls_file.read_bytes()
+                    # Pattern "XXXXXM2TS" dans le binaire MPLS
+                    clips = set(_re2.findall(rb'([0-9]{5})M2TS', data))
+                    total = sum(m2ts_sizes.get(c.decode(), 0) for c in clips)
+                    candidates_list.append((mpls_file.name.upper(), total))
+                    if total > best_size:
+                        best_size = total
+                        best_name = mpls_file.name.upper()
+                except Exception:
+                    continue
+
+            if best_name:
+                # Log des 3 plus grosses playlists pour info
+                candidates_list.sort(key=lambda x: x[1], reverse=True)
+                for pl, sz in candidates_list[:3]:
+                    _status("  %s → %.2f GB" % (pl, sz / 1_073_741_824))
+
+            return best_name
+
+        _status("Identification de la playlist principale…")
         try:
-            list_lines, _ = _run_bdinfo(["--list"], "Listing playlists…")
-        except Exception as e_list:
-            _status("⚠ --list : " + str(e_list), "warn")
-
-        # Format : "  1   1   00800.MPLS   01:49:22   36 349 261 824   -"
-        playlists = []
-        for ln in list_lines:
-            m = _re.search(
-                r'(\d{5}\.MPLS)\s+\d+:\d+:\d+\s+([\d\s]+)',
-                ln, _re.IGNORECASE
-            )
-            if m:
-                pl_name   = m.group(1).upper()
-                est_bytes = int(_re.sub(r'\s', '', m.group(2)) or "0")
-                playlists.append((pl_name, est_bytes))
-
-        if playlists:
-            playlists.sort(key=lambda x: x[1], reverse=True)
-            main_pl = playlists[0][0]
-            size_gb = playlists[0][1] / 1_073_741_824
-            _status("Playlist principale : " + main_pl
-                    + " (%d playlists, %.2f GB)" % (len(playlists), size_gb))
-        else:
+            main_pl = _pick_mpls_by_stream_size(scan_root)
+            if main_pl:
+                _status("Playlist principale : " + main_pl)
+            else:
+                _status("⚠ Lecture MPLS échouée → essai 00000.MPLS", "warn")
+                main_pl = "00000.MPLS"
+        except Exception as e_pl:
+            _status("⚠ " + str(e_pl) + " → essai 00000.MPLS", "warn")
             main_pl = "00000.MPLS"
-            _status("⚠ Pas de playlist parsée → essai " + main_pl, "warn")
 
         # ── 3c. Préparer le fichier de sortie NFO ────────────────────────────
         # BDInfoCLI sauvegarde le rapport dans un fichier, pas sur stdout.
