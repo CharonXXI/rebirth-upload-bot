@@ -694,11 +694,20 @@ class API:
                          bool(_re.search(r"\[\s*\d+", ln)))
                     )
                     if not selection_sent and _is_sel_prompt:
+                        # Première sélection : envoyer le numéro de la playlist
                         choice = playlist_index or _pl_number
                         try:
                             _os.write(master_fd, (choice + "\n").encode())
                             selection_sent = True
                             _status("→ Sélection #" + choice + " (" + main_pl + ")")
+                        except OSError:
+                            pass
+
+                    elif selection_sent and _is_sel_prompt:
+                        # BDInfoCLI redemande une sélection (mode multi) → Enter pour terminer
+                        try:
+                            _os.write(master_fd, b"\n")
+                            _status("→ Enter (fin de sélection)")
                         except OSError:
                             pass
 
@@ -853,18 +862,34 @@ class API:
             ffp = shutil.which("ffprobe")
             if ffp and m2ts_paths:
                 try:
+                    # -read_intervals "%+60" : lire seulement 60s (évite de charger
+                    # un M2TS de 30+ GB entier en mémoire)
                     r = subprocess.run(
                         [ffp, "-v", "quiet", "-print_format", "json",
-                         "-show_streams", str(m2ts_paths[0])],
-                        capture_output=True, text=True, timeout=60
+                         "-show_streams", "-show_format",
+                         "-read_intervals", "%+60",
+                         str(m2ts_paths[0])],
+                        capture_output=True, text=True, timeout=120
                     )
                     if r.returncode == 0:
-                        for s in _json2.loads(r.stdout).get("streams", []):
+                        data = _json2.loads(r.stdout)
+                        # Bitrate total depuis le format si non calculé
+                        fmt_br = int(data.get("format", {}).get("bit_rate", 0)) // 1000
+                        for s in data.get("streams", []):
                             br = int(s.get("bit_rate", 0)) // 1000  # bps→kbps
                             if s.get("codec_type") == "video":
                                 video_kbps.append(br)
                             elif s.get("codec_type") == "audio":
                                 audio_kbps.append(br)
+                        # Si ffprobe n'a pas de bitrate par stream, distribuer
+                        # depuis le bitrate total (video ~75%, audio distribué sur reste)
+                        if not any(video_kbps) and fmt_br > 0:
+                            n_audio = len(audio_kbps) if audio_kbps else 0
+                            # estimation typique BD : vidéo = 75%, audio = 25%/n
+                            video_kbps = [int(fmt_br * 0.75)]
+                            if n_audio:
+                                per_audio = int(fmt_br * 0.25 / n_audio)
+                                audio_kbps = [per_audio] * n_audio
                 except Exception:
                     pass
 
