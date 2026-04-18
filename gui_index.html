@@ -587,21 +587,22 @@ html.light body::before {
 
           <!-- Boutons upload (visibles après scan réussi) -->
           <div id="bdi-upload-section" style="display:none;margin-top:16px;">
-            <div class="section-label" style="margin-bottom:10px;">Envoyer le NFO</div>
-            <div class="platform-toggle">
-              <button class="plat-btn" id="bdi-btn-bzhv"
-                onclick="bdiUpload('b')"
-                style="display:flex;align-items:center;justify-content:center;gap:6px;">
-                BuzzHeavier
-              </button>
-              <button class="plat-btn" id="bdi-btn-gofile"
-                onclick="bdiUpload('g')"
-                style="display:flex;align-items:center;justify-content:center;gap:6px;">
-                Gofile
-              </button>
+            <div class="section-label" style="margin-bottom:10px;">Envoyer</div>
+            <div class="platform-toggle" style="margin-bottom:10px;">
+              <button class="plat-btn active" id="bdi-btn-bzhv"
+                onclick="bdiSetPlatform('b')" >BuzzHeavier</button>
+              <button class="plat-btn"        id="bdi-btn-gofile"
+                onclick="bdiSetPlatform('g')">Gofile</button>
             </div>
+            <button id="bdi-send-btn"
+                    onclick="bdiUpload()"
+                    style="width:100%;padding:12px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
+                    onmouseover="if(!this.disabled)this.style.background='var(--orange2)'"
+                    onmouseout="if(!this.disabled)this.style.background='var(--orange)'">
+              ↑ &nbsp;ENVOYER
+            </button>
             <div id="bdi-upload-status"
-                 style="font-family:var(--mono);font-size:10px;color:var(--text-dim);min-height:16px;transition:color .2s;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+                 style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:8px;min-height:16px;transition:color .2s;padding:0 2px;word-break:break-all;"></div>
           </div>
 
         </div>
@@ -705,10 +706,8 @@ async function bdiScan() {
   document.getElementById('bdi-done-banner').innerHTML   = '';
   document.getElementById('bdi-upload-section').style.display = 'none';
   document.getElementById('bdi-upload-status').textContent    = '';
-  ['bdi-btn-bzhv','bdi-btn-gofile'].forEach(function(id){
-    var b = document.getElementById(id);
-    b.disabled = false; b.classList.remove('active');
-  });
+  document.getElementById('bdi-send-btn').disabled = false;
+  document.getElementById('bdi-send-btn').innerHTML = '↑ &nbsp;ENVOYER';
   bdiSetStatus('Initialisation…');
 
   var btn  = document.getElementById('bdi-btn');
@@ -790,10 +789,8 @@ function bdiOnDone(data) {
     // Afficher la section upload
     document.getElementById('bdi-upload-section').style.display = 'block';
     document.getElementById('bdi-upload-status').textContent = '';
-    ['bdi-btn-bzhv','bdi-btn-gofile'].forEach(function(id){
-      var b = document.getElementById(id);
-      b.disabled = false; b.classList.remove('active');
-    });
+    document.getElementById('bdi-send-btn').disabled = false;
+    document.getElementById('bdi-send-btn').innerHTML = '↑ &nbsp;ENVOYER';
     setTimeout(function(){
       prog.style.display    = 'none';
       fill.style.width      = '0%';
@@ -813,13 +810,20 @@ function bdiOnDone(data) {
   }
 }
 
-async function bdiUpload(platform) {
-  var btnId = platform === 'b' ? 'bdi-btn-bzhv' : 'bdi-btn-gofile';
-  var btn   = document.getElementById(btnId);
+var _bdiPlatform = 'b';
+
+function bdiSetPlatform(p) {
+  _bdiPlatform = p;
+  document.getElementById('bdi-btn-bzhv').classList.toggle('active', p === 'b');
+  document.getElementById('bdi-btn-gofile').classList.toggle('active', p === 'g');
+}
+
+async function bdiUpload() {
+  var btn = document.getElementById('bdi-send-btn');
   btn.disabled = true;
-  btn.classList.add('active');
+  btn.innerHTML = '⏳ &nbsp;ENVOI EN COURS…';
   bdiUploadStatus('Upload en cours…', 'info');
-  await window.pywebview.api.upload_bdinfo_nfo(platform);
+  await window.pywebview.api.upload_bdinfo_nfo(_bdiPlatform);
 }
 
 function bdiUploadStatus(msg, level) {
@@ -832,10 +836,9 @@ function bdiUploadStatus(msg, level) {
 }
 
 function bdiUploadDone(data) {
-  ['bdi-btn-bzhv','bdi-btn-gofile'].forEach(function(id){
-    var b = document.getElementById(id);
-    b.disabled = false; b.classList.remove('active');
-  });
+  var btn = document.getElementById('bdi-send-btn');
+  btn.disabled = false;
+  btn.innerHTML = '↑ &nbsp;ENVOYER';
   if (data.ok) {
     var label = data.platform === 'b' ? 'BuzzHeavier' : 'Gofile';
     bdiUploadStatus('✅ ' + label + ' — ' + data.url, 'success');

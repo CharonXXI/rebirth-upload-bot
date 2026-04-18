@@ -686,11 +686,19 @@ class API:
                 return
 
             # Collecter tous les fichiers du dossier film
+            # Exclure fichiers cachés (.DS_Store, ._*, etc.) et dossier BACKUP
             files = []
             if folder and Path(folder).exists():
                 for f in sorted(Path(folder).rglob("*")):
-                    if f.is_file():
-                        files.append(str(f))
+                    if not f.is_file():
+                        continue
+                    # Ignorer fichiers système macOS
+                    if f.name.startswith(".") or f.name.startswith("._"):
+                        continue
+                    # Ignorer le dossier BACKUP (redondant avec BDMV)
+                    if "BACKUP" in f.parts:
+                        continue
+                    files.append(str(f))
 
             # Ajouter le NFO (s'il n'est pas déjà dans le dossier)
             if nfo not in files:
