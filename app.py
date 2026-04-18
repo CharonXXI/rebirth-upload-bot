@@ -675,18 +675,25 @@ class API:
 
                     # Chercher notre MPLS dans le listing pour noter son index
                     # Format observé : "N  M  XXXXX.MPLS  duration  size  -"
+                    # Colonne 1 = index (#), colonne 2 = groupe, colonne 3 = fichier
                     if not selection_sent and main_pl.upper() in ln.upper():
-                        nums = _re.findall(r"\b(\d+)\b", ln)
-                        if nums:
-                            # Prendre le dernier nombre AVANT le nom du MPLS
-                            mpls_pos = ln.upper().index(main_pl.upper())
-                            pre_nums = _re.findall(r"\b(\d+)\b", ln[:mpls_pos])
-                            playlist_index = pre_nums[-1] if pre_nums else nums[0]
+                        mpls_pos = ln.upper().index(main_pl.upper())
+                        pre_nums = _re.findall(r"\b(\d+)\b", ln[:mpls_pos])
+                        if pre_nums:
+                            # pre_nums[0] = index (colonne #), pre_nums[-1] = groupe
+                            playlist_index = pre_nums[0]
                             _status("Playlist #" + playlist_index + " = " + main_pl)
 
                     # Prompt de sélection de playlist
-                    if not selection_sent and any(kw in ln_low for kw in
-                            ("enter", "select", "choose", "number", "index", "playlist")):
+                    # Détecter uniquement les vraies invites (fin par : ou ?)
+                    # pour ne pas déclencher sur le header "# Group Playlist File…"
+                    _is_sel_prompt = (
+                        any(kw in ln_low for kw in
+                            ("enter", "select", "choose", "number", "index")) and
+                        (ln.rstrip().endswith((":", "?")) or
+                         bool(_re.search(r"\[\s*\d+", ln)))
+                    )
+                    if not selection_sent and _is_sel_prompt:
                         choice = playlist_index or _pl_number
                         try:
                             _os.write(master_fd, (choice + "\n").encode())
