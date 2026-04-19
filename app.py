@@ -805,12 +805,130 @@ class API:
         if filtered:
             output_text = filtered
 
-        # ── 5b. Patch uniquement les valeurs à 0 laissées par BDInfoCLI ─────────
-        # Si le scan M2TS a réussi (user a tapé "y"), BDInfoCLI a les vrais
-        # bitrates → on ne touche à rien sauf Size (toujours 0 en sortie -m).
-        # Si le scan a échoué (OOM / user a tapé "n"), bitrates = 0 → on
-        # injecte Size + Total Bitrate depuis les tailles M2TS réelles.
-        # Les bitrates stream restent à 0 (scan non effectué).
+        # ── 5b. Corrections bitrates BDInfoCLI ───────────────────────────────────
+        # BDInfoCLI-ng v0.8.0.0 peut donner un bitrate vidéo faux à cause d'un
+        # OutOfMemoryException lors du scan des gros M2TS (>20 GB).
+        # Le Total Bitrate reste correct (calculé depuis taille/durée),
+        # mais le bitrate vidéo par stream est sous-estimé (ex: 9428 au lieu
+        # de 28289 kbps).
+        # Solution : si la somme des streams est très inférieure au total,
+        # on recalcule le bitrate vidéo en comptant les paquets TS par PID
+        # directement dans le fichier M2TS (sans ffprobe, sans outil externe).
+
+        def _get_video_bitrate_from_m2ts(m2ts_paths, duration_sec):
+            """
+            Compte les paquets TS du PID vidéo dans les fichiers M2TS
+            (échantillonnage sur les premiers 512 MB par fichier, extrapolation
+            sur la taille totale).
+
+            Formule :
+              ratio = paquets_video / paquets_total_dans_echantillon
+              video_kbps = ratio × (taille_totale // 192) × 184 × 8 / durée / 1000
+              (184 = 188 octets TS - 4 octets header TS = payload PES estimé)
+
+            Retourne le bitrate vidéo en kbps (int) ou None si impossible.
+            """
+            M2TS  = 192       # taille paquet M2TS (4 timestamp + 188 TS)
+            TS_PL = 184       # payload PES estimé par paquet TS (188 - 4 header)
+            SAMPLE = 512 * 1024 * 1024  # 512 MB par fichier
+
+            paths = [str(p) for p in m2ts_paths if os.path.exists(str(p))]
+            if not paths:
+                return None
+
+            # ── Phase 1 : trouver le PID vidéo via PAT → PMT ─────────────────
+            video_pid = None
+            pmt_pid   = None
+
+            try:
+                with open(paths[0], 'rb') as fh:
+                    hdr = fh.read(min(1024 * 1024, os.path.getsize(paths[0])))
+            except Exception:
+                return None
+
+            i = 0
+            while i + M2TS <= len(hdr) and video_pid is None:
+                ts = hdr[i + 4: i + M2TS]
+                if len(ts) < 4 or ts[0] != 0x47:
+                    i += M2TS; continue
+
+                pid  = ((ts[1] & 0x1F) << 8) | ts[2]
+                pusi = bool(ts[1] & 0x40)
+                afc  = (ts[3] >> 4) & 0x3
+                p    = 4
+                if afc in (0x2, 0x3) and p < len(ts):
+                    p = p + 1 + ts[p]   # sauter adaptation_field
+
+                if pid == 0 and pusi and pmt_pid is None and p < len(ts):
+                    # PAT : pointer_field + table
+                    ptr = ts[p]; p += 1 + ptr
+                    if p + 8 < len(ts) and ts[p] == 0x00:
+                        sec_len = ((ts[p + 1] & 0x0F) << 8) | ts[p + 2]
+                        j = p + 8
+                        end = p + 3 + sec_len - 4
+                        while j + 3 < min(end, len(ts)):
+                            prog = (ts[j] << 8) | ts[j + 1]
+                            if prog != 0:
+                                pmt_pid = ((ts[j + 2] & 0x1F) << 8) | ts[j + 3]
+                                break
+                            j += 4
+
+                elif pmt_pid is not None and pid == pmt_pid and pusi and p < len(ts):
+                    # PMT : pointer_field + table
+                    ptr = ts[p]; p += 1 + ptr
+                    if p + 12 < len(ts) and ts[p] == 0x02:
+                        sec_len = ((ts[p + 1] & 0x0F) << 8) | ts[p + 2]
+                        pi_len  = ((ts[p + 10] & 0x0F) << 8) | ts[p + 11]
+                        j   = p + 12 + pi_len
+                        end = p + 3 + sec_len - 4
+                        while j + 4 < min(end, len(ts)):
+                            st   = ts[j]
+                            spid = ((ts[j + 1] & 0x1F) << 8) | ts[j + 2]
+                            el   = ((ts[j + 3] & 0x0F) << 8) | ts[j + 4]
+                            # types vidéo : MPEG-1=0x01, MPEG-2=0x02,
+                            #               H.264=0x1B, H.265=0x24, VC-1=0xEA
+                            if st in (0x01, 0x02, 0x1B, 0x24, 0xEA):
+                                video_pid = spid
+                                break
+                            j += 5 + el
+                i += M2TS
+
+            if video_pid is None:
+                return None
+
+            # ── Phase 2 : compter paquets vidéo, extrapoler sur taille totale ─
+            samp_video = 0
+            samp_total = 0
+            full_size  = 0
+
+            for path in paths:
+                try:
+                    fsize = os.path.getsize(path)
+                    full_size += fsize
+                    with open(path, 'rb') as fh:
+                        data = fh.read(min(SAMPLE, fsize))
+                except Exception:
+                    continue
+                j = 0
+                while j + M2TS <= len(data):
+                    ts = data[j + 4: j + M2TS]
+                    if len(ts) >= 3 and ts[0] == 0x47:
+                        pid = ((ts[1] & 0x1F) << 8) | ts[2]
+                        samp_total += 1
+                        if pid == video_pid:
+                            samp_video += 1
+                    j += M2TS
+
+            if samp_total == 0 or full_size == 0:
+                return None
+
+            # extrapolation
+            video_ratio        = samp_video / samp_total
+            full_ts_pkts       = full_size // M2TS
+            est_video_pkts     = video_ratio * full_ts_pkts
+            video_kbps         = est_video_pkts * TS_PL * 8 / duration_sec / 1000
+            return round(video_kbps)
+
         def _patch_bitrates(text, total_bytes, m2ts_paths):
             import re as _re2
 
@@ -826,32 +944,71 @@ class API:
                                     + float(dm.group(3)))
                     break
             if not duration_sec or not total_bytes:
-                return text
+                return text, False
 
             total_mbps = total_bytes * 8 / duration_sec / 1_000_000
             size_str   = "{:,}".format(total_bytes)
 
+            # ── Patch Size: 0 et Total Bitrate: 0.00 ─────────────────────────
             result = []
             for ln in lines:
-                # Size: 0 bytes → taille réelle
                 if _re2.search(r'\bSize:\s+0 bytes', ln):
                     ln = ln.replace("0 bytes", size_str + " bytes")
-                # Total Bitrate: 0.00 Mbps → calculé depuis taille/durée
                 elif _re2.search(r'Total Bitrate:\s+0\.00 Mbps', ln):
                     ln = _re2.sub(r'0\.00 Mbps', "%.2f Mbps" % total_mbps, ln)
                 result.append(ln)
+            lines = result
 
-            return "\n".join(result)
+            # ── Détection OOM : si la somme des streams << total ─────────────
+            # Récupérer le total réel depuis le rapport (après patch éventuel)
+            total_kbps = total_mbps * 1000
+            for ln in lines:
+                tm = _re2.search(r'Total Bitrate:\s+([\d.]+)\s*Mbps', ln)
+                if tm:
+                    total_kbps = float(tm.group(1)) * 1000
+                    break
 
-        # Appliquer uniquement si Size ou Total Bitrate sont à 0
-        import re as _re_check
-        _needs_patch = (main_pl_bytes > 0 and (
-            _re_check.search(r'\bSize:\s+0 bytes', output_text) or
-            _re_check.search(r'Total Bitrate:\s+0\.00 Mbps', output_text)
-        ))
-        if _needs_patch:
-            output_text = _patch_bitrates(output_text, main_pl_bytes, main_pl_clips)
-            _status("✔ Taille/bitrate total injectés depuis M2TS", "success")
+            stream_kbps = 0.0
+            for ln in lines:
+                bm = _re2.search(r'(\d[\d,]*)\s+kbps', ln)
+                if bm:
+                    stream_kbps += float(bm.group(1).replace(',', ''))
+
+            video_fixed = False
+            # Si > 20 % du bitrate total est non-attribué aux streams → OOM vidéo
+            unaccounted_frac = (
+                (total_kbps - stream_kbps) / total_kbps
+                if total_kbps > 0 else 0
+            )
+            if unaccounted_frac > 0.20 and m2ts_paths and duration_sec > 0:
+                _status("⚙ OOM détecté — recalcul bitrate vidéo depuis paquets TS…")
+                corrected = _get_video_bitrate_from_m2ts(m2ts_paths, duration_sec)
+                if corrected:
+                    result2 = []
+                    for ln in lines:
+                        if not video_fixed:
+                            vm = _re2.match(
+                                r'^(\s*\S.*?\s+Video\s+)(\d[\d,]*)\s*(kbps)(.*)',
+                                ln, _re2.IGNORECASE
+                            )
+                            if vm:
+                                ln = (vm.group(1) + str(corrected)
+                                      + " " + vm.group(3) + vm.group(4))
+                                video_fixed = True
+                        result2.append(ln)
+                    lines = result2
+
+            return "\n".join(lines), video_fixed
+
+        # Appliquer si on a les tailles M2TS (corrige Size/Total/vidéo OOM)
+        if main_pl_bytes > 0:
+            output_text, _video_fixed = _patch_bitrates(
+                output_text, main_pl_bytes, main_pl_clips
+            )
+            if _video_fixed:
+                _status("✔ Bitrate vidéo corrigé (OOM BDInfoCLI — comptage paquets TS)", "success")
+            else:
+                _status("✔ Taille/bitrate total injectés depuis M2TS", "success")
         elif main_pl_bytes == 0:
             _status("⚠ Taille M2TS inconnue — bitrates non calculés", "warning")
 
