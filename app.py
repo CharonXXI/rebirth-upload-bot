@@ -801,160 +801,53 @@ class API:
                 result.pop()
             return "\n".join(result)
 
-        # ── 5a. Extraire le PID vidéo depuis STREAM DIAGNOSTICS (avant filtrage) ─
-        # BDInfoCLI écrit STREAM DIAGNOSTICS dans le rapport brut.
-        # _extract_disc_info va le supprimer → on le lit MAINTENANT.
-        import re as _re_diag
-        _video_pid_hint = None
-        _diag_m = _re_diag.search(
-            r'\.M2TS\s+(\d+)\s+\(0x[0-9A-Fa-f]+\)\s+0x(?:1B|24|01|02|EA)\b',
-            output_text, _re_diag.IGNORECASE
-        )
-        if _diag_m:
-            _video_pid_hint = int(_diag_m.group(1))
-            _status("→ PID vidéo (STREAM DIAGNOSTICS) : %d (0x%04X)"
-                    % (_video_pid_hint, _video_pid_hint))
-        else:
-            _status("⚠ STREAM DIAGNOSTICS absent → PID via PAT/PMT ou 0x1011")
-
         filtered = _extract_disc_info(output_text)
         if filtered:
             output_text = filtered
 
-        # ── 5b. Corrections bitrates BDInfoCLI ───────────────────────────────────
-        # BDInfoCLI-ng v0.8.0.0 peut donner un bitrate vidéo faux :
+        # ── 5b. Corrections bitrates BDInfoCLI via pymediainfo ───────────────────
+        # BDInfoCLI-ng v0.8.0.0 donne un bitrate vidéo faux dans deux cas :
         #  • Mode -m (Windows sans pty) : métadonnées seulement, pas de scan stream
-        #  • OOM sur gros M2TS (>20 GB) : scan partiel → bitrate sous-estimé
-        # Correction : si sum(streams) << total, recompter les paquets TS par PID.
+        #  • OOM sur gros M2TS (>20 GB)  : scan partiel → bitrate sous-estimé
+        # Correction : pymediainfo (libmediainfo, déjà installé) lit le vrai
+        # bitrate directement dans le fichier M2TS sans charger tout le fichier.
 
-        def _get_video_bitrate_from_m2ts(m2ts_paths, duration_sec, video_pid=None):
+        def _get_video_kbps_mediainfo(m2ts_paths):
             """
-            Compte les paquets TS du PID vidéo dans les fichiers M2TS.
-            Échantillonne les premiers 512 MB par fichier et extrapole.
-            video_pid : PID connu (depuis STREAM DIAGNOSTICS) → saute Phase 1.
-            Si non fourni : essaie PAT→PMT puis fallback PID 0x1011 (standard BD).
-            Retourne le bitrate en kbps (int) ou None.
+            Lit le bitrate vidéo réel depuis les fichiers M2TS via pymediainfo.
+            Retourne le bitrate en kbps (int) ou None en cas d'échec.
             """
-            M2TS  = 192
-            TS_PL = 184       # 188 octets TS - 4 header = payload PES moyen
-            SAMPLE = 512 * 1024 * 1024
+            try:
+                from pymediainfo import MediaInfo
+            except ImportError:
+                _status("⚠ pymediainfo non disponible", "warning")
+                return None
 
             paths = [str(p) for p in m2ts_paths if os.path.exists(str(p))]
-            _status("→ TS count : %d fichier(s) M2TS trouvé(s)" % len(paths))
+            _status("→ MediaInfo : analyse de %d fichier(s) M2TS…" % len(paths))
             if not paths:
-                _status("✖ Aucun fichier M2TS accessible — correction annulée", "warning")
+                _status("✖ Aucun fichier M2TS accessible", "warning")
                 return None
-
-            # ── Phase 1 : trouver le PID vidéo (si non fourni) ───────────────
-            if video_pid is None:
-                pmt_pid = None
-                try:
-                    fsize0 = os.path.getsize(paths[0])
-                    with open(paths[0], 'rb') as fh:
-                        hdr = fh.read(min(1024 * 1024, fsize0))
-                    _status("→ PAT/PMT parsing sur %s (%d Mo lu)"
-                            % (paths[0].split(os.sep)[-1], len(hdr) // (1024*1024)))
-                except Exception as e_hdr:
-                    _status("✖ Lecture M2TS échouée : %s" % e_hdr, "warning")
-                    hdr = b""
-
-                i = 0
-                while i + M2TS <= len(hdr) and video_pid is None:
-                    ts = hdr[i + 4: i + M2TS]
-                    if len(ts) < 4 or ts[0] != 0x47:
-                        i += M2TS; continue
-
-                    pid  = ((ts[1] & 0x1F) << 8) | ts[2]
-                    pusi = bool(ts[1] & 0x40)
-                    afc  = (ts[3] >> 4) & 0x3
-                    p    = 4
-                    if afc in (0x2, 0x3) and p < len(ts):
-                        afl = ts[p]
-                        if p + 1 + afl < len(ts):
-                            p = p + 1 + afl
-                        else:
-                            i += M2TS; continue
-
-                    if pid == 0 and pusi and pmt_pid is None and p < len(ts):
-                        ptr = ts[p]; np = p + 1 + ptr
-                        if np + 8 < len(ts) and ts[np] == 0x00:
-                            sec_len = ((ts[np + 1] & 0x0F) << 8) | ts[np + 2]
-                            j = np + 8
-                            end = np + 3 + sec_len - 4
-                            while j + 3 < min(end, len(ts)):
-                                prog = (ts[j] << 8) | ts[j + 1]
-                                if prog != 0:
-                                    pmt_pid = ((ts[j + 2] & 0x1F) << 8) | ts[j + 3]
-                                    _status("→ PMT PID trouvé : 0x%04X" % pmt_pid)
-                                    break
-                                j += 4
-
-                    elif pmt_pid is not None and pid == pmt_pid and pusi and p < len(ts):
-                        ptr = ts[p]; np = p + 1 + ptr
-                        if np + 12 < len(ts) and ts[np] == 0x02:
-                            sec_len = ((ts[np + 1] & 0x0F) << 8) | ts[np + 2]
-                            pi_len  = ((ts[np + 10] & 0x0F) << 8) | ts[np + 11]
-                            j   = np + 12 + pi_len
-                            end = np + 3 + sec_len - 4
-                            while j + 4 < min(end, len(ts)):
-                                st   = ts[j]
-                                spid = ((ts[j + 1] & 0x1F) << 8) | ts[j + 2]
-                                el   = ((ts[j + 3] & 0x0F) << 8) | ts[j + 4]
-                                if st in (0x01, 0x02, 0x1B, 0x24, 0xEA):
-                                    video_pid = spid
-                                    _status("→ PID vidéo (PAT/PMT) : %d (0x%04X)"
-                                            % (video_pid, video_pid))
-                                    break
-                                j += 5 + el
-                    i += M2TS
-
-                if video_pid is None:
-                    # Fallback : PID 0x1011 = standard BD-ROM vidéo
-                    video_pid = 0x1011
-                    _status("⚠ PAT/PMT non trouvé → fallback PID 0x1011 (standard BD)")
-
-            # ── Phase 2 : compter paquets vidéo, extrapoler ───────────────────
-            _status("→ Comptage paquets TS PID 0x%04X (512 MB/fichier)…" % video_pid)
-            samp_video = 0
-            samp_total = 0
-            full_size  = 0
 
             for path in paths:
+                fname = path.replace("\\", "/").split("/")[-1]
                 try:
-                    fsize = os.path.getsize(path)
-                    full_size += fsize
-                    with open(path, 'rb') as fh:
-                        data = fh.read(min(SAMPLE, fsize))
-                except Exception as e_rd:
-                    _status("✖ Lecture %s : %s" % (path.split(os.sep)[-1], e_rd), "warning")
-                    continue
-                j = 0
-                while j + M2TS <= len(data):
-                    ts = data[j + 4: j + M2TS]
-                    if len(ts) >= 3 and ts[0] == 0x47:
-                        pid = ((ts[1] & 0x1F) << 8) | ts[2]
-                        samp_total += 1
-                        if pid == video_pid:
-                            samp_video += 1
-                    j += M2TS
+                    _status("→ MediaInfo parse : %s…" % fname)
+                    mi = MediaInfo.parse(path)
+                    for track in mi.tracks:
+                        if track.track_type == "Video":
+                            br = getattr(track, "bit_rate", None)
+                            if br:
+                                kbps = round(int(str(br).strip()) / 1000)
+                                if kbps > 500:   # sanity check minimal
+                                    _status("→ Bitrate vidéo (MediaInfo) : %d kbps" % kbps)
+                                    return kbps
+                            _status("⚠ track Video sans bit_rate (br=%r)" % br, "warning")
+                except Exception as e_mi:
+                    _status("✖ MediaInfo erreur sur %s : %s" % (fname, e_mi), "warning")
+            return None
 
-            _status("→ Paquets comptés : vidéo=%d / total=%d (ratio=%.1f%%)"
-                    % (samp_video, samp_total,
-                       100 * samp_video / samp_total if samp_total else 0))
-
-            if samp_total == 0 or full_size == 0:
-                _status("✖ Aucun paquet TS valide — correction annulée", "warning")
-                return None
-
-            video_ratio    = samp_video / samp_total
-            full_ts_pkts   = full_size // M2TS
-            est_video_pkts = video_ratio * full_ts_pkts
-            video_kbps     = est_video_pkts * TS_PL * 8 / duration_sec / 1000
-            _status("→ Bitrate vidéo estimé : %d kbps (total=%.2f Mbps)"
-                    % (round(video_kbps), full_size * 8 / duration_sec / 1_000_000))
-            return round(video_kbps)
-
-        def _patch_bitrates(text, total_bytes, m2ts_paths, video_pid_hint=None):
+        def _patch_bitrates(text, total_bytes, m2ts_paths):
             import re as _re2
 
             lines = text.splitlines()
@@ -984,7 +877,7 @@ class API:
                 result.append(ln)
             lines = result
 
-            # ── Détection scan partiel : sum(streams) << total ────────────────
+            # ── Détection scan partiel : sum(streams kbps entiers) << total ──
             total_kbps = total_mbps * 1000
             for ln in lines:
                 tm = _re2.search(r'Total Bitrate:\s+([\d.]+)\s*Mbps', ln)
@@ -992,27 +885,25 @@ class API:
                     total_kbps = float(tm.group(1)) * 1000
                     break
 
+            # Ne sommer que les valeurs entières (audio/vidéo) ; les sous-titres
+            # ont des valeurs décimales (ex: "37.605 kbps") ignorées ici.
             stream_kbps = 0.0
             for ln in lines:
-                bm = _re2.search(r'(\d[\d,]*)\s+kbps', ln)
+                bm = _re2.search(r'\b(\d{3,})\s+kbps\b', ln)
                 if bm:
-                    stream_kbps += float(bm.group(1).replace(',', ''))
+                    stream_kbps += float(bm.group(1))
 
-            _status("→ Vérif bitrates : total=%.0f kbps, streams=%.0f kbps, manquant=%.0f%%"
-                    % (total_kbps, stream_kbps,
-                       100 * (total_kbps - stream_kbps) / total_kbps if total_kbps else 0))
-
-            video_fixed = False
-            unaccounted_frac = (
-                (total_kbps - stream_kbps) / total_kbps
+            unaccounted_pct = (
+                100 * (total_kbps - stream_kbps) / total_kbps
                 if total_kbps > 0 else 0
             )
-            if unaccounted_frac > 0.20 and m2ts_paths and duration_sec > 0:
-                _status("⚙ Scan partiel détecté (%.0f%% non attribué) — comptage TS…"
-                        % (unaccounted_frac * 100))
-                corrected = _get_video_bitrate_from_m2ts(
-                    m2ts_paths, duration_sec, video_pid=video_pid_hint
-                )
+            _status("→ Vérif : total=%.0f kbps, streams=%.0f kbps, manquant=%.0f%%"
+                    % (total_kbps, stream_kbps, unaccounted_pct))
+
+            video_fixed = False
+            if unaccounted_pct > 20 and m2ts_paths and duration_sec > 0:
+                _status("⚙ Scan partiel (%.0f%% manquant) → MediaInfo…" % unaccounted_pct)
+                corrected = _get_video_kbps_mediainfo(m2ts_paths)
                 if corrected:
                     result2 = []
                     for ln in lines:
@@ -1029,23 +920,21 @@ class API:
                         result2.append(ln)
                     lines = result2
                     if not video_fixed:
-                        _status("⚠ Ligne vidéo non trouvée dans le rapport (regex no-match)",
-                                "warning")
+                        _status("⚠ Ligne vidéo non trouvée (regex no-match)", "warning")
             else:
-                _status("→ Bitrates OK (scan complet ou pas de correction nécessaire)")
+                _status("→ Bitrates OK (scan complet)")
 
             return "\n".join(lines), video_fixed
 
-        # Appliquer si on a les tailles M2TS (corrige Size/Total/vidéo OOM ou -m)
+        # Appliquer si on a les tailles M2TS
         if main_pl_bytes > 0:
             output_text, _video_fixed = _patch_bitrates(
-                output_text, main_pl_bytes, main_pl_clips,
-                video_pid_hint=_video_pid_hint
+                output_text, main_pl_bytes, main_pl_clips
             )
             if _video_fixed:
-                _status("✔ Bitrate vidéo corrigé (comptage paquets TS)", "success")
+                _status("✔ Bitrate vidéo corrigé via MediaInfo", "success")
             else:
-                _status("✔ Rapport traité (pas de correction vidéo nécessaire)", "success")
+                _status("✔ Rapport traité", "success")
         elif main_pl_bytes == 0:
             _status("⚠ Taille M2TS inconnue — bitrates non calculés", "warning")
 
