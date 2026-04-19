@@ -580,8 +580,18 @@ class API:
         # Fallback automatique -m si le module pty n'est pas disponible (Windows).
         import queue as _q
 
+        # Numéro alphabétique du MPLS (BDInfoCLI liste dans cet ordre)
+        _pl_dir = Path(scan_root) / "BDMV" / "PLAYLIST"
+        _all_mpls = sorted(f.name.upper() for f in _pl_dir.iterdir()
+                           if f.suffix.upper() == ".MPLS") if _pl_dir.exists() else []
+        _pl_number = str(_all_mpls.index(main_pl) + 1) if main_pl in _all_mpls else "1"
+
         def _run_bdinfo_interactive_pty(label):
-            """PTY + attente de la saisie utilisateur depuis le frontend."""
+            """PTY hybride :
+            - 'Select (q when finished):' → auto-envoie le numéro du MPLS, puis 'q'
+            - 'Continue scanning?'        → demande confirmation à l'utilisateur
+            - Tout autre prompt inconnu   → demande à l'utilisateur
+            """
             import pty as _pty, os as _os, select as _sel
             try:
                 import termios as _termios
@@ -609,8 +619,12 @@ class API:
             except Exception as e_pty:
                 _os.close(slave_fd); _os.close(master_fd); raise e_pty
 
-            buf          = b""
-            waiting_user = False   # True quand on a émis bdinfo_waiting_input
+            buf              = b""
+            playlist_added   = False   # True après avoir envoyé le numéro
+            waiting_user     = False   # True quand on attend la saisie UI
+
+            def _send(text):
+                _os.write(master_fd, (text + "\n").encode())
 
             while True:
                 if p.poll() is not None:
@@ -623,34 +637,54 @@ class API:
                     break
 
                 try:
-                    r, _, _ = _sel.select([master_fd], [], [], 3)
+                    r, _, _ = _sel.select([master_fd], [], [], 2)
                 except (ValueError, OSError):
                     break
 
                 if not r:
-                    # Pas de nouvelles données depuis 3 s → BDInfoCLI attend
-                    # Vérifier si l'utilisateur a envoyé une réponse
+                    # Pas de nouvelles données depuis 2 s
                     if waiting_user:
+                        # Vérifier si l'utilisateur a répondu
                         try:
                             user_text = self._bdinfo_input_queue.get_nowait()
-                            _os.write(master_fd, (user_text + "\n").encode())
+                            _send(user_text)
                             waiting_user = False
+                            self._emit("bdinfo_hide_input", {})
                             _status("→ « " + user_text + " » envoyé")
                         except _q.Empty:
                             pass
                     else:
-                        # Afficher le fragment en attente comme invite
-                        if buf:
-                            prompt = buf.decode("utf-8", errors="replace")
-                            prompt = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", prompt).strip()
-                            if prompt:
-                                self._emit("bdinfo_waiting_input", {"prompt": prompt})
-                                waiting_user = True
-                                _status("⌨ En attente de ta saisie…")
+                        # Inspecter le fragment courant
+                        prompt_raw = buf.decode("utf-8", errors="replace")
+                        prompt = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", prompt_raw).strip()
+                        prompt_low = prompt.lower()
+
+                        if "select" in prompt_low and "when finished" in prompt_low:
+                            # Prompt de sélection de playlist
+                            if not playlist_added:
+                                _send(_pl_number)
+                                playlist_added = True
+                                _status("→ Playlist #" + _pl_number + " (" + main_pl + ") auto-sélectionnée")
+                            else:
+                                # Déjà sélectionnée → quitter la boucle
+                                _send("q")
+                                _status("→ q (fin de sélection)")
+
+                        elif "continue" in prompt_low and "scanning" in prompt_low:
+                            # "Continue scanning? [y/N]" → demander à l'user
+                            self._emit("bdinfo_waiting_input", {
+                                "prompt": prompt + "\n\nTaper y pour lancer le scan M2TS réel (bitrates vrais)\nou n pour générer sans scan (bitrates calculés)"
+                            })
+                            waiting_user = True
+                            _status("⌨ Continue scanning? — ta décision…")
+
+                        elif prompt:
+                            # Prompt inconnu → demander à l'utilisateur
+                            self._emit("bdinfo_waiting_input", {"prompt": prompt})
+                            waiting_user = True
+                            _status("⌨ En attente de ta saisie…")
                     continue
 
-                # Des données arrivent : si on attendait l'user, c'est BDInfoCLI
-                # qui a repris (ex: écho de l'entrée) → pas de souci
                 try:
                     data = _os.read(master_fd, 8192)
                 except OSError:
@@ -673,7 +707,6 @@ class API:
                         continue
                     _output(ln)
 
-                # Si on reçoit des données, BDInfoCLI est actif → masquer input
                 if waiting_user:
                     self._emit("bdinfo_hide_input", {})
                     waiting_user = False
@@ -684,7 +717,6 @@ class API:
                 pass
             if p.poll() is None:
                 p.wait()
-            # Toujours masquer le champ de saisie à la fin
             self._emit("bdinfo_hide_input", {})
             return p.returncode
 
