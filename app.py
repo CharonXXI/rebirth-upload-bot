@@ -580,11 +580,10 @@ class API:
         # Fallback automatique -m si le module pty n'est pas disponible (Windows).
         import queue as _q
 
-        # Numéro alphabétique du MPLS (BDInfoCLI liste dans cet ordre)
-        _pl_dir = Path(scan_root) / "BDMV" / "PLAYLIST"
-        _all_mpls = sorted(f.name.upper() for f in _pl_dir.iterdir()
-                           if f.suffix.upper() == ".MPLS") if _pl_dir.exists() else []
-        _pl_number = str(_all_mpls.index(main_pl) + 1) if main_pl in _all_mpls else "1"
+        # _pl_number sera écrasé dès qu'on voit la ligne du listing BDInfoCLI
+        # Format : "N  G  XXXXX.MPLS  HH:MM:SS  bytes  -"
+        # Valeur initiale = "1" (jamais utilisée si le listing est parsé)
+        _pl_number = "1"
 
         def _run_bdinfo_interactive_pty(label):
             """PTY hybride :
@@ -705,6 +704,17 @@ class API:
                     ln = ln.rstrip()
                     if not ln:
                         continue
+
+                    # Parser le listing pour trouver le vrai numéro de main_pl
+                    # Format : "N  G  XXXXX.MPLS  HH:MM:SS  bytes  -"
+                    if not playlist_added and main_pl.upper() in ln.upper():
+                        mpls_pos = ln.upper().index(main_pl.upper())
+                        pre_nums = _re.findall(r"\b(\d+)\b", ln[:mpls_pos])
+                        if pre_nums:
+                            _pl_number = pre_nums[0]
+                            _status("→ %s = #%s dans le listing BDInfoCLI"
+                                    % (main_pl, _pl_number))
+
                     _output(ln)
 
                 if waiting_user:
