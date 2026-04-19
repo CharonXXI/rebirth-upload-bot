@@ -576,6 +576,27 @@ html.light body::before {
             💿 &nbsp;SCANNER
           </button>
 
+          <!-- Champ de saisie interactive PTY (masqué par défaut) -->
+          <div id="bdi-input-wrap" style="display:none;margin-top:10px;">
+            <div id="bdi-input-prompt"
+                 style="font-family:var(--mono);font-size:10px;color:var(--orange);
+                        margin-bottom:6px;word-break:break-all;white-space:pre-wrap;
+                        padding:6px 8px;background:var(--bg3);border-radius:3px;
+                        border-left:2px solid var(--orange);">
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input id="bdi-input" type="text" placeholder="Ta réponse…"
+                     style="flex:1;padding:7px 10px;background:var(--bg3);border:1px solid var(--orange);
+                            border-radius:3px;color:var(--text);font-family:var(--mono);
+                            font-size:12px;outline:none;"
+                     onkeydown="if(event.key==='Enter')bdiSendInput()">
+              <button onclick="bdiSendInput()"
+                      style="padding:7px 12px;background:var(--orange);border:none;border-radius:3px;
+                             color:#000;font-family:var(--sans);font-weight:700;font-size:12px;
+                             cursor:pointer;">↵</button>
+            </div>
+          </div>
+
           <!-- Barre de progression (masquée par défaut) -->
           <div class="progress-wrap" id="bdi-progress" style="display:none;">
             <div class="progress-label" id="bdi-progress-label">ANALYSE EN COURS…</div>
@@ -672,6 +693,8 @@ window._emit = function(event, data) {
   if (event === 'bdinfo_done')          bdiOnDone(data);
   if (event === 'bdinfo_upload_status') bdiUploadStatus(data.msg, 'info');
   if (event === 'bdinfo_upload_done')   bdiUploadDone(data);
+  if (event === 'bdinfo_waiting_input') bdiShowInput(data.prompt);
+  if (event === 'bdinfo_hide_input')    bdiHideInput();
 };
 
 // ── BD Info ──────────────────────────────────────────────────────────────────
@@ -736,6 +759,31 @@ function bdiSetStatus(msg, level) {
                  : 'var(--text-dim)';
 }
 
+// ── Saisie interactive PTY ───────────────────────────────────────────────
+function bdiShowInput(prompt) {
+  var wrap = document.getElementById('bdi-input-wrap');
+  var promptEl = document.getElementById('bdi-input-prompt');
+  var inputEl  = document.getElementById('bdi-input');
+  if (!wrap) return;
+  promptEl.textContent = prompt;
+  wrap.style.display = 'block';
+  setTimeout(function() { inputEl.focus(); }, 50);
+}
+
+function bdiHideInput() {
+  var wrap = document.getElementById('bdi-input-wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+async function bdiSendInput() {
+  var inputEl = document.getElementById('bdi-input');
+  var val = inputEl.value.trim();
+  inputEl.value = '';
+  bdiHideInput();
+  bdiSetStatus('→ « ' + val + ' » envoyé');
+  await window.pywebview.api.send_bdinfo_input(val);
+}
+
 // Reset preview entre le --list et le vrai scan
 function bdiResetOutput() {
   _bdiOutputLines = [];
@@ -758,6 +806,8 @@ function bdiAddOutput(line) {
 }
 
 function bdiOnDone(data) {
+  bdiHideInput();   // toujours masquer le champ de saisie à la fin
+
   var btn    = document.getElementById('bdi-btn');
   var prog   = document.getElementById('bdi-progress');
   var banner = document.getElementById('bdi-done-banner');

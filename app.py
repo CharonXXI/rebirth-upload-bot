@@ -33,6 +33,7 @@ class API:
         self._tmdb_confirmed     = None
         self._torrent_event      = Event()
         self._torrent_confirmed  = None
+        self._bdinfo_input_queue = None   # queue.Queue() créé à chaque scan
 
     def get_config(self):
         return {
@@ -277,11 +278,19 @@ class API:
         Cherche le dossier BDMV à l'intérieur si nécessaire.
         Sauvegarde le rapport dans BDINFO/<nom>.nfo et l'émet via log.
         """
+        import queue as _q
+        self._bdinfo_input_queue = _q.Queue()
         threading.Thread(
             target=self._bdinfo_worker,
             args=(folder_path,),
             daemon=True
         ).start()
+        return {"ok": True}
+
+    def send_bdinfo_input(self, text: str):
+        """Envoie une réponse à BDInfoCLI en cours (appelé depuis le frontend)."""
+        if self._bdinfo_input_queue is not None:
+            self._bdinfo_input_queue.put(str(text))
         return {"ok": True}
 
     def _bdinfo_worker(self, folder_path: str):
@@ -563,18 +572,133 @@ class API:
         # Il crée lui-même le fichier rapport à l'intérieur.
         import glob as _glob, time as _time, queue as _queue
 
-        # ── 3e. Scan -m : structure CLPI (rapide, sans OOM) + bitrates calculés ──
-        # BDInfoCLI -m lit les CLPI pour codec/langue/résolution sans scanner
-        # les M2TS (évite les OutOfMemoryException sur les gros fichiers).
-        # Les bitrates (0 dans le rapport) sont recalculés après via les
-        # tailles réelles des M2TS + durée issue du rapport + ffprobe.
-        _status("Scan %s (structure CLPI)…" % main_pl)
+        # ── 3e. Scan interactif via PTY ────────────────────────────────────────
+        # BDInfoCLI utilise Console.KeyAvailable() → exige un vrai terminal.
+        # On ouvre un PTY. Quand BDInfoCLI attend une entrée, on émet
+        # bdinfo_waiting_input vers le frontend : l'utilisateur tape la réponse
+        # (numéro de playlist, "y" pour scanner, etc.).
+        # Fallback automatique -m si le module pty n'est pas disponible (Windows).
+        import queue as _q
+
+        def _run_bdinfo_interactive_pty(label):
+            """PTY + attente de la saisie utilisateur depuis le frontend."""
+            import pty as _pty, os as _os, select as _sel
+            try:
+                import termios as _termios
+                _has_termios = True
+            except ImportError:
+                _has_termios = False
+
+            master_fd, slave_fd = _pty.openpty()
+            if _has_termios:
+                try:
+                    t = _termios.tcgetattr(slave_fd)
+                    t[3] &= ~_termios.ECHO
+                    _termios.tcsetattr(slave_fd, _termios.TCSANOW, t)
+                except Exception:
+                    pass
+
+            cmd = [dotnet_bin, bdinfo_dll, scan_root, str(nfo_dir)]
+            _status(label)
+            try:
+                p = subprocess.Popen(
+                    cmd, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+                    close_fds=True, env=env
+                )
+                _os.close(slave_fd)
+            except Exception as e_pty:
+                _os.close(slave_fd); _os.close(master_fd); raise e_pty
+
+            buf          = b""
+            waiting_user = False   # True quand on a émis bdinfo_waiting_input
+
+            while True:
+                if p.poll() is not None:
+                    try:
+                        r2, _, _ = _sel.select([master_fd], [], [], 2)
+                        if r2:
+                            buf += _os.read(master_fd, 65536)
+                    except OSError:
+                        pass
+                    break
+
+                try:
+                    r, _, _ = _sel.select([master_fd], [], [], 3)
+                except (ValueError, OSError):
+                    break
+
+                if not r:
+                    # Pas de nouvelles données depuis 3 s → BDInfoCLI attend
+                    # Vérifier si l'utilisateur a envoyé une réponse
+                    if waiting_user:
+                        try:
+                            user_text = self._bdinfo_input_queue.get_nowait()
+                            _os.write(master_fd, (user_text + "\n").encode())
+                            waiting_user = False
+                            _status("→ « " + user_text + " » envoyé")
+                        except _q.Empty:
+                            pass
+                    else:
+                        # Afficher le fragment en attente comme invite
+                        if buf:
+                            prompt = buf.decode("utf-8", errors="replace")
+                            prompt = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", prompt).strip()
+                            if prompt:
+                                self._emit("bdinfo_waiting_input", {"prompt": prompt})
+                                waiting_user = True
+                                _status("⌨ En attente de ta saisie…")
+                    continue
+
+                # Des données arrivent : si on attendait l'user, c'est BDInfoCLI
+                # qui a repris (ex: écho de l'entrée) → pas de souci
+                try:
+                    data = _os.read(master_fd, 8192)
+                except OSError:
+                    break
+                if not data:
+                    break
+
+                buf += data
+                text = buf.decode("utf-8", errors="replace")
+                buf  = b""
+                text = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+                text = text.replace("\r", "")
+
+                lines = text.split("\n")
+                buf   = lines[-1].encode()
+
+                for ln in lines[:-1]:
+                    ln = ln.rstrip()
+                    if not ln:
+                        continue
+                    _output(ln)
+
+                # Si on reçoit des données, BDInfoCLI est actif → masquer input
+                if waiting_user:
+                    self._emit("bdinfo_hide_input", {})
+                    waiting_user = False
+
+            try:
+                _os.close(master_fd)
+            except OSError:
+                pass
+            if p.poll() is None:
+                p.wait()
+            # Toujours masquer le champ de saisie à la fin
+            self._emit("bdinfo_hide_input", {})
+            return p.returncode
 
         # Timestamp AVANT le scan pour trouver les fichiers créés/modifiés après
         scan_start = _time.time()
 
-        rc = _run_bdinfo_to_file(["-m", main_pl], nfo_dir,
-                                 "Scan -m " + main_pl + "…")
+        try:
+            _status("Scan interactif %s via PTY…" % main_pl)
+            rc = _run_bdinfo_interactive_pty("BDInfoCLI en cours…")
+        except ImportError:
+            # Windows : pas de module pty → fallback -m + patch bitrates
+            _status("⚠ PTY non dispo → -m + calcul bitrates")
+            rc = _run_bdinfo_to_file(["-m", main_pl], nfo_dir,
+                                     "Scan -m " + main_pl + "…")
 
         # ── 4. Lire le rapport généré par BDInfoCLI ───────────────────────────
         # Chercher le fichier le plus récent dans nfo_dir modifié APRÈS scan_start
