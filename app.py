@@ -314,10 +314,14 @@ class API:
             nfo_raw = nfo_raw.replace('{', '').replace('}', '').replace('\\', '')
             nfo_raw = _re.sub(r'\n{3,}', '\n\n', nfo_raw).strip()
 
-        # Extraire le bloc "DISC INFO: ... SUBTITLES: ..."
-        # (couper avant FILES: / CHAPTERS: / STREAM DIAGNOSTICS:)
-        _m = _re.search(r'(DISC INFO:.*?)(?=\nFILES:|\nCHAPTERS:|\nSTREAM DIAGNOSTICS:|\n\*{10,}|\Z)',
-                        nfo_raw, _re.DOTALL)
+        # Extraire depuis "DISC INFO:" (ou "Disc Title:" si pas de header) jusqu'à SUBTITLES inclus
+        _STOP = r'(?=\nFILES:|\nCHAPTERS:|\nSTREAM DIAGNOSTICS:|\n\[/code\]|\nQUICK SUMMARY:|\n\*{10,}|\Z)'
+        _m = _re.search(r'(DISC INFO:.*?)' + _STOP, nfo_raw, _re.DOTALL)
+        if not _m:
+            # Pas de "DISC INFO:" → partir du premier "Disc Title:" ou "Disc Label:"
+            _start = _re.search(r'^Disc (?:Title|Label):', nfo_raw, _re.MULTILINE)
+            if _start:
+                _m = _re.search(r'(.+?)' + _STOP, nfo_raw[_start.start():], _re.DOTALL)
         nfo_content = _m.group(1).strip() + "\n" if _m else nfo_raw.strip() + "\n"
 
         # Disc label (Label prioritaire sur Title)
@@ -1422,25 +1426,16 @@ class API:
                 _status("→ STREAM DIAG PID %d : %d paquets × 184 B / %.3f s = %d kbps"
                         % (video_pid, sd_pkts, sd_dur, sd_kbps_exact))
 
-        # ── 5b. Filtrer : garder uniquement DISC INFO → FILES (exclu) ────────
+        # ── 5b. Filtrer : garder uniquement DISC INFO (ou Disc Title) → SUBTITLES ──
         def _extract_disc_info(text):
-            lines = text.splitlines()
-            result = []
-            inside = False
-            stop_sections = {"FILES:", "CHAPTERS:", "STREAM DIAGNOSTICS:"}
-            for ln in lines:
-                stripped = ln.strip()
-                if not inside:
-                    if stripped == "DISC INFO:":
-                        inside = True
-                        result.append(ln)
-                else:
-                    if stripped in stop_sections:
-                        break
-                    result.append(ln)
-            while result and not result[-1].strip():
-                result.pop()
-            return "\n".join(result)
+            import re as _re2
+            _STOP = r'(?=\nFILES:|\nCHAPTERS:|\nSTREAM DIAGNOSTICS:|\n\[/code\]|\nQUICK SUMMARY:|\n\*{10,}|\Z)'
+            _m = _re2.search(r'(DISC INFO:.*?)' + _STOP, text, _re2.DOTALL)
+            if not _m:
+                _start = _re2.search(r'^Disc (?:Title|Label):', text, _re2.MULTILINE)
+                if _start:
+                    _m = _re2.search(r'(.+?)' + _STOP, text[_start.start():], _re2.DOTALL)
+            return _m.group(1).strip() if _m else ""
 
         filtered = _extract_disc_info(output_text)
         if filtered:
