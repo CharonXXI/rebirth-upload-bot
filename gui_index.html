@@ -289,7 +289,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.5.9</div>
+      <div class="logo-sub">UPLOAD BOT v2.6.0</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -546,23 +546,38 @@ html.light body::before {
         <!-- ── Colonne gauche ─────────────────────────────────────────────── -->
         <div class="upload-left">
 
-          <div class="section-label">Dossier source</div>
+          <div class="section-label">Source</div>
 
-          <!-- Zone de sélection dossier (style file-drop) -->
-          <div class="file-drop" id="bdi-drop" onclick="bdiBrowse()"
-               style="margin-bottom:20px;">
+          <!-- Indicateur de sélection (lecture seule, pas cliquable) -->
+          <div class="file-drop" id="bdi-drop" style="margin-bottom:10px;cursor:default;pointer-events:none;">
             <div class="file-icon">💿</div>
-            <div class="file-label" id="bdi-drop-label">CLIQUER POUR SÉLECTIONNER</div>
+            <div class="file-label" id="bdi-drop-label">SÉLECTIONNER UNE SOURCE CI-DESSOUS</div>
             <div class="file-name" id="bdi-drop-name" style="margin-top:6px;font-size:11px;color:var(--orange);word-break:break-all;"></div>
+          </div>
+
+          <!-- Boutons de sélection (hors file-drop) -->
+          <div style="display:flex;gap:8px;margin-bottom:20px;">
+            <button onclick="bdiBrowse()"
+              style="flex:1;padding:9px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:border-color .15s;"
+              onmouseover="this.style.borderColor='var(--orange)'"
+              onmouseout="this.style.borderColor='var(--border2)'">
+              📁 &nbsp;DOSSIER BDMV
+            </button>
+            <button onclick="bdiBrowseIso()"
+              style="flex:1;padding:9px 0;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:border-color .15s;"
+              onmouseover="this.style.borderColor='var(--orange)'"
+              onmouseout="this.style.borderColor='var(--border2)'">
+              💿 &nbsp;FICHIER ISO
+            </button>
           </div>
 
           <div class="section-label">Scan</div>
 
           <!-- Info technique -->
-          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);line-height:1.8;margin-bottom:16px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;">
-            <span style="color:var(--text);">BDInfoCLI</span> (net8.0 · osx-arm64)<br>
-            Détection automatique du dossier <span style="color:var(--orange);">BDMV/</span><br>
-            Rapport sauvegardé dans <span style="color:var(--orange);">BDINFO/*.nfo</span>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);line-height:1.9;margin-bottom:16px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;">
+            <span style="color:var(--orange);">1.</span> Ouvre <span style="color:var(--text);">BDInfo v0.7.5.6</span> via Whisky<br>
+            <span style="color:var(--orange);">2.</span> Scan Bitrates → View Report → sauvegarde dans <span style="color:var(--orange);">BDINFO/</span><br>
+            <span style="color:var(--orange);">3.</span> Clique <span style="color:var(--text);">CHARGER RAPPORT</span> ci-dessous
           </div>
 
           <!-- Statut interne (debug, discret) -->
@@ -574,6 +589,14 @@ html.light body::before {
                   onmouseover="this.style.background='var(--orange2)'"
                   onmouseout="this.style.background='var(--orange)'">
             💿 &nbsp;SCANNER
+          </button>
+
+          <!-- Bouton charger rapport existant -->
+          <button id="bdi-load-btn" onclick="bdiLoadExisting()"
+                  style="width:100%;margin-top:8px;padding:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
+                  onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'"
+                  onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text)'">
+            📂 &nbsp;CHARGER RAPPORT BDINFO
           </button>
 
           <!-- Champ de saisie interactive PTY (masqué par défaut) -->
@@ -702,16 +725,42 @@ window._emit = function(event, data) {
 var _bdiFolder      = '';
 var _bdiOutputLines = [];
 
+function _bdiSetSource(path, isIso) {
+  _bdiFolder = path;
+  var sep  = (path.indexOf('\\') >= 0) ? '\\' : '/';
+  var name = path.split(sep).filter(Boolean).pop() || path;
+  var drop = document.getElementById('bdi-drop');
+  drop.classList.add('has-file');
+  document.getElementById('bdi-drop-label').textContent = isIso ? 'ISO SÉLECTIONNÉ' : 'DOSSIER SÉLECTIONNÉ';
+  document.getElementById('bdi-drop-name').textContent  = name;
+  bdiSetStatus('');
+}
+
 async function bdiBrowse() {
   const res = await window.pywebview.api.browse_folder_bdinfo();
-  if (res && res.path) {
-    _bdiFolder = res.path;
-    var name = res.path.split('/').filter(Boolean).pop() || res.path;
-    var drop = document.getElementById('bdi-drop');
-    drop.classList.add('has-file');
-    document.getElementById('bdi-drop-label').textContent = 'DOSSIER SÉLECTIONNÉ';
-    document.getElementById('bdi-drop-name').textContent  = name;
-    bdiSetStatus('');
+  if (res && res.path) _bdiSetSource(res.path, false);
+}
+
+async function bdiBrowseIso() {
+  const res = await window.pywebview.api.browse_iso_bdinfo();
+  if (res && res.path) _bdiSetSource(res.path, true);
+}
+
+async function bdiLoadExisting() {
+  var btn = document.getElementById('bdi-load-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳  CHARGEMENT…';
+  document.getElementById('bdi-nfo-content').textContent = '';
+  document.getElementById('bdi-nfo-label').textContent   = '';
+  document.getElementById('bdi-done-banner').innerHTML   = '';
+  document.getElementById('bdi-upload-section').style.display = 'none';
+  try {
+    await window.pywebview.api.load_existing_bdinfo();
+  } catch(e) {
+    bdiSetStatus('Erreur : ' + e, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '📂 &nbsp;CHARGER RAPPORT BDINFO';
   }
 }
 

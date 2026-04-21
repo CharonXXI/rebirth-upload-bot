@@ -3,3 +3,5 @@ requests_toolbelt
 tqdm
 rich
 pymediainfo
+numpy
+# pywinpty  # Windows uniquement — installer manuellement sur Windows si nécessaire

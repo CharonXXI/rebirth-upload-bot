@@ -5,10 +5,18 @@ __pycache__/
 dist/
 build/
 *.nfo
+*.txt
+*.rtf
 *.torrent
 FILMS/
 FINAL/
 TORRENTS/
+BDINFO/
+BDInfo_v0/
+history.json
+theme.txt
 .env
 .DS_Store
 NFO_CUSTOM/.DS_Store
+".git 2/"
+".gitignore 2"

@@ -273,6 +273,205 @@ class API:
             return {"path": result[0]}
         return {"path": ""}
 
+    def load_existing_bdinfo(self):
+        """Charge et traite le rapport BDInfo le plus récent dans le dossier BDINFO/."""
+        import re as _re
+
+        # Tuer BDInfo/Wine s'il tourne encore
+        _wp = getattr(self, '_wine_proc', None)
+        if _wp is not None:
+            try:
+                if _wp.poll() is None:
+                    _wp.terminate()
+                    self._emit("bdinfo_status", {"msg": "🛑 BDInfo fermé"})
+            except Exception:
+                pass
+            self._wine_proc = None
+
+        _nfo_dir = BASE_DIR / "BDINFO"
+        _nfo_dir.mkdir(exist_ok=True)
+
+        _candidates = (
+            list(_nfo_dir.glob("*.rtf"))
+            + list(_nfo_dir.glob("*.txt"))
+            + list(_nfo_dir.glob("*.nfo"))
+        )
+        if not _candidates:
+            self._emit("bdinfo_status", {"msg": "✖ Aucun rapport dans BDINFO/", "level": "error"})
+            return
+
+        _src = sorted(_candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+        self._emit("bdinfo_status", {"msg": "📂 Lecture : %s" % _src.name})
+
+        with open(_src, "r", encoding="utf-8", errors="replace") as _f:
+            nfo_raw = _f.read()
+
+        # Conversion RTF si nécessaire
+        if _src.suffix.lower() == ".rtf":
+            nfo_raw = _re.sub(r'\\par\b', '\n', nfo_raw)
+            nfo_raw = _re.sub(r'\\line\b', '\n', nfo_raw)
+            nfo_raw = _re.sub(r'\\[a-zA-Z]+\-?[0-9]*\s?', '', nfo_raw)
+            nfo_raw = nfo_raw.replace('{', '').replace('}', '').replace('\\', '')
+            nfo_raw = _re.sub(r'\n{3,}', '\n\n', nfo_raw).strip()
+
+        # Extraire le bloc "DISC INFO: ... SUBTITLES: ..."
+        # (couper avant FILES: / CHAPTERS: / STREAM DIAGNOSTICS:)
+        _m = _re.search(r'(DISC INFO:.*?)(?=\nFILES:|\nCHAPTERS:|\nSTREAM DIAGNOSTICS:|\n\*{10,}|\Z)',
+                        nfo_raw, _re.DOTALL)
+        nfo_content = _m.group(1).strip() + "\n" if _m else nfo_raw.strip() + "\n"
+
+        # Disc label (Label prioritaire sur Title)
+        _disc_label = None
+        for _pri in ('Label', 'Title'):
+            for _line in nfo_content.splitlines():
+                _mm = _re.match(r'^Disc\s+' + _pri + r'\s*:\s*(.+)', _line, _re.IGNORECASE)
+                if _mm:
+                    _disc_label = _mm.group(1).strip().replace(" ", "_")
+                    break
+            if _disc_label:
+                break
+        if not _disc_label:
+            _disc_label = _src.stem
+
+        # Sauvegarder .txt + .nfo
+        _out_txt = _nfo_dir / (_disc_label + ".txt")
+        _out_nfo = _nfo_dir / (_disc_label + ".nfo")
+        for _out in (_out_txt, _out_nfo):
+            with open(_out, "w", encoding="utf-8") as _of:
+                _of.write(nfo_content)
+        if _src not in (_out_txt, _out_nfo):
+            try: _src.unlink()
+            except Exception: pass
+
+        self._emit("bdinfo_status", {"msg": "💾 %s (.txt + .nfo)" % _disc_label, "level": "success"})
+        self._emit("bdinfo_done", {
+            "ok":       True,
+            "content":  nfo_content,
+            "nfo_name": _out_nfo.name,
+            "lines":    len(nfo_content.splitlines()),
+        })
+
+    def browse_iso_bdinfo(self):
+        """Ouvre un sélecteur de fichier pour choisir un .iso Blu-ray."""
+        films_dir = BASE_DIR / "FILMS"
+        start_dir = str(films_dir) if films_dir.exists() else str(Path.home())
+        try:
+            result = self.window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                directory=start_dir,
+                file_types=("ISO (*.iso)",)
+            )
+        except Exception:
+            # Fallback sans filtre si pywebview ne supporte pas file_types
+            result = self.window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                directory=start_dir
+            )
+        if result and result[0]:
+            return {"path": result[0]}
+        return {"path": ""}
+
+    # ------------------------------------------------------------------
+    # Helpers montage / démontage ISO (cross-platform)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _mount_iso(iso_path):
+        """Monte un fichier ISO et retourne (mount_point, mount_info).
+        mount_info est un dict utilisé par _unmount_iso pour nettoyer.
+        Supporte macOS (hdiutil), Linux (udisksctl) et Windows (PowerShell).
+        """
+        import subprocess as _sp
+        import platform as _platform
+        import re as _re2
+
+        sys_name = _platform.system()
+
+        if sys_name == "Darwin":
+            # hdiutil attach — pas besoin de sudo, mount point dans la sortie
+            out = _sp.check_output(
+                ["hdiutil", "attach", "-nobrowse", "-noverify", iso_path],
+                stderr=_sp.DEVNULL
+            ).decode("utf-8", errors="replace")
+            # Dernière ligne : /dev/diskXsN  Apple_HFS  /Volumes/NAME
+            for line in reversed(out.splitlines()):
+                parts = line.split("\t")
+                if len(parts) >= 3:
+                    mount_pt = parts[-1].strip()
+                    dev      = parts[0].strip()
+                    if mount_pt.startswith("/Volumes/"):
+                        return mount_pt, {"sys": "darwin", "dev": dev, "mount": mount_pt}
+            raise RuntimeError("hdiutil : mount point introuvable dans :\n" + out)
+
+        elif sys_name == "Linux":
+            # udisksctl loop-setup (pas besoin de sudo)
+            out_loop = _sp.check_output(
+                ["udisksctl", "loop-setup", "-f", iso_path],
+                stderr=_sp.PIPE
+            ).decode("utf-8", errors="replace")
+            # "Mapped file ... as /dev/loop0."
+            m = _re2.search(r"as (/dev/loop\S+)\.", out_loop)
+            if not m:
+                raise RuntimeError("udisksctl loop-setup : " + out_loop.strip())
+            loop_dev = m.group(1).rstrip(".")
+
+            out_mnt = _sp.check_output(
+                ["udisksctl", "mount", "-b", loop_dev],
+                stderr=_sp.PIPE
+            ).decode("utf-8", errors="replace")
+            # "Mounted /dev/loop0 at /run/media/user/NAME."
+            m2 = _re2.search(r"at (/\S+)\.", out_mnt)
+            if not m2:
+                raise RuntimeError("udisksctl mount : " + out_mnt.strip())
+            mount_pt = m2.group(1).rstrip(".")
+            return mount_pt, {"sys": "linux", "loop": loop_dev, "mount": mount_pt}
+
+        elif sys_name == "Windows":
+            iso_path_w = iso_path.replace("/", "\\")
+            # Monter
+            _sp.check_call(
+                ["powershell", "-Command",
+                 'Mount-DiskImage -ImagePath "%s"' % iso_path_w],
+                stdout=_sp.DEVNULL, stderr=_sp.DEVNULL
+            )
+            # Récupérer la lettre de lecteur
+            out = _sp.check_output(
+                ["powershell", "-Command",
+                 '(Get-DiskImage -ImagePath "%s" | Get-Volume).DriveLetter' % iso_path_w],
+                stderr=_sp.DEVNULL
+            ).decode("utf-8", errors="replace").strip()
+            if not out:
+                raise RuntimeError("PowerShell : lettre de lecteur introuvable")
+            drive = out[0].upper() + ":\\"
+            return drive, {"sys": "windows", "iso": iso_path_w, "mount": drive}
+
+        else:
+            raise RuntimeError("OS non supporté pour le montage ISO : " + sys_name)
+
+    @staticmethod
+    def _unmount_iso(mount_info):
+        """Démonte un ISO précédemment monté par _mount_iso."""
+        import subprocess as _sp
+
+        sys_name = mount_info.get("sys", "")
+
+        if sys_name == "darwin":
+            _sp.call(["hdiutil", "detach", "-force", mount_info["dev"]],
+                     stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+
+        elif sys_name == "linux":
+            _sp.call(["udisksctl", "unmount", "-b", mount_info["loop"]],
+                     stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            _sp.call(["udisksctl", "loop-delete", "-b", mount_info["loop"]],
+                     stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+
+        elif sys_name == "windows":
+            _sp.call(
+                ["powershell", "-Command",
+                 'Dismount-DiskImage -ImagePath "%s"' % mount_info["iso"]],
+                stdout=_sp.DEVNULL, stderr=_sp.DEVNULL
+            )
+
     def run_bdinfo_scan(self, folder_path: str):
         """Lance BDInfoCLI sur folder_path (thread séparé).
         Cherche le dossier BDMV à l'intérieur si nécessaire.
@@ -309,6 +508,21 @@ class API:
 
         _status("▶ " + Path(folder_path).name)
 
+        # ── 0. Montage ISO si nécessaire ─────────────────────────────────────
+        iso_mount_info = None   # sera peuplé si on monte un ISO
+        if folder_path.lower().endswith(".iso"):
+            _status("📀 ISO détecté — montage en cours…")
+            try:
+                mounted_root, iso_mount_info = self._mount_iso(folder_path)
+                _status("✔ ISO monté : " + mounted_root)
+                # On travaille sur le point de montage comme si c'était un dossier
+                folder_path = mounted_root
+            except Exception as e_iso:
+                err = "Impossible de monter l'ISO : %s" % e_iso
+                _status("✖ " + err, "error")
+                self._emit("bdinfo_done", {"ok": False, "error": err})
+                return
+
         # ── 1. Trouver le dossier racine contenant BDMV ───────────────────────
         scan_root = folder_path
         folder_path_obj = Path(folder_path)
@@ -327,6 +541,251 @@ class API:
             if found_bdmv:
                 scan_root = str(found_bdmv)
 
+        # nfo_dir défini tôt pour Wine (réutilisé aussi en section 4)
+        nfo_dir = BASE_DIR / "BDINFO"
+        nfo_dir.mkdir(exist_ok=True)
+
+        # ── 1b. Wine / Whisky — BDInfo.exe Windows (résultats exacts) ───────────
+        #
+        # Variables d'environnement requises :
+        #   BDINFO_WIN_EXE  = chemin absolu vers BDInfo.exe  (ex: ~/Wine/BDInfo.exe)
+        #
+        # Installation sur macOS :
+        #   brew install --cask wine-stable          (ou utiliser Whisky)
+        #   export BDINFO_WIN_EXE="$HOME/Wine/BDInfo.exe"
+        #
+        # BDInfo.exe v0.7.5.5 est une app GUI WinForms. Sous Wine, elle nécessite
+        # un display (XQuartz sur macOS, ou DISPLAY=:0). Whisky configure cela
+        # automatiquement. L'exe accepte le chemin du disque en argument et génère
+        # un rapport dans le répertoire de sortie.
+        # ─────────────────────────────────────────────────────────────────────────
+        import shutil as _shutil_wine, time as _time_wine
+        _bdinfo_win_exe = os.getenv("BDINFO_WIN_EXE", "")
+
+        # Chercher wine64 : PATH d'abord, puis Whisky, puis wine-stable
+        _whisky_wine = str(Path.home() /
+            "Library/Application Support/com.isaacmarovitz.Whisky"
+            "/Libraries/Wine/bin/wine64")
+        _wine_bin = (
+            _shutil_wine.which("wine64")
+            or (_whisky_wine if Path(_whisky_wine).exists() else None)
+            or _shutil_wine.which("wine")
+        )
+
+        if _bdinfo_win_exe and _wine_bin and Path(_bdinfo_win_exe).exists():
+            _status("🍷 Wine détecté — lancement de BDInfo.exe…")
+
+            def _posix_to_wine(p: str) -> str:
+                """Convertit /chemin/posix → Z:\\chemin\\windows"""
+                return "Z:" + p.replace("/", "\\")
+
+            z_scan = _posix_to_wine(str(scan_root))
+            z_nfo  = _posix_to_wine(str(nfo_dir))
+
+            wine_env = os.environ.copy()
+            wine_env["WINEDEBUG"] = "-all"          # masque les messages debug Wine
+
+            # WINEPREFIX : utiliser le prefix Whisky s'il existe, sinon ~/.wine
+            _whisky_prefix = str(Path.home() /
+                "Library/Application Support/com.isaacmarovitz.Whisky/Bottles")
+            _default_bottle = Path(_whisky_prefix)
+            # Chercher le premier bottle Whisky disponible
+            _whisky_bottle = None
+            if _default_bottle.exists():
+                _bottles = sorted(_default_bottle.iterdir())
+                if _bottles:
+                    _whisky_bottle = str(_bottles[0])
+            wine_env["WINEPREFIX"] = (
+                _whisky_bottle
+                or os.getenv("WINEPREFIX", str(Path.home() / ".wine"))
+            )
+            # Sur macOS, Whisky/XQuartz expose DISPLAY automatiquement.
+            if "DISPLAY" not in wine_env:
+                wine_env["DISPLAY"] = ":0"
+
+            # BDInfo.exe <disc_path> <output_dir>  — ouvre la fenêtre ET auto-scanne
+            wine_cmd = [_wine_bin, _bdinfo_win_exe, z_scan, z_nfo]
+            _status("→ " + " ".join(wine_cmd))
+
+            WINE_TIMEOUT = int(os.getenv("BDINFO_WINE_TIMEOUT", "1800"))  # 30 min par défaut
+            _wine_nfo_before = (
+                set(str(p) for p in Path(nfo_dir).glob("*.txt"))
+                | set(str(p) for p in Path(nfo_dir).glob("*.nfo"))
+                | set(str(p) for p in Path(nfo_dir).glob("*.rtf"))
+            )
+
+            try:
+                wine_proc = subprocess.Popen(
+                    wine_cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True, encoding="utf-8", errors="replace",
+                    env=wine_env
+                )
+                self._wine_proc = wine_proc   # exposé pour kill depuis load_existing_bdinfo
+
+                _wine_nfo_file = None
+                _wine_done    = False
+                _wine_start   = _time_wine.time()
+                _wine_tick    = 0
+
+                def _wine_reader():
+                    nonlocal _wine_nfo_file, _wine_done
+                    for ln in wine_proc.stdout:
+                        ln = ln.rstrip()
+                        if any(ln.startswith(pfx) for pfx in
+                               ("fixme:", "err:", "warn:", "trace:", "wine:")):
+                            continue
+                        if ln:
+                            _output(ln)
+                    _wine_done = True
+
+                _wine_th = threading.Thread(target=_wine_reader, daemon=True)
+                _wine_th.start()
+
+                # Mode manuel : l'utilisateur clique lui-même sur Scan Bitrates
+                # puis View Report dans la fenêtre BDInfo, et sauvegarde dans nfo_dir.
+                _status("🖱 BDInfo ouvert — clique Scan Bitrates puis View Report…")
+                _status("💾 Sauvegarde le rapport dans : %s" % str(nfo_dir))
+
+                # Polling principal : attendre qu'un fichier .txt / .nfo apparaisse
+                while _time_wine.time() - _wine_start < WINE_TIMEOUT:
+                    _time_wine.sleep(2)
+                    _wine_tick += 2
+
+                    # Chercher un nouveau rapport (.txt, .nfo ou .rtf depuis TextEdit)
+                    _now_files = (
+                        set(str(p) for p in Path(nfo_dir).glob("*.txt"))
+                        | set(str(p) for p in Path(nfo_dir).glob("*.nfo"))
+                        | set(str(p) for p in Path(nfo_dir).glob("*.rtf"))
+                    )
+                    _new = _now_files - _wine_nfo_before
+                    if _new:
+                        _wine_nfo_file = sorted(
+                            _new,
+                            key=lambda x: Path(x).stat().st_mtime,
+                            reverse=True
+                        )[0]
+                        break
+
+                    # Si le processus est déjà sorti sans créer de fichier
+                    if _wine_done and wine_proc.poll() is not None:
+                        break
+
+                # Terminer le processus Wine si encore actif (BDInfo GUI reste ouvert)
+                if wine_proc.poll() is None:
+                    try: wine_proc.terminate()
+                    except Exception: pass
+
+                if _wine_nfo_file:
+                    with open(_wine_nfo_file, "r", encoding="utf-8", errors="replace") as _nf:
+                        nfo_raw = _nf.read()
+
+                    # Convertir RTF en texte brut si nécessaire (TextEdit sauvegarde en RTF)
+                    import re as _re
+                    if _wine_nfo_file.endswith(".rtf"):
+                        _rtf = nfo_raw
+                        _rtf = _re.sub(r'\\par\b', '\n', _rtf)
+                        _rtf = _re.sub(r'\\line\b', '\n', _rtf)
+                        _rtf = _re.sub(r'\\[a-zA-Z]+\-?[0-9]*\s?', '', _rtf)
+                        _rtf = _rtf.replace('{', '').replace('}', '').replace('\\', '')
+                        _rtf = _re.sub(r'\n{3,}', '\n\n', _rtf)
+                        nfo_raw = _rtf.strip()
+                        # Supprimer les débris de font-table en début de fichier
+                        _fd = _re.search(r'^Disc\s+(?:Title|Label)\s*:', nfo_raw, _re.MULTILINE)
+                        if _fd:
+                            nfo_raw = nfo_raw[_fd.start():]
+
+                    # ── Post-traitement : garder seulement la playlist principale ──
+                    # 1. Extraire le nom du disque — préférer Disc Label (ex: THE_STRANGERS_CHAPTER_3_BD)
+                    _disc_label = None
+                    for _priority in ('Label', 'Title'):
+                        for _line in nfo_raw.splitlines():
+                            _m = _re.match(r'^Disc\s+' + _priority + r'\s*:\s*(.+)', _line, _re.IGNORECASE)
+                            if _m:
+                                _disc_label = _m.group(1).strip().replace(" ", "_")
+                                break
+                        if _disc_label:
+                            break
+                    if not _disc_label:
+                        # fallback : utiliser le nom du fichier brut sans extension
+                        _disc_label = Path(_wine_nfo_file).stem
+
+                    # 2. Découper le rapport en sections par playlist
+                    #    Chaque section commence par "PLAYLIST:" ou "Name:" + .MPLS
+                    _sections = _re.split(
+                        r'(?=^\*{3,}\nPLAYLIST:|\bPLAYLIST:\s+\S+\.MPLS|^Name:\s+\S+\.MPLS)',
+                        nfo_raw, flags=_re.MULTILINE)
+                    _header = _sections[0] if _sections else ""
+                    _playlist_secs = _sections[1:] if len(_sections) > 1 else []
+
+                    # 3. Choisir la playlist principale :
+                    #    - préférer 00001.MPLS s'il existe
+                    #    - sinon prendre celle avec la plus longue durée (HH:MM:SS)
+                    def _parse_duration(sec_text):
+                        _dm = _re.search(
+                            r'Length\s*:\s*(\d+):(\d+):(\d+)', sec_text, _re.IGNORECASE)
+                        if _dm:
+                            return int(_dm.group(1))*3600 + int(_dm.group(2))*60 + int(_dm.group(3))
+                        return 0
+
+                    _main_sec = None
+                    for _s in _playlist_secs:
+                        if _re.search(r'(?:PLAYLIST|Name)\s*:\s*00001\.MPLS', _s, _re.IGNORECASE):
+                            _main_sec = _s
+                            break
+                    if _main_sec is None and _playlist_secs:
+                        _main_sec = max(_playlist_secs, key=_parse_duration)
+
+                    nfo_content = (_header.rstrip() + "\n\n" + _main_sec.strip() + "\n"
+                                   if _main_sec else nfo_raw)
+
+                    # 4. Sauvegarder .txt ET .nfo avec le nom du disque
+                    _out_stem = _disc_label
+                    _out_txt  = nfo_dir / (_out_stem + ".txt")
+                    _out_nfo  = nfo_dir / (_out_stem + ".nfo")
+                    for _out_path in (_out_txt, _out_nfo):
+                        with open(_out_path, "w", encoding="utf-8") as _of:
+                            _of.write(nfo_content)
+                    _status("💾 Rapport sauvegardé : %s (.txt + .nfo)" % _out_stem)
+                    # Supprimer le fichier brut généré par BDInfo si différent
+                    _wine_nfo_path_obj = Path(_wine_nfo_file)
+                    if _wine_nfo_path_obj not in (_out_txt, _out_nfo):
+                        try: _wine_nfo_path_obj.unlink()
+                        except Exception: pass
+
+                    _status("✔ BDInfo.exe (Wine) — rapport généré en %ds" %
+                            int(_time_wine.time() - _wine_start))
+                    self._emit("bdinfo_done", {
+                        "ok":       True,
+                        "content":  nfo_content,
+                        "nfo_name": _out_nfo.name,
+                        "lines":    len(nfo_content.splitlines()),
+                    })
+                    if iso_mount_info:
+                        try: self._unmount_iso(iso_mount_info)
+                        except Exception: pass
+                    return
+                else:
+                    rc = wine_proc.returncode if wine_proc.returncode is not None else "?"
+                    err_msg = "BDInfo.exe (Wine) n'a produit aucun rapport (code=%s)" % rc
+                    _status("✖ " + err_msg, "error")
+                    self._emit("bdinfo_done", {"ok": False, "error": err_msg})
+                    if iso_mount_info:
+                        try: self._unmount_iso(iso_mount_info)
+                        except Exception: pass
+                    return
+
+            except Exception as e_wine:
+                err_msg = "Erreur Wine : %s" % e_wine
+                _status("✖ " + err_msg, "error")
+                self._emit("bdinfo_done", {"ok": False, "error": err_msg})
+                if iso_mount_info:
+                    try: self._unmount_iso(iso_mount_info)
+                    except Exception: pass
+                return
+
         # ── 2. Localiser dotnet et BDInfo.dll ────────────────────────────────
         bdinfo_dll = os.getenv("BDINFO_CLI_PATH", "")
         if not bdinfo_dll:
@@ -344,6 +803,9 @@ class API:
         if not bdinfo_dll:
             _status("✖ BDInfo.dll introuvable — configurez BDINFO_CLI_PATH", "error")
             self._emit("bdinfo_done", {"ok": False, "error": "BDInfo.dll introuvable"})
+            if iso_mount_info:
+                try: self._unmount_iso(iso_mount_info)
+                except Exception: pass
             return
 
         dotnet_candidates = [
@@ -670,12 +1132,9 @@ class API:
                                 _status("→ q (fin de sélection)")
 
                         elif "continue" in prompt_low and "scanning" in prompt_low:
-                            # "Continue scanning? [y/N]" → demander à l'user
-                            self._emit("bdinfo_waiting_input", {
-                                "prompt": prompt + "\n\nTaper y pour lancer le scan M2TS réel (bitrates vrais)\nou n pour générer sans scan (bitrates calculés)"
-                            })
-                            waiting_user = True
-                            _status("⌨ Continue scanning? — ta décision…")
+                            # "Continue scanning? [y/N]" → toujours y (scan complet)
+                            _send("y")
+                            _status("→ y (scan M2TS complet)")
 
                         elif prompt:
                             # Prompt inconnu → demander à l'utilisateur
@@ -695,7 +1154,8 @@ class API:
                 text = buf.decode("utf-8", errors="replace")
                 buf  = b""
                 text = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
-                text = text.replace("\r", "")
+                # \r\n → newline ; \r seul (mise à jour de progression) → newline aussi
+                text = text.replace("\r\n", "\n").replace("\r", "\n")
 
                 lines = text.split("\n")
                 buf   = lines[-1].encode()
@@ -703,6 +1163,12 @@ class API:
                 for ln in lines[:-1]:
                     ln = ln.rstrip()
                     if not ln:
+                        continue
+
+                    # Ligne de progression M2TS "XXXXX.M2TS  HH:MM:SS  HH:MM:SS"
+                    # → status (mise à jour en temps réel, pas dans le rapport)
+                    if _re.search(r'\.M2TS\s+\d+:\d+:\d+', ln, _re.IGNORECASE):
+                        _status("⏱ " + ln.strip())
                         continue
 
                     # Parser le listing pour trouver le vrai numéro de main_pl
@@ -730,6 +1196,141 @@ class API:
             self._emit("bdinfo_hide_input", {})
             return p.returncode
 
+        def _run_bdinfo_winpty(label):
+            """Windows ConPTY via pywinpty : même logique interactive que le PTY Unix.
+            Un thread lecteur alimente une queue ; la boucle principale détecte les
+            prompts par silence de 2 s (identique au chemin Unix).
+            """
+            from winpty import PtyProcess
+            import threading as _threading
+
+            nonlocal _pl_number
+
+            cmd_str = " ".join(
+                '"%s"' % c if " " in c else c
+                for c in [dotnet_bin, bdinfo_dll, scan_root, str(nfo_dir)]
+            )
+            _status(label)
+
+            # Largeur généreuse pour ne pas tronquer les lignes de listing
+            proc = PtyProcess.spawn(
+                [dotnet_bin, bdinfo_dll, scan_root, str(nfo_dir)],
+                env=env,
+                dimensions=(50, 260),
+            )
+
+            read_q   = _q.Queue()
+            eof_evt  = _threading.Event()
+
+            def _reader():
+                while True:
+                    try:
+                        chunk = proc.read(8192)
+                        if chunk:
+                            read_q.put(chunk)
+                        if not proc.isalive():
+                            break
+                    except EOFError:
+                        break
+                    except Exception:
+                        break
+                eof_evt.set()
+
+            _threading.Thread(target=_reader, daemon=True).start()
+
+            buf            = ""
+            playlist_added = False
+            waiting_user   = False
+
+            def _send(text):
+                proc.write(text + "\r\n")
+
+            while True:
+                # ── Lire avec timeout 2 s ──────────────────────────────────────
+                try:
+                    chunk = read_q.get(timeout=2)
+                except _q.Empty:
+                    chunk = None
+
+                if chunk is not None:
+                    buf += chunk
+                    # Décoder ANSI + normaliser fins de ligne
+                    text = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", buf)
+                    text = text.replace("\r\n", "\n").replace("\r", "\n")
+                    lines = text.split("\n")
+                    buf   = lines[-1]           # fragment incomplet → réserver
+
+                    for ln in lines[:-1]:
+                        ln = ln.rstrip()
+                        if not ln:
+                            continue
+
+                        # Ligne de progression M2TS "XXXXX.M2TS  HH:MM:SS  HH:MM:SS"
+                        if _re.search(r'\.M2TS\s+\d+:\d+:\d+', ln, _re.IGNORECASE):
+                            _status("⏱ " + ln.strip())
+                            continue
+
+                        # Parser le listing → trouver le numéro du bon MPLS
+                        if not playlist_added and main_pl.upper() in ln.upper():
+                            mpls_pos = ln.upper().index(main_pl.upper())
+                            pre_nums = _re.findall(r"\b(\d+)\b", ln[:mpls_pos])
+                            if pre_nums:
+                                _pl_number = pre_nums[0]
+                                _status("→ %s = #%s dans le listing BDInfoCLI"
+                                        % (main_pl, _pl_number))
+
+                        _output(ln)
+
+                    if waiting_user:
+                        self._emit("bdinfo_hide_input", {})
+                        waiting_user = False
+
+                else:
+                    # ── Timeout 2 s — aucune donnée ───────────────────────────
+                    if eof_evt.is_set() and read_q.empty():
+                        break   # processus terminé + queue vide
+
+                    if waiting_user:
+                        try:
+                            user_text = self._bdinfo_input_queue.get_nowait()
+                            _send(user_text)
+                            waiting_user = False
+                            self._emit("bdinfo_hide_input", {})
+                            _status("→ « " + user_text + " » envoyé")
+                        except _q.Empty:
+                            pass
+                    else:
+                        prompt     = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", buf).strip()
+                        prompt_low = prompt.lower()
+
+                        if "select" in prompt_low and "when finished" in prompt_low:
+                            if not playlist_added:
+                                _send(_pl_number)
+                                playlist_added = True
+                                _status("→ Playlist #" + _pl_number
+                                        + " (" + main_pl + ") auto-sélectionnée")
+                            else:
+                                _send("q")
+                                _status("→ q (fin de sélection)")
+
+                        elif "continue" in prompt_low and "scanning" in prompt_low:
+                            # Toujours scanner complètement
+                            _send("y")
+                            _status("→ y (scan M2TS complet)")
+
+                        elif prompt:
+                            self._emit("bdinfo_waiting_input", {"prompt": prompt})
+                            waiting_user = True
+                            _status("⌨ En attente de ta saisie…")
+
+            try:
+                proc.close()
+            except Exception:
+                pass
+            self._emit("bdinfo_hide_input", {})
+            rc = proc.exitstatus
+            return rc if rc is not None else 0
+
         # Timestamp AVANT le scan pour trouver les fichiers créés/modifiés après
         scan_start = _time.time()
 
@@ -737,10 +1338,15 @@ class API:
             _status("Scan interactif %s via PTY…" % main_pl)
             rc = _run_bdinfo_interactive_pty("BDInfoCLI en cours…")
         except ImportError:
-            # Windows : pas de module pty → fallback -m + patch bitrates
-            _status("⚠ PTY non dispo → -m + calcul bitrates")
-            rc = _run_bdinfo_to_file(["-m", main_pl], nfo_dir,
-                                     "Scan -m " + main_pl + "…")
+            # Pas de pty Unix → essayer pywinpty (Windows ConPTY)
+            try:
+                _status("Scan interactif %s via WinPTY…" % main_pl)
+                rc = _run_bdinfo_winpty("BDInfoCLI (WinPTY) en cours…")
+            except ImportError:
+                # Aucun PTY dispo → fallback -m + patch bitrates
+                _status("⚠ PTY non dispo → -m + calcul bitrates")
+                rc = _run_bdinfo_to_file(["-m", main_pl], nfo_dir,
+                                         "Scan -m " + main_pl + "…")
 
         # ── 4. Lire le rapport généré par BDInfoCLI ───────────────────────────
         # Chercher le fichier le plus récent dans nfo_dir modifié APRÈS scan_start
@@ -779,9 +1385,44 @@ class API:
             err_msg = "BDInfoCLI n'a produit aucun rapport"
             _status("✖ " + err_msg, "error")
             self._emit("bdinfo_done", {"ok": False, "error": err_msg})
+            if iso_mount_info:
+                try: self._unmount_iso(iso_mount_info)
+                except Exception: pass
             return
 
-        # ── 5. Filtrer : garder uniquement DISC INFO → FILES (exclu) ─────────
+        # ── 5. Parser STREAM DIAGNOSTICS avant filtrage ──────────────────────
+        # BDInfoCLI v0.8.0.0 calcule le bitrate vidéo sur les bytes PES payload
+        # (trop bas). BDInfo v0.7.5.5 utilise : packets × 184 × 8 / durée / 1000
+        # (184 = taille payload TS = 188 - 4 bytes header).
+        # On recalcule ici depuis les données de STREAM DIAGNOSTICS qui sont exactes.
+        import re as _re_sd
+        video_pid      = 0x1011   # défaut Blu-ray
+        sd_kbps_exact  = None     # bitrate recalculé depuis STREAM DIAGNOSTICS
+
+        # Format : "FICHIER  PID (0xHEX)  TYPE  CODEC  LANG  SECONDES  BITRATE  BYTES  PAQUETS"
+        _sd_video = _re_sd.search(
+            r'(\w+\.M2TS)\s+(\d+)\s+\(0x[\dA-Fa-f]+\)\s+'   # fichier, PID
+            r'0x(?:1[Bb]|24|EA)\s+'                            # type vidéo AVC/HEVC/VC-1
+            r'\S+\s+'                                           # codec
+            r'\S*\s*'                                           # langue (optionnel)
+            r'([\d.]+)\s+'                                      # secondes
+            r'[\d,]+\s+'                                        # bitrate (PES — ignoré)
+            r'[\d,]+\s+'                                        # bytes PES (ignoré)
+            r'([\d,]+)',                                         # paquets TS ← la vraie donnée
+            output_text, _re_sd.IGNORECASE
+        )
+        if _sd_video:
+            video_pid   = int(_sd_video.group(2))
+            sd_dur      = float(_sd_video.group(3))
+            sd_pkts     = int(_sd_video.group(4).replace(',', ''))
+            if sd_dur > 0 and sd_pkts > 0:
+                # BDInfo v0.7.5.5 : paquets × 184 × 8 / durée / 1000
+                # (184 = 188 bytes TS − 4 bytes header)
+                sd_kbps_exact = round(sd_pkts * 184 * 8 / sd_dur / 1000)
+                _status("→ STREAM DIAG PID %d : %d paquets × 184 B / %.3f s = %d kbps"
+                        % (video_pid, sd_pkts, sd_dur, sd_kbps_exact))
+
+        # ── 5b. Filtrer : garder uniquement DISC INFO → FILES (exclu) ────────
         def _extract_disc_info(text):
             lines = text.splitlines()
             result = []
@@ -805,12 +1446,78 @@ class API:
         if filtered:
             output_text = filtered
 
-        # ── 5b. Corrections bitrates BDInfoCLI via pymediainfo ───────────────────
-        # BDInfoCLI-ng v0.8.0.0 donne un bitrate vidéo faux dans deux cas :
-        #  • Mode -m (Windows sans pty) : métadonnées seulement, pas de scan stream
-        #  • OOM sur gros M2TS (>20 GB)  : scan partiel → bitrate sous-estimé
-        # Correction : pymediainfo (libmediainfo, déjà installé) lit le vrai
-        # bitrate directement dans le fichier M2TS sans charger tout le fichier.
+        # ── 5c. Mesure exacte du bitrate vidéo par comptage de paquets TS ────
+        # Même algorithme que BDInfo : pour chaque paquet TS du PID vidéo,
+        # on cumule 188 octets. bitrate = (total_bytes × 8) / durée / 1000.
+        # Numpy utilisé pour la vitesse (fallback pur Python si absent).
+
+        def _measure_video_kbps_ts(paths, dur_sec, pid):
+            """Compte les paquets TS du PID vidéo dans les fichiers M2TS.
+            Retourne le bitrate en kbps (int) ou None."""
+            if dur_sec <= 0 or not paths:
+                return None
+            total_video_bytes = 0
+            for path in paths:
+                path = str(path)
+                if not os.path.exists(path):
+                    continue
+                _status("⏱ Comptage paquets TS : %s…" % os.path.basename(path))
+                try:
+                    with open(path, 'rb') as f:
+                        probe = f.read(384)
+                        f.seek(0)
+                        if len(probe) >= 192 and probe[4] == 0x47:
+                            pkt_size, ts_off = 192, 4
+                        else:
+                            pkt_size, ts_off = 188, 0
+                        try:
+                            import numpy as _np
+                            CHUNK   = 64 * 1024 * 1024   # 64 MB
+                            leftover = b""
+                            while True:
+                                raw = leftover + f.read(CHUNK)
+                                if not raw:
+                                    break
+                                arr = _np.frombuffer(raw, dtype=_np.uint8)
+                                n = len(arr) // pkt_size
+                                if n == 0:
+                                    leftover = bytes(arr)
+                                    continue
+                                m = arr[:n * pkt_size].reshape(n, pkt_size)
+                                sync = m[:, ts_off] == 0x47
+                                hi   = (m[:, ts_off + 1].astype(_np.uint16) & 0x1F) << 8
+                                lo   =  m[:, ts_off + 2].astype(_np.uint16)
+                                pids = hi | lo
+                                total_video_bytes += int(_np.sum(sync & (pids == pid))) * 184
+                                leftover = bytes(arr[n * pkt_size:])
+                        except ImportError:
+                            # Fallback pur Python — plus lent
+                            CHUNK    = 8 * 1024 * 1024
+                            leftover = b""
+                            while True:
+                                raw = leftover + f.read(CHUNK)
+                                if not raw:
+                                    break
+                                n = len(raw) // pkt_size
+                                if n == 0:
+                                    leftover = raw
+                                    continue
+                                for i in range(n):
+                                    b = i * pkt_size + ts_off
+                                    if raw[b] != 0x47:
+                                        continue
+                                    p = ((raw[b+1] & 0x1F) << 8) | raw[b+2]
+                                    if p == pid:
+                                        total_video_bytes += 184
+                                leftover = raw[n * pkt_size:]
+                except Exception as e_ts:
+                    _status("⚠ Comptage TS erreur : %s" % e_ts, "warning")
+                    continue
+            if total_video_bytes == 0:
+                return None
+            kbps = round(total_video_bytes * 8 / dur_sec / 1000)
+            _status("✔ Bitrate vidéo mesuré (TS) : %d kbps" % kbps)
+            return kbps
 
         def _get_video_kbps_mediainfo(m2ts_paths):
             """
@@ -897,12 +1604,21 @@ class API:
                 100 * (total_kbps - stream_kbps) / total_kbps
                 if total_kbps > 0 else 0
             )
-            _status("→ Vérif : total=%.0f kbps, streams=%.0f kbps, manquant=%.0f%%"
-                    % (total_kbps, stream_kbps, unaccounted_pct))
+            # Détection overcounting : streams > total → BDInfoCLI a surestimé la vidéo
+            overcounting = (total_kbps > 0 and stream_kbps > total_kbps * 1.02)
+            _status("→ Vérif : total=%.0f kbps, streams=%.0f kbps, manquant=%.0f%%%s"
+                    % (total_kbps, stream_kbps, unaccounted_pct,
+                       " ⚠OVERCOUNTING" if overcounting else ""))
+
+            needs_fix = (unaccounted_pct > 20 or overcounting)
 
             video_fixed = False
-            if unaccounted_pct > 20 and m2ts_paths and duration_sec > 0:
-                _status("⚙ Scan partiel (%.0f%% manquant) → MediaInfo…" % unaccounted_pct)
+            if needs_fix and m2ts_paths and duration_sec > 0:
+                if overcounting:
+                    _status("⚙ Overcounting (streams %.0f kbps > total %.0f kbps) → MediaInfo…"
+                            % (stream_kbps, total_kbps))
+                else:
+                    _status("⚙ Scan partiel (%.0f%% manquant) → MediaInfo…" % unaccounted_pct)
                 corrected = _get_video_kbps_mediainfo(m2ts_paths)
                 if corrected:
                     result2 = []
@@ -926,17 +1642,58 @@ class API:
 
             return "\n".join(lines), video_fixed
 
-        # Appliquer si on a les tailles M2TS
+        # ── 5d. Corriger Size/Bitrate à zéro si nécessaire ────────────────────
         if main_pl_bytes > 0:
-            output_text, _video_fixed = _patch_bitrates(
-                output_text, main_pl_bytes, main_pl_clips
-            )
-            if _video_fixed:
-                _status("✔ Bitrate vidéo corrigé via MediaInfo", "success")
+            output_text, _ = _patch_bitrates(output_text, main_pl_bytes, main_pl_clips)
+
+        # ── 5e. Corriger le bitrate vidéo ─────────────────────────────────────
+        # BDInfoCLI v0.8.0.0 calcule le bitrate sur les bytes PES payload au lieu
+        # de paquets × 184 bytes (payload TS = 188 - 4 header).
+        # Méthode 1 (prioritaire, instantanée) : recalculer depuis STREAM DIAGNOSTICS
+        # Méthode 2 (fallback) : lire les fichiers M2TS et compter les paquets
+
+        def _apply_video_kbps(kbps, label):
+            """Remplace la ligne vidéo kbps dans output_text."""
+            nonlocal output_text
+            import re as _re_v2
+            _lines = output_text.splitlines()
+            for _i, _ln in enumerate(_lines):
+                _vm = _re_v2.match(
+                    r'^(\s*\S.*?\s+Video\s+)(\d[\d,]*)\s*(kbps)(.*)',
+                    _ln, _re_v2.IGNORECASE
+                )
+                if _vm:
+                    _lines[_i] = (_vm.group(1) + str(kbps)
+                                  + " " + _vm.group(3) + _vm.group(4))
+                    output_text = "\n".join(_lines)
+                    _status("✔ %s : %d kbps" % (label, kbps), "success")
+                    return True
+            _status("⚠ Ligne vidéo introuvable dans le rapport", "warning")
+            return False
+
+        if sd_kbps_exact:
+            # Méthode 1 : depuis STREAM DIAGNOSTICS (paquets × 184 × 8 / durée / 1000)
+            _apply_video_kbps(sd_kbps_exact, "Bitrate vidéo (paquets TS × 184)")
+
+        elif main_pl_clips:
+            # Méthode 2 : lire les fichiers M2TS — fallback si STREAM DIAGNOSTICS absent
+            # Extraire la durée du rapport
+            _dur_sec = 0.0
+            import re as _re_dur
+            _dm = _re_dur.search(r'Length:\s+(\d+):(\d+):([\d.]+)', output_text)
+            if _dm:
+                _dur_sec = (int(_dm.group(1)) * 3600
+                            + int(_dm.group(2)) * 60
+                            + float(_dm.group(3)))
+            if _dur_sec > 0:
+                _status("⏱ Comptage paquets TS (fallback)…")
+                ts_kbps = _measure_video_kbps_ts(main_pl_clips, _dur_sec, video_pid)
+                if ts_kbps:
+                    _apply_video_kbps(ts_kbps, "Bitrate vidéo (comptage M2TS)")
+                else:
+                    _status("⚠ Comptage TS échoué — valeur BDInfoCLI conservée", "warning")
             else:
-                _status("✔ Rapport traité", "success")
-        elif main_pl_bytes == 0:
-            _status("⚠ Taille M2TS inconnue — bitrates non calculés", "warning")
+                _status("⚠ Durée introuvable — valeur BDInfoCLI conservée", "warning")
 
         # Réécrire .nfo ET le fichier source (.txt ou autre) avec la version filtrée
         nfo_path.write_text(output_text, encoding="utf-8")
@@ -959,6 +1716,14 @@ class API:
             "lines":    len(output_lines),
             "content":  output_text,
         })
+
+        # ── Démontage ISO ─────────────────────────────────────────────────────
+        if iso_mount_info:
+            try:
+                self._unmount_iso(iso_mount_info)
+                _status("✔ ISO démonté")
+            except Exception as e_umount:
+                _status("⚠ Démontage ISO : %s" % e_umount, "warning")
 
     def upload_bdinfo_nfo(self, platform: str):
         """Compresse dossier film + NFO en ZIP puis upload vers Gofile/BuzzHeavier."""
