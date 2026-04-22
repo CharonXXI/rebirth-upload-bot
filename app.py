@@ -564,51 +564,63 @@ class API:
         # un rapport dans le répertoire de sortie.
         # ─────────────────────────────────────────────────────────────────────────
         import shutil as _shutil_wine, time as _time_wine
-        _bdinfo_win_exe = os.getenv("BDINFO_WIN_EXE", "")
+        _is_windows = (os.name == "nt")
 
-        # Chercher wine64 : PATH d'abord, puis Whisky, puis wine-stable
-        _whisky_wine = str(Path.home() /
-            "Library/Application Support/com.isaacmarovitz.Whisky"
-            "/Libraries/Wine/bin/wine64")
-        _wine_bin = (
-            _shutil_wine.which("wine64")
-            or (_whisky_wine if Path(_whisky_wine).exists() else None)
-            or _shutil_wine.which("wine")
-        )
+        # Chercher BDInfo.exe :
+        #   Windows → BASE_DIR/BDInfo_v0/BDInfo.exe (lancement direct, pas de Wine)
+        #   macOS   → variable BDINFO_WIN_EXE + Wine/Whisky
+        if _is_windows:
+            _bdinfo_win_exe = str(BASE_DIR / "BDInfo_v0" / "BDInfo.exe")
+            _wine_bin = None   # inutile sur Windows
+        else:
+            _bdinfo_win_exe = os.getenv("BDINFO_WIN_EXE", "")
+            _whisky_wine = str(Path.home() /
+                "Library/Application Support/com.isaacmarovitz.Whisky"
+                "/Libraries/Wine/bin/wine64")
+            _wine_bin = (
+                _shutil_wine.which("wine64")
+                or (_whisky_wine if Path(_whisky_wine).exists() else None)
+                or _shutil_wine.which("wine")
+            )
 
-        if _bdinfo_win_exe and _wine_bin and Path(_bdinfo_win_exe).exists():
-            _status("🍷 Wine détecté — lancement de BDInfo.exe…")
+        _bdinfo_ready = Path(_bdinfo_win_exe).exists() if _bdinfo_win_exe else False
+
+        if _bdinfo_ready and (_is_windows or _wine_bin):
+            if _is_windows:
+                _status("💿 BDInfo.exe détecté — lancement direct…")
+            else:
+                _status("🍷 Wine détecté — lancement de BDInfo.exe…")
 
             def _posix_to_wine(p: str) -> str:
                 """Convertit /chemin/posix → Z:\\chemin\\windows"""
                 return "Z:" + p.replace("/", "\\")
 
-            z_scan = _posix_to_wine(str(scan_root))
-            z_nfo  = _posix_to_wine(str(nfo_dir))
-
             wine_env = os.environ.copy()
-            wine_env["WINEDEBUG"] = "-all"          # masque les messages debug Wine
 
-            # WINEPREFIX : utiliser le prefix Whisky s'il existe, sinon ~/.wine
-            _whisky_prefix = str(Path.home() /
-                "Library/Application Support/com.isaacmarovitz.Whisky/Bottles")
-            _default_bottle = Path(_whisky_prefix)
-            # Chercher le premier bottle Whisky disponible
-            _whisky_bottle = None
-            if _default_bottle.exists():
-                _bottles = sorted(_default_bottle.iterdir())
-                if _bottles:
-                    _whisky_bottle = str(_bottles[0])
-            wine_env["WINEPREFIX"] = (
-                _whisky_bottle
-                or os.getenv("WINEPREFIX", str(Path.home() / ".wine"))
-            )
-            # Sur macOS, Whisky/XQuartz expose DISPLAY automatiquement.
-            if "DISPLAY" not in wine_env:
-                wine_env["DISPLAY"] = ":0"
+            if _is_windows:
+                # Windows : lancement direct, chemins natifs
+                wine_cmd = [_bdinfo_win_exe, str(scan_root), str(nfo_dir)]
+            else:
+                # macOS : conversion chemins POSIX → Wine Z:\...
+                z_scan = "Z:" + str(scan_root).replace("/", "\\")
+                z_nfo  = "Z:" + str(nfo_dir).replace("/", "\\")
+                wine_env["WINEDEBUG"] = "-all"
+                # WINEPREFIX Whisky
+                _whisky_prefix = Path.home() / \
+                    "Library/Application Support/com.isaacmarovitz.Whisky/Bottles"
+                _whisky_bottle = None
+                if _whisky_prefix.exists():
+                    _bottles = sorted(_whisky_prefix.iterdir())
+                    if _bottles:
+                        _whisky_bottle = str(_bottles[0])
+                wine_env["WINEPREFIX"] = (
+                    _whisky_bottle
+                    or os.getenv("WINEPREFIX", str(Path.home() / ".wine"))
+                )
+                if "DISPLAY" not in wine_env:
+                    wine_env["DISPLAY"] = ":0"
+                wine_cmd = [_wine_bin, _bdinfo_win_exe, z_scan, z_nfo]
 
-            # BDInfo.exe <disc_path> <output_dir>  — ouvre la fenêtre ET auto-scanne
-            wine_cmd = [_wine_bin, _bdinfo_win_exe, z_scan, z_nfo]
             _status("→ " + " ".join(wine_cmd))
 
             WINE_TIMEOUT = int(os.getenv("BDINFO_WINE_TIMEOUT", "1800"))  # 30 min par défaut
