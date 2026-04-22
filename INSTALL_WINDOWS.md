@@ -42,30 +42,27 @@ pip install -r NFO_CUSTOM\requirements.txt
 
 > 💡 `$env:PYTHONUTF8="1"` est nécessaire pour que `parse-torrent-name` compile correctement sur Python 3.12. Sans cette ligne, le build du package échoue avec une erreur d'encodage.
 
-### 4. BDInfoCLI (optionnel — pour l'onglet BD Info)
+### 4. BDInfo v0.7.5.6 (pour l'onglet BD Info)
 
-L'onglet **BD Info** nécessite BDInfoCLI et .NET 8.
+L'onglet **BD Info** utilise **BDInfo v0.7.5.6** (GUI Windows) lancé directement — aucun .NET ni Wine requis.
 
-```powershell
-# 1. Installer .NET 8 SDK
-# Télécharger depuis https://dotnet.microsoft.com/download/dotnet/8.0
+1. Télécharger BDInfo v0.7.5.6 (ex: depuis [VideoHelp](https://www.videohelp.com/software/BDInfo))
+2. Placer `BDInfo.exe` et ses DLLs dans le dossier **`BDInfo_v0\`** à la racine du projet :
 
-# 2. Vérifier l'installation
-dotnet --version
-
-# 3. Cloner et compiler BDInfoCLI (fork tetrahydroc)
-git clone https://github.com/zoffline/BDInfoCLI-ng.git %USERPROFILE%\BDInfoCLI
-cd %USERPROFILE%\BDInfoCLI\BDInfo
-dotnet build -c Release -r win-x64
+```
+rebirth-upload-bot\
+└── BDInfo_v0\
+    ├── BDInfo.exe       ← requis
+    ├── BDInfoLib.dll
+    └── ...
 ```
 
-Le bot détecte automatiquement `BDInfo.exe` dans `~/BDInfoCLI/`. Si besoin, renseigner le chemin manuellement dans `V1.env` :
+Le bot détecte et lance `BDInfo_v0\BDInfo.exe` automatiquement. Aucune variable d'environnement à configurer.
 
-```env
-BDINFO_CLI_PATH=C:\Users\TonUser\BDInfoCLI\BDInfo\bin\Release\net8.0\win-x64\BDInfo.exe
-```
-
-> 💡 **MakeMKV** (facultatif mais recommandé) : si installé, le bot l'utilise pour identifier automatiquement le MPLS principal avant de lancer BDInfoCLI.
+**Workflow :**
+1. Cliquer **SCANNER** dans l'onglet BD Info → BDInfo s'ouvre
+2. Dans BDInfo : Scan Bitrates → View Report → sauvegarder dans le dossier `BDINFO\`
+3. Cliquer **📂 CHARGER RAPPORT BDINFO** → le bot traite et affiche le rapport
 
 ### 5. Configurer le fichier `.env`
 
@@ -163,6 +160,5 @@ Pour partager le bot, zipper l'intégralité de `dist\REBiRTH\` (sans le `.env` 
 | Erreur NFO vide | Vérifier que le fichier `.mkv` est accessible |
 | FTP timeout | Vérifier host, port et identifiants seedbox |
 | Torrent SB : erreur HTTP 4xx | ⚠️ Fonctionnalité non fonctionnelle actuellement — à reprendre ultérieurement |
-| BD Info : `BDInfoCLI introuvable` | Vérifier que `dotnet build` a bien produit `BDInfo.exe` dans `bin\Release\net8.0\win-x64\`, ou renseigner `BDINFO_CLI_PATH` dans `V1.env` |
-| BD Info : bitrates à 0 | Limitation mémoire (BDInfoCLI a besoin de beaucoup de RAM pour scanner les gros M2TS) — la structure du rapport reste correcte |
+| BD Info : `BDInfo.exe introuvable` | Vérifier que `BDInfo.exe` est bien dans le dossier `BDInfo_v0\` à la racine du projet |
 | BD Info : `does not exist or is not a directory` | Vérifier que le dossier sélectionné contient bien un sous-dossier `BDMV\` |

@@ -88,6 +88,10 @@ export BDINFO_WIN_EXE="$HOME/Desktop/BDInfo_v0/BDInfo.exe"
 
 Voir **[INSTALL_WINDOWS.md](./INSTALL_WINDOWS.md)** pour le guide complet.
 
+#### BD Info (Windows)
+
+Placer `BDInfo.exe` et ses DLLs dans le dossier **`BDInfo_v0\`** à la racine du projet — le bot le détecte et le lance directement, sans Wine ni .NET.
+
 ---
 
 ## ⚙️ Configuration
