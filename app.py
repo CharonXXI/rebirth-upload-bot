@@ -347,6 +347,23 @@ class API:
             try: _src.unlink()
             except Exception: pass
 
+        self._bdi_last_nfo = str(_out_nfo)   # expose pour upload_bdinfo_nfo
+
+        # Chercher le dossier COMPLETE.BLURAY dans FILMS/ seulement si pas déjà set par un scan
+        if not getattr(self, "_bdi_last_folder", ""):
+            _films_dir = BASE_DIR / "FILMS"
+            _matched_folder = ""
+            if _films_dir.exists():
+                for _d in _films_dir.iterdir():
+                    if _d.is_dir() and (_disc_label.upper() in _d.name.upper() or _d.name.upper() in _disc_label.upper()):
+                        _matched_folder = str(_d)
+                        break
+            if _matched_folder:
+                self._bdi_last_folder = _matched_folder
+                self._emit("bdinfo_status", {"msg": "📁 Dossier FILMS détecté : %s" % Path(_matched_folder).name})
+            else:
+                self._emit("bdinfo_status", {"msg": "⚠ Dossier COMPLETE.BLURAY introuvable dans FILMS/ — seul le NFO sera uploadé", "level": "warning"})
+
         self._emit("bdinfo_status", {"msg": "💾 %s (.txt + .nfo)" % _disc_label, "level": "success"})
         self._emit("bdinfo_done", {
             "ok":       True,

@@ -25,6 +25,8 @@ LANGUAGE_MAP = {
     "et": "ESTONIAN",
     "tl": "FILIPINO (TAGALOG)",
     "fi": "FINNISH",
+    "fr-FR": "FRENCH",
+    "fr-CA": "FRENCH",
     "fr": "FRENCH",
     "fa": "FARSI",
     "de": "GERMAN",
@@ -48,6 +50,7 @@ LANGUAGE_MAP = {
     "ml": "MALAYALAM",
     "mr": "MARATHI",
     "ne": "NEPALI",
+    "no": "NORVEGIAN",
     "pl": "POLISH",
     "pt": "PORTUGUESE",
     "pa": "PUNJABI",
@@ -58,6 +61,7 @@ LANGUAGE_MAP = {
     "sk": "SLOVAK",
     "sl": "SLOVENIAN",
     "es": "SPANISH",
+    "es-419": "SPANISH LATIN AMERICA",
     "su": "SUNDANESE",
     "sw": "SWAHILI",
     "sv": "SWEDISH",
@@ -366,7 +370,7 @@ def generate_template(file_path, tmdb_link_override=None):
 █ ████▓▓▓▒▒▒░░░                        THX                        ░░░▒▒▒▓▓▓████ █
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 █                                                                               █
-█                             ■ Manix123   ■ MenFox                             █
+█                             ■ ManixQC   ■ MenFox                              █
 █                                                                               █
 █▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
 █ ▀███▓▓▓▒▒▒░░░                NO RULES! JUST FiLES!              ░░░▒▒▒▓▓▓███▀ █
