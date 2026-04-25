@@ -272,7 +272,12 @@ rebirth-upload-bot/
 - Feat : **kill Wine automatique** au clic "Charger rapport" — BDInfo est fermé proprement
 - Feat : **polling .rtf** ajouté en plus de `.txt` / `.nfo`
 - Feat : **mini-tuto intégré** dans l'onglet BD Info (3 étapes)
+- Feat : **lancement direct BDInfo.exe sur Windows** depuis `BDInfo_v0\` sans Wine ni .NET
+- Feat : **section THX dans le NFO** — ManixQC & MenFox centrés entre LiNKS et NO RULES
+- Feat : **LANGUAGE_MAP étendu** — ajout `fr-FR`, `fr-CA`, `no` (Norvégien), `es-419` (Spanish Latin America)
 - Fix : **post-traitement unifié** — même logique extraction/renommage pour le polling Wine et le chargement manuel
+- Fix : **upload BD Info** — `_bdi_last_nfo` correctement exposé après chargement manuel du rapport
+- Fix : **upload BD Info** — détection automatique du dossier COMPLETE.BLURAY dans `FILMS/` pour les deux workflows (scan ou chargement manuel)
 
 ### v2.5.9
 - Feat : onglet BD Info complet — scan COMPLETE BLURAY, rapport BDInfoCLI filtré, upload ZIP
