@@ -132,48 +132,63 @@ class API:
         return {"ok": True}
 
     def list_seedbox_files(self):
-        """Retourne la liste des dossiers présents dans SFTP_PATH via FTP."""
+        """Retourne la liste des entrées présentes dans SFTP_PATH.
+        Port 22 → SFTP via paramiko. Autre port → FTP TLS legacy."""
+        host     = os.getenv("SFTP_HOST_FTP", "")
+        port     = int(os.getenv("SFTP_PORT", "22"))
+        user     = os.getenv("SFTP_USER", "")
+        password = os.getenv("SFTP_PASS", "")
+        path     = os.getenv("SFTP_PATH", "/home/rtorrent/rtorrent/download/REBiRTH")
+
+        if not host:
+            return {"error": "SFTP_HOST_FTP non configuré"}
+
+        # ── SFTP via SSH (port 22) ─────────────────────────────────────────────
+        if port == 22:
+            try:
+                import paramiko
+            except ImportError:
+                import subprocess as _sp
+                _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
+                         "--break-system-packages", "--quiet"], capture_output=True)
+                import paramiko  # noqa: F811
+            try:
+                transport = paramiko.Transport((host, port))
+                transport.connect(username=user, password=password)
+                sftp = paramiko.SFTPClient.from_transport(transport)
+                try:
+                    entries = sftp.listdir_attr(path)
+                    names = sorted([e.filename for e in entries
+                                    if e.filename not in (".", "..")],
+                                   key=lambda x: x.lower())
+                    return {"files": names, "path": path}
+                except FileNotFoundError:
+                    return {"error": f"Dossier introuvable : {path}"}
+                finally:
+                    sftp.close()
+                    transport.close()
+            except Exception as e:
+                return {"error": str(e)}
+
+        # ── FTP TLS legacy (ancien port != 22) ────────────────────────────────
         import ftplib
         try:
-            host     = os.getenv("SFTP_HOST_FTP", "")
-            port     = int(os.getenv("SFTP_PORT", "23421"))
-            user     = os.getenv("SFTP_USER", "")
-            password = os.getenv("SFTP_PASS", "")
-            path     = os.getenv("SFTP_PATH", "/rtorrent/REBiRTH")
-
-            if not host:
-                return {"error": "SFTP_HOST_FTP non configuré"}
-
             ftp = ftplib.FTP_TLS()
             ftp.connect(host, port, timeout=10)
             ftp.login(user, password)
             ftp.prot_p()
-
-            # Naviguer vers le dossier REBiRTH
-            parts = path.strip("/").split("/")
-            for part in parts:
+            for part in path.strip("/").split("/"):
                 ftp.cwd(part)
-
-            # Lister le contenu (dossiers uniquement)
             entries = []
             ftp.retrlines("LIST", entries.append)
             ftp.quit()
-
             folders = []
             for entry in entries:
                 parts_e = entry.split()
-                if not parts_e:
-                    continue
-                name = parts_e[-1]
-                # Ignore les entrées . et ..
-                if name in (".", ".."):
-                    continue
-                # Lignes commençant par 'd' = dossier, sinon fichier aussi
-                folders.append(name)
-
+                if parts_e and parts_e[-1] not in (".", ".."):
+                    folders.append(parts_e[-1])
             folders.sort(key=lambda x: x.lower())
             return {"files": folders, "path": path}
-
         except Exception as e:
             return {"error": str(e)}
 
