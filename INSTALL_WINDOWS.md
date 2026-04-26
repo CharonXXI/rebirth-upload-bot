@@ -25,14 +25,22 @@ Ou télécharger le ZIP depuis GitHub et extraire dans un dossier.
 
 ### 2. Créer l'environnement virtuel
 
-```cmd
+> ⚠️ Si tu obtiens `Permission denied` sur `venv\Scripts\python.exe`, un venv existe déjà — supprimer le dossier `venv\` avant de recommencer :
+> ```powershell
+> Remove-Item -Recurse -Force venv
+> python -m venv venv
+> ```
+
+```powershell
 python -m venv venv
 venv\Scripts\activate
 ```
 
 ### 3. Installer les dépendances
 
-> ⚠️ **PowerShell requis** pour cette étape (pas CMD). PowerShell est installé par défaut sur Windows 10/11.
+> ⚠️ **Utiliser PowerShell** (pas CMD). Ouvrir PowerShell dans le dossier du projet.
+>
+> ⚠️ **Attention aux underscores** : le nom du package est `requests_toolbelt` avec un **underscore `_`**, pas un backslash `\`. Ne pas copier-coller depuis un terminal macOS.
 
 ```powershell
 $env:PYTHONUTF8="1"
@@ -156,9 +164,12 @@ Pour partager le bot, zipper l'intégralité de `dist\REBiRTH\` (sans le `.env` 
 | `No module named 'PTN'` | PowerShell : `$env:PYTHONUTF8="1"` puis `pip install parse-torrent-name` |
 | `Failed to build parse-torrent-name` | Même solution : utiliser PowerShell + `$env:PYTHONUTF8="1"` avant le pip |
 | Fenêtre blanche au lancement | Installer/réparer .NET Framework |
-| `Fatal error in launcher` | Le venv est corrompu — le recréer : `python -m venv venv` |
+| `Permission denied` sur venv | Supprimer le dossier `venv\` puis relancer `python -m venv venv` |
+| `Fatal error in launcher` | Le venv est corrompu — le recréer : `Remove-Item -Recurse -Force venv` puis `python -m venv venv` |
+| `Invalid requirement 'requests\_toolbelt'` | Utiliser `requests_toolbelt` (underscore, pas backslash) |
+| `Could not open requirements file: NFO\_CUSTOM` | Utiliser `NFO_CUSTOM\requirements.txt` sans backslash supplémentaire |
 | Erreur NFO vide | Vérifier que le fichier `.mkv` est accessible |
-| FTP timeout | Vérifier host, port et identifiants seedbox |
-| Torrent SB : erreur HTTP 4xx | ⚠️ Fonctionnalité non fonctionnelle actuellement — à reprendre ultérieurement |
+| FTP timeout | Vérifier host, port et identifiants seedbox dans `V1.env` |
+| Torrent SB : répertoire ruTorrent incorrect | Vérifier que `SFTP_PATH` dans `V1.env` correspond au chemin réel des films sur la seedbox |
 | BD Info : `BDInfo.exe introuvable` | Vérifier que `BDInfo.exe` est bien dans le dossier `BDInfo_v0\` à la racine du projet |
 | BD Info : `does not exist or is not a directory` | Vérifier que le dossier sélectionné contient bien un sous-dossier `BDMV\` |
