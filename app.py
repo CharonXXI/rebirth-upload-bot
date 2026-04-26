@@ -3300,23 +3300,35 @@ class API:
             raise Exception("Contenu .torrent invalide (pas bencoded)")
         self._log(f"  [SSH] ✅ .torrent OK — {len(torrent_bytes):,} octets")
 
-        # ── 5. Charger dans ruTorrent pour seeding ───────────────────────────
+        # ── 5. Charger dans ruTorrent via XML-RPC (load.raw_start) ──────────────
+        # addtorrent.php sanitize les slashes de dir_edit → chemin corrompu.
+        # load.raw_start + d.directory.set passe le chemin tel quel à rtorrent.
         if rt_url:
+            import base64 as _b64
             parent_dir = str(Path(remote_path).parent)
             try:
+                torrent_b64 = _b64.b64encode(torrent_bytes).decode()
+                xml_payload = (
+                    '<?xml version="1.0"?>'
+                    '<methodCall><methodName>load.raw_start_verbose</methodName>'
+                    '<params>'
+                    '<param><value><string></string></value></param>'
+                    f'<param><value><base64>{torrent_b64}</base64></value></param>'
+                    f'<param><value><string>d.directory.set={parent_dir}</string></value></param>'
+                    f'<param><value><string>d.custom1.set=REBiRTH</string></value></param>'
+                    '</params></methodCall>'
+                )
                 resp = requests.post(
-                    rt_url.rstrip("/") + "/php/addtorrent.php",
-                    files={"torrent_file": (base + ".torrent",
-                                            torrent_bytes,
-                                            "application/x-bittorrent")},
-                    data={"dir_edit": parent_dir, "label": "REBiRTH"},
+                    rt_url.rstrip("/") + "/RPC2",
+                    data=xml_payload,
+                    headers={"Content-Type": "text/xml"},
                     auth=(rt_user, rt_pass),
                     verify=False,
                     timeout=30
                 )
-                self._log(f"  [ruT] HTTP {resp.status_code} — seeding dans {parent_dir}")
+                self._log(f"  [ruT] XML-RPC {resp.status_code} — directory={parent_dir}")
             except Exception as e_rut:
-                self._log(f"  [ruT] ⚠ chargement ruTorrent : {e_rut}", "warn")
+                self._log(f"  [ruT] ⚠ XML-RPC : {e_rut}", "warn")
 
         return torrent_bytes
 
