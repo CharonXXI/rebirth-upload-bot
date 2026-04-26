@@ -210,15 +210,21 @@ class API:
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             client.connect(host, port=port, username=user, password=pwd,
                            timeout=10, allow_agent=False, look_for_keys=False)
-            _, out, _ = client.exec_command(f"df -B1 '{path}' 2>/dev/null || df -B1 /", timeout=10)
-            lines = out.read().decode("utf-8", errors="replace").strip().splitlines()
+            # Prendre le filesystem avec le plus grand espace total
+            # (ignore tmpfs/devtmpfs/overlay qui sont des pseudo-fs)
+            cmd = ("df -B1 | awk 'NR>1 && "
+                   "$1 !~ /tmpfs|devtmpfs|overlay|udev/ "
+                   "{print $2, $3, $4, $1}' | sort -k1 -rn | head -1")
+            _, out, _ = client.exec_command(cmd, timeout=10)
+            line = out.read().decode("utf-8", errors="replace").strip()
             client.close()
-            # Ligne header + ligne data (peut être sur 2 lignes si path long)
-            data = " ".join(lines[1:]).split()
-            # df -B1: Filesystem 1B-blocks Used Available Use% Mounted
-            total_b = int(data[1])
-            used_b  = int(data[2])
-            avail_b = int(data[3])
+            if not line:
+                return {"error": "df vide"}
+            parts = line.split()
+            # total used avail filesystem
+            total_b = int(parts[0])
+            used_b  = int(parts[1])
+            avail_b = int(parts[2])
             def fmt(b):
                 for unit in ("o", "Kio", "Mio", "Gio", "Tio"):
                     if b < 1024 or unit == "Tio":
