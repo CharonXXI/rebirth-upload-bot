@@ -45,7 +45,7 @@
 | 💬 **Discord** | Notification automatique avec embed TMDB |
 | 📁 **FINAL/** | Création automatique avec le bon NFO par tracker |
 | 🌱 **Seedbox** | Upload complet via FTP TLS |
-| 🧲 **Torrent SB** | ⚠️ *En attente — non fonctionnel actuellement* |
+| 🧲 **Torrent SB** | Création torrent via SSH+mktorrent côté seedbox, chargement automatique dans ruTorrent |
 | 💿 **BD Info** | Rapport exact via **BDInfo v0.7.5.6** (Wine/Whisky) — DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
 | 🎛️ **Trackers** | Page dédiée pour gérer les announces URL |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
@@ -235,8 +235,11 @@ Onglet BD INFO
 ### 💬 Discord
 - Embed avec poster TMDB, liens TMDB/IMDb, source, trackers, note
 
-### 🧲 Torrent SB *(non fonctionnel)*
-- Page présente dans l'interface, à reprendre ultérieurement
+### 🧲 Torrent SB
+- Création du torrent via **SSH + mktorrent** directement sur la seedbox (piece size 4 MiB, privé)
+- Chargement automatique dans ruTorrent pour seeding immédiat
+- Un `.torrent` par tracker coché — sauvegardé dans `TORRENTS/`
+- Requiert un accès SSH sur port 22 (configurer `SFTP_HOST_FTP`, `SFTP_USER`, `SFTP_PASS`, `SFTP_PORT=22`)
 
 ---
 
@@ -261,6 +264,12 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.7.0
+- **Torrent SB opérationnel** — création via SSH + mktorrent côté seedbox, chargement automatique dans ruTorrent pour seeding immédiat
+- Feat : méthode SSH prioritaire dans la cascade de création torrent (port 22 détecté automatiquement)
+- Feat : un `.torrent` par tracker coché, sauvegardé dans `TORRENTS/`
+- Fix : mise à jour credentials seedbox (nouveau VPS avec accès SSH complet)
 
 ### v2.6.0
 - **Refactor BD Info complet** — abandon de BDInfoCLI (.NET) au profit de **BDInfo v0.7.5.6** (Windows GUI via Wine/Whisky)
@@ -332,7 +341,7 @@ rebirth-upload-bot/
 - Le bot empêche automatiquement la mise en veille pendant l'upload
 - `V1.env` n'est jamais publié sur GitHub
 - BD Info nécessite BDInfo v0.7.5.6 + Whisky (voir section Installation)
-- Torrent SB est présent dans l'interface mais **non fonctionnel**
+- Torrent SB nécessite un accès SSH sur port 22 et `mktorrent` installé sur la seedbox
 
 ---
 

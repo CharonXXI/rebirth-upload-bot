@@ -3057,6 +3057,124 @@ class API:
         results.sort(key=lambda x: x[0])
         return results
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Méthode SSH : mktorrent côté seedbox + SFTP + chargement ruTorrent
+    # ──────────────────────────────────────────────────────────────────────────
+    def _create_torrent_via_ssh(self, base, remote_path, announce, private, tk_name):
+        """Crée un torrent via SSH+mktorrent directement sur la seedbox.
+        1. SSH connect (paramiko)
+        2. Vérifie/installe mktorrent
+        3. Lance mktorrent sur le chemin distant
+        4. SFTP download du .torrent
+        5. HTTP upload dans ruTorrent pour seeding immédiat
+        """
+        try:
+            import paramiko
+        except ImportError:
+            self._log("  [SSH] paramiko absent — installation…")
+            import subprocess as _sp
+            _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
+                     "--break-system-packages", "--quiet"],
+                    capture_output=True)
+            import paramiko  # noqa: F811
+
+        import io, urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        ssh_host = os.getenv("SFTP_HOST_FTP", "")
+        ssh_port = int(os.getenv("SFTP_PORT", "22"))
+        ssh_user = os.getenv("SFTP_USER", "")
+        ssh_pass = os.getenv("SFTP_PASS", "")
+        rt_url   = os.getenv("RUTORRENT_URL", "")
+        rt_user  = os.getenv("RUTORRENT_USER", "")
+        rt_pass  = os.getenv("RUTORRENT_PASS", "")
+
+        if not ssh_host or not ssh_user:
+            raise Exception("SSH non configuré (SFTP_HOST_FTP / SFTP_USER)")
+
+        tmp_remote = f"/tmp/{base}__{tk_name}.torrent"
+
+        # ── 1. Connexion SSH ───────────────────────────────────────────────────
+        self._log(f"  [SSH] Connexion {ssh_user}@{ssh_host}:{ssh_port}…")
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(ssh_host, port=ssh_port,
+                       username=ssh_user, password=ssh_pass,
+                       timeout=30, allow_agent=False, look_for_keys=False)
+        self._log("  [SSH] Connecté ✓")
+
+        def _exec(cmd, timeout=300):
+            _, out, err = client.exec_command(cmd, timeout=timeout)
+            o = out.read().decode("utf-8", errors="replace").strip()
+            e = err.read().decode("utf-8", errors="replace").strip()
+            return o, e
+
+        # ── 2. Vérifier/installer mktorrent ───────────────────────────────────
+        mk_path, _ = _exec("which mktorrent")
+        if not mk_path:
+            self._log("  [SSH] mktorrent absent — installation en cours…")
+            o, e = _exec("sudo apt-get install -y mktorrent 2>&1", timeout=120)
+            self._log("  [SSH] " + (o or e)[:300])
+            mk_path, _ = _exec("which mktorrent")
+            if not mk_path:
+                raise Exception("mktorrent introuvable même après tentative d'installation")
+        self._log(f"  [SSH] mktorrent : {mk_path}")
+
+        # ── 3. Lancer mktorrent ───────────────────────────────────────────────
+        priv_flag = "-p " if private else ""
+        cmd = (f"mktorrent {priv_flag}-l 22 "
+               f"-a '{announce}' "
+               f"-o '{tmp_remote}' "
+               f"'{remote_path}' 2>&1")
+        self._log(f"  [SSH] {cmd}")
+        o, _ = _exec(cmd, timeout=600)
+        if o:
+            self._log("  [SSH] " + o[:400])
+
+        # ── 4. SFTP download du .torrent ──────────────────────────────────────
+        sftp = client.open_sftp()
+        try:
+            try:
+                st = sftp.stat(tmp_remote)
+            except FileNotFoundError:
+                raise Exception(f"mktorrent n'a pas produit de fichier → {tmp_remote}")
+            if st.st_size < 64:
+                raise Exception(f"Fichier .torrent trop petit ({st.st_size} o) — échec mktorrent")
+            buf = io.BytesIO()
+            sftp.getfo(tmp_remote, buf)
+            torrent_bytes = buf.getvalue()
+            try:
+                sftp.remove(tmp_remote)
+            except Exception:
+                pass
+        finally:
+            sftp.close()
+        client.close()
+
+        if not torrent_bytes or torrent_bytes.lstrip()[:1] != b"d":
+            raise Exception("Contenu .torrent invalide (pas bencoded)")
+        self._log(f"  [SSH] ✅ .torrent OK — {len(torrent_bytes):,} octets")
+
+        # ── 5. Charger dans ruTorrent pour seeding ───────────────────────────
+        if rt_url:
+            parent_dir = str(Path(remote_path).parent)
+            try:
+                resp = requests.post(
+                    rt_url.rstrip("/") + "/php/addtorrent.php",
+                    files={"torrent_file": (base + ".torrent",
+                                            torrent_bytes,
+                                            "application/x-bittorrent")},
+                    data={"dir_edit": parent_dir, "label": "REBiRTH"},
+                    auth=(rt_user, rt_pass),
+                    verify=False,
+                    timeout=30
+                )
+                self._log(f"  [ruT] HTTP {resp.status_code} — seeding dans {parent_dir}")
+            except Exception as e_rut:
+                self._log(f"  [ruT] ⚠ chargement ruTorrent : {e_rut}", "warn")
+
+        return torrent_bytes
+
     def _create_torrent_local_ftp(self, ftp_host, ftp_port, ftp_user, ftp_pass,
                                   ftp_content_path, name, announce,
                                   piece_size=4194304, private=True):
@@ -3256,11 +3374,19 @@ class API:
                     " (vérifier que le plugin 'create' est installé)"
                 )
 
-            # ── 3. Récupération du .torrent (cascade A → B → C → D → E) ─────────
+            # ── 3. Récupération du .torrent (SSH → cascade A → B → C → D → E) ──
             torrent_bytes = None
 
-            # Réponse directe (rare)
-            if r.content and r.content.lstrip()[:1] == b"d":
+            # SSH primary) mktorrent côté seedbox via SSH (port 22)
+            if ftp_port == 22:
+                try:
+                    torrent_bytes = self._create_torrent_via_ssh(
+                        base, remote_path, announce, bool(private), tk_name)
+                except Exception as e_ssh:
+                    self._log("  ⚠ [SSH] " + str(e_ssh), "warn")
+
+            # Réponse directe du plugin create (rare)
+            if not torrent_bytes and r.content and r.content.lstrip()[:1] == b"d":
                 torrent_bytes = r.content
                 self._log("  📦 .torrent reçu directement dans la réponse POST", "success")
 
