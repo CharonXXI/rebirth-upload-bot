@@ -1191,11 +1191,10 @@ async function tsbPickFile() {
 
 function tsbUpdatePath() {
   var fname  = document.getElementById('tsb-filename').value.trim();
-  var base   = fname.replace(/\.[^.]+$/, '');  // sans extension
-  if (!base) return;
+  if (!fname) return;
   var sftp   = document.getElementById('cfg-SFTP_PATH') ? document.getElementById('cfg-SFTP_PATH').value.trim() : '';
-  var prefix = sftp || '/rtorrent/REBiRTH';
-  document.getElementById('tsb-remote-path').value = prefix + '/' + base;
+  var prefix = sftp || '/home/rtorrent/rtorrent/download/REBiRTH';
+  document.getElementById('tsb-remote-path').value = prefix + '/' + fname;
 }
 
 function _tsbLog(msg, cls) {

@@ -211,9 +211,12 @@ class API:
             if not filename:
                 raise Exception("Aucun nom de fichier spécifié.")
 
-            base = Path(filename).name  # nom du dossier tel quel (pas .stem qui coupe le dernier segment)
-
-            if not remote_path:
+            # Toujours dériver base depuis remote_path s'il est fourni,
+            # sinon depuis filename — jamais .stem qui coupe le dernier segment
+            if remote_path:
+                base = Path(remote_path).name
+            else:
+                base = Path(filename).name
                 remote_base = os.getenv("SFTP_PATH", "/home/rtorrent/rtorrent/download/REBiRTH")
                 remote_path = remote_base + "/" + base
                 self._log("  remote_path (auto) : " + remote_path)
