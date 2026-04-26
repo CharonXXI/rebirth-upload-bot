@@ -56,6 +56,8 @@ class API:
             "TRACKER_C411":       os.getenv("TRACKER_C411", ""),
             "TRACKER_TORR9":      os.getenv("TRACKER_TORR9", ""),
             "TRACKER_LACALE":     os.getenv("TRACKER_LACALE", ""),
+            "TRACKER_HDT":        os.getenv("TRACKER_HDT", ""),
+            "SFTP_PATH_HDT":      os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD"),
             "BDINFO_CLI_PATH":    os.getenv("BDINFO_CLI_PATH", ""),
         }
 
@@ -272,6 +274,7 @@ class API:
                 "C411":   os.getenv("TRACKER_C411", ""),
                 "TORR9":  os.getenv("TRACKER_TORR9", ""),
                 "LACALE": os.getenv("TRACKER_LACALE", ""),
+                "HDT":    os.getenv("TRACKER_HDT", ""),
             }
             checked = [t.strip().upper() for t in trackers.split() if t.strip()]
             active  = {k: v for k, v in announces.items() if v and k.upper() in checked}
@@ -285,7 +288,20 @@ class API:
             if not active:
                 raise Exception("Aucun tracker configuré pour les cases cochées. Vérifie les announces dans Config.")
 
-            self._create_torrent_rutorrent(base, remote_path, active, private=bool(private))
+            # HDT utilise un répertoire différent sur la seedbox (FULL BD)
+            hdt_announce = active.pop("HDT", None)
+            active_hdt = {"HDT": hdt_announce} if hdt_announce else {}
+            active_regular = active  # trackers restants (REBiRTH path)
+
+            if active_regular:
+                self._create_torrent_rutorrent(base, remote_path, active_regular, private=bool(private))
+
+            if active_hdt:
+                hdt_sftp_path = os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD")
+                hdt_remote_path = hdt_sftp_path.rstrip("/") + "/" + base
+                self._log("  HDT remote_path : " + hdt_remote_path)
+                self._create_torrent_rutorrent(base, hdt_remote_path, active_hdt, private=bool(private))
+
             self._emit("done", {"nfo_only": False, "url": "Torrents SB créés !"})
 
         except Exception as e:
@@ -1913,6 +1929,44 @@ class API:
         threading.Thread(target=_worker, daemon=True).start()
         return {"ok": True}
 
+    def torrent_bdinfo_hdt(self):
+        """Crée un torrent HD-Torrents depuis la seedbox pour un FULL BD.
+        Le fichier doit déjà être présent sur la seedbox dans SFTP_PATH_HDT/<nom_dossier>.
+        """
+        def _worker():
+            try:
+                folder = getattr(self, "_bdi_last_folder", "")
+                if not folder:
+                    self._emit("bdinfo_hdt_done", {
+                        "ok": False, "error": "Aucune source sélectionnée — lancez d'abord un scan"
+                    })
+                    return
+                base = Path(folder).name
+                hdt_announce = os.getenv("TRACKER_HDT", "")
+                if not hdt_announce:
+                    self._emit("bdinfo_hdt_done", {
+                        "ok": False, "error": "TRACKER_HDT non configuré dans le .env"
+                    })
+                    return
+                hdt_sftp_path = os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD")
+                hdt_remote_path = hdt_sftp_path.rstrip("/") + "/" + base
+                self._emit("bdinfo_hdt_status", {
+                    "msg": f"Création torrent HDT — {base}…"
+                })
+                self._log(f"▶ Torrent BD Info HDT : {base}")
+                self._log(f"  seedbox path : {hdt_remote_path}")
+                self._create_torrent_rutorrent(base, hdt_remote_path, {"HDT": hdt_announce}, private=True)
+                self._emit("bdinfo_hdt_done", {
+                    "ok": True, "base": base, "path": hdt_remote_path
+                })
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._emit("bdinfo_hdt_done", {"ok": False, "error": str(e)})
+
+        threading.Thread(target=_worker, daemon=True).start()
+        return {"ok": True}
+
     def _emit(self, event: str, data):
         payload = json.dumps(data).replace("'", "\\'")
         self.window.evaluate_js(f"window._emit('{event}', {payload})")
@@ -3263,6 +3317,7 @@ class API:
             "C411":   "C411",
             "TORR9":  "Torr9",
             "LACALE": "LaCale",
+            "HDT":    "HD-Torrents",
         }
         source_tag = SOURCE_TAGS.get(tk_name.upper(), tk_name)
         priv_flag = "-p " if private else ""

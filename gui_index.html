@@ -289,7 +289,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.7.1</div>
+      <div class="logo-sub">UPLOAD BOT v2.8.0</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -446,6 +446,10 @@ html.light body::before {
           <span class="tracker-name">LACALE</span>
           <input id="tk-lacale" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
         </div>
+        <div class="tracker-row">
+          <span class="tracker-name">HDT</span>
+          <input id="tk-hdt" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
         <button id="btn-save-trackers" onclick="saveTrackers()" style="margin-top:16px;padding:11px 28px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">
           💾 &nbsp;SAUVEGARDER
         </button>
@@ -514,6 +518,11 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tsb-c411"   checked/><span class="tck-lbl">C411</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-lacale" checked/><span class="tck-lbl">LaCale</span></label>
+              <label class="tck-row" title="HDT utilise /FULL BD — chemin séparé">
+                <input type="checkbox" id="tsb-hdt"/>
+                <span class="tck-lbl">HDT</span>
+                <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-left:4px;">(FULL BD)</span>
+              </label>
             </div>
           </div>
 
@@ -648,6 +657,18 @@ html.light body::before {
             </button>
             <div id="bdi-upload-status"
                  style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:8px;min-height:16px;transition:color .2s;padding:0 2px;word-break:break-all;"></div>
+
+            <!-- HDT Seedbox torrent -->
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
+              <div style="font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text-dim);margin-bottom:8px;">HD-TORRENTS</div>
+              <button id="bdi-hdt-btn" onclick="bdiTorrentHDT()"
+                style="width:100%;padding:10px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
+                onmouseover="if(!this.disabled)this.style.background='rgba(255,140,0,0.1)'"
+                onmouseout="if(!this.disabled)this.style.background='transparent'">
+                🧲 &nbsp;TORRENT HDT (FULL BD)
+              </button>
+              <div id="bdi-hdt-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;min-height:14px;word-break:break-all;"></div>
+            </div>
           </div>
 
         </div>
@@ -719,6 +740,8 @@ window._emit = function(event, data) {
   if (event === 'bdinfo_upload_done')   bdiUploadDone(data);
   if (event === 'bdinfo_waiting_input') bdiShowInput(data.prompt);
   if (event === 'bdinfo_hide_input')    bdiHideInput();
+  if (event === 'bdinfo_hdt_status')    bdiHdtStatus(data.msg);
+  if (event === 'bdinfo_hdt_done')      bdiHdtDone(data);
 };
 
 // ── BD Info ──────────────────────────────────────────────────────────────────
@@ -946,6 +969,41 @@ function bdiUploadDone(data) {
     try { navigator.clipboard.writeText(data.url); } catch(e) {}
   } else {
     bdiUploadStatus('✖ ' + (data.error || 'Erreur'), 'error');
+  }
+}
+
+function bdiHdtStatus(msg) {
+  var el = document.getElementById('bdi-hdt-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = 'var(--text-dim)';
+}
+
+function bdiHdtDone(data) {
+  var btn = document.getElementById('bdi-hdt-btn');
+  if (btn) { btn.disabled = false; btn.innerHTML = '🧲 &nbsp;TORRENT HDT (FULL BD)'; }
+  var el = document.getElementById('bdi-hdt-status');
+  if (!el) return;
+  if (data.ok) {
+    el.textContent = '✅ Torrent HDT créé — seeding depuis ' + data.path;
+    el.style.color = 'var(--green)';
+    showToast('✓ Torrent HDT créé !', 'success', 5000);
+  } else {
+    el.textContent = '✖ ' + (data.error || 'Erreur');
+    el.style.color = 'var(--red)';
+    showToast('✗ HDT : ' + (data.error || 'Erreur'), 'error', 7000);
+  }
+}
+
+async function bdiTorrentHDT() {
+  var btn = document.getElementById('bdi-hdt-btn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ &nbsp;CRÉATION EN COURS…';
+  bdiHdtStatus('Création du torrent HDT en cours…');
+  try {
+    await window.pywebview.api.torrent_bdinfo_hdt();
+  } catch(e) {
+    bdiHdtDone({ ok: false, error: 'Erreur JS : ' + e });
   }
 }
 
@@ -1206,7 +1264,7 @@ function _tsbLog(msg, cls) {
 }
 
 function _tsbGetTrackers() {
-  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-lacale':'LaCale' };
+  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-lacale':'LaCale', 'tsb-hdt':'HDT' };
   return Object.entries(map).filter(function(kv){
     var el = document.getElementById(kv[0]); return el && el.checked;
   }).map(function(kv){ return kv[1]; }).join(' ');
@@ -1389,7 +1447,7 @@ async function saveConfig() {
   setTimeout(function() { btn.textContent = '💾  SAUVEGARDER'; }, 2000);
 }
 
-var TRACKER_KEYS = ['abn','tos','c411','torr9','lacale'];
+var TRACKER_KEYS = ['abn','tos','c411','torr9','lacale','hdt'];
 
 async function saveTrackers() {
   var cfg = {};

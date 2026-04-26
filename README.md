@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.7.1-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.8.0-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -287,6 +287,13 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.8.0
+- Feat : **tracker HD-Torrents (HDT)** — ajout dans Config, Torrent SB et BD Info
+- Feat : onglet **BD Info → bouton TORRENT HDT** — crée le torrent depuis la seedbox et démarre le seeding dans `/FULL BD`
+- Feat : **Torrent SB → case HDT** — chemin seedbox séparé (`SFTP_PATH_HDT`) pour les FULL Blu-ray
+- Feat : source tag `HD-Torrents` dans mktorrent pour info hash unique sur HDT
+- Feat : variables `.env` : `TRACKER_HDT` (announce URL) + `SFTP_PATH_HDT` (répertoire FULL BD)
+
 ### v2.7.1
 - Feat : **espace disque seedbox** affiché en bas du sidebar (`SB : X.XX Tio / Y.YY Tio`)
 - Feat : rafraîchissement automatique toutes les 60 secondes
@@ -379,7 +386,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.7.1** — macOS & Windows
+**REBiRTH Upload Bot v2.8.0** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
