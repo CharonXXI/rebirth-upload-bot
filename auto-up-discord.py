@@ -217,11 +217,21 @@ def upload_big_file(file_path: str, directory_id: str, account_id: str, progress
                                 progress_fn(uploaded[0], file_size)
                     return data
 
-            response = requests.put(
+            # timeout=(connect, read) — pas de timeout en lecture pour les gros fichiers
+            import socket as _socket
+            _orig_create = _socket.create_connection
+            def _patched_create(*a, **kw):
+                s = _orig_create(*a, **kw)
+                s.setsockopt(_socket.SOL_SOCKET, _socket.SO_SNDBUF, 8 * 1024 * 1024)
+                return s
+            _socket.create_connection = _patched_create
+
+            session = requests.Session()
+            response = session.put(
                 url,
                 headers=headers,
                 data=ReadProgress(f, pbar),
-                timeout=30
+                timeout=(10, None)
             )
     
     response.raise_for_status()
