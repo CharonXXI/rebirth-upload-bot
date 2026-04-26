@@ -210,9 +210,10 @@ class API:
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             client.connect(host, port=port, username=user, password=pwd,
                            timeout=10, allow_agent=False, look_for_keys=False)
-            # Prendre le filesystem avec le plus grand espace total
-            # (ignore tmpfs/devtmpfs/overlay qui sont des pseudo-fs)
-            cmd = ("df -B1 | awk 'NR>1 && "
+            # -P (POSIX) : une ligne par fs, pas de wrap même si nom long
+            # On prend le filesystem avec le plus grand espace total
+            # (ignore tmpfs/devtmpfs/overlay/udev qui sont des pseudo-fs)
+            cmd = ("df -B1 -P | awk 'NR>1 && "
                    "$1 !~ /tmpfs|devtmpfs|overlay|udev/ "
                    "{print $2, $3, $4, $1}' | sort -k1 -rn | head -1")
             _, out, _ = client.exec_command(cmd, timeout=10)
