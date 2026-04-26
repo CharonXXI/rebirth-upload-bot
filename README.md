@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.6.0-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.7.0-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
