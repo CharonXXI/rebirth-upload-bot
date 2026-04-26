@@ -1929,36 +1929,139 @@ class API:
         threading.Thread(target=_worker, daemon=True).start()
         return {"ok": True}
 
+    def _sftp_upload_folder(self, sftp, local_dir: str, remote_dir: str):
+        """Upload récursif d'un dossier local vers la seedbox via SFTP.
+        Crée les sous-dossiers distants à la volée. Exclut les fichiers cachés (.) et BACKUP/.
+        """
+        import time as _time
+
+        local_path = Path(local_dir)
+
+        def _mkdir_p(sftp_client, path):
+            parts = path.strip("/").split("/")
+            cur = ""
+            for part in parts:
+                cur += "/" + part
+                try:
+                    sftp_client.stat(cur)
+                except FileNotFoundError:
+                    sftp_client.mkdir(cur)
+                    self._log("  [SFTP] Dossier créé : " + cur)
+
+        # Créer le dossier racine distant
+        _mkdir_p(sftp, remote_dir)
+
+        for local_f in sorted(local_path.rglob("*")):
+            if not local_f.is_file():
+                continue
+            # Ignorer fichiers cachés et dossier BACKUP
+            if any(p.startswith(".") for p in local_f.parts):
+                continue
+            if "BACKUP" in local_f.parts:
+                continue
+
+            rel      = local_f.relative_to(local_path)
+            remote_f = remote_dir.rstrip("/") + "/" + str(rel).replace("\\", "/")
+            remote_parent = remote_dir.rstrip("/") + "/" + str(rel.parent).replace("\\", "/")
+
+            # Créer les sous-dossiers intermédiaires
+            if rel.parent != Path("."):
+                _mkdir_p(sftp, remote_parent)
+
+            filesize = local_f.stat().st_size
+            size_str = (str(round(filesize / 1073741824, 2)) + " GiB"
+                        if filesize > 1073741824
+                        else str(round(filesize / 1048576, 1)) + " MiB")
+            self._log(f"  [SFTP] ↑ {rel} ({size_str})…")
+            self._emit("bdinfo_hdt_status", {"msg": f"Upload {local_f.name} ({size_str})…"})
+
+            start     = _time.time()
+            last_emit = [0.0]
+
+            def _cb(sent, total, _f=local_f.name, _fs=filesize, _st=start, _le=last_emit):
+                now = _time.time()
+                if now - _le[0] < 1.0:
+                    return
+                _le[0] = now
+                elapsed = now - _st
+                speed = sent / elapsed / 1048576 if elapsed > 0 else 0
+                pct   = int(sent * 100 / total) if total > 0 else 0
+                self._emit("bdinfo_hdt_status", {
+                    "msg": f"Upload {_f} — {pct}% — {round(speed, 1)} MB/s"
+                })
+
+            sftp.put(str(local_f), remote_f, callback=_cb)
+
+            elapsed = _time.time() - start
+            m, s = divmod(int(elapsed), 60)
+            self._log(f"  [SFTP] ✓ {rel} — {m:02d}m{s:02d}s", "success")
+
     def torrent_bdinfo_hdt(self):
-        """Crée un torrent HD-Torrents depuis la seedbox pour un FULL BD.
-        Le fichier doit déjà être présent sur la seedbox dans SFTP_PATH_HDT/<nom_dossier>.
+        """Upload le dossier FULL BD sur la seedbox puis crée le torrent HD-Torrents.
+        1. SFTP upload récursif du dossier local vers SFTP_PATH_HDT/<nom>
+        2. Création du torrent via mktorrent (SSH) + chargement ruTorrent
         """
         def _worker():
             try:
                 folder = getattr(self, "_bdi_last_folder", "")
-                if not folder:
+                if not folder or not Path(folder).exists():
                     self._emit("bdinfo_hdt_done", {
-                        "ok": False, "error": "Aucune source sélectionnée — lancez d'abord un scan"
+                        "ok": False, "error": "Aucune source locale — sélectionne et scanne d'abord un dossier BDMV"
                     })
                     return
-                base = Path(folder).name
+
                 hdt_announce = os.getenv("TRACKER_HDT", "")
                 if not hdt_announce:
                     self._emit("bdinfo_hdt_done", {
                         "ok": False, "error": "TRACKER_HDT non configuré dans le .env"
                     })
                     return
-                hdt_sftp_path = os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD")
-                hdt_remote_path = hdt_sftp_path.rstrip("/") + "/" + base
-                self._emit("bdinfo_hdt_status", {
-                    "msg": f"Création torrent HDT — {base}…"
-                })
-                self._log(f"▶ Torrent BD Info HDT : {base}")
-                self._log(f"  seedbox path : {hdt_remote_path}")
+
+                base          = Path(folder).name
+                hdt_sftp_base = os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD")
+                hdt_remote_path = hdt_sftp_base.rstrip("/") + "/" + base
+
+                self._log(f"▶ BD Info HDT : {base}")
+                self._log(f"  dossier local  : {folder}")
+                self._log(f"  seedbox target : {hdt_remote_path}")
+
+                # ── 1. SFTP upload récursif du dossier ─────────────────────────
+                try:
+                    import paramiko
+                except ImportError:
+                    import subprocess as _sp
+                    _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
+                             "--break-system-packages", "--quiet"], capture_output=True)
+                    import paramiko  # noqa: F811
+
+                host     = os.getenv("SFTP_HOST_FTP", "")
+                port     = int(os.getenv("SFTP_PORT", "22"))
+                user     = os.getenv("SFTP_USER", "")
+                password = os.getenv("SFTP_PASS", "")
+
+                self._emit("bdinfo_hdt_status", {"msg": f"Connexion SFTP vers {host}…"})
+                transport = paramiko.Transport((host, port))
+                transport.window_size              = 67108864
+                transport.packetizer.REKEY_BYTES   = pow(2, 40)
+                transport.packetizer.REKEY_PACKETS = pow(2, 40)
+                transport.connect(username=user, password=password)
+                sftp = paramiko.SFTPClient.from_transport(transport)
+                sftp.MAX_REQUEST_SIZE = 1048576
+
+                self._sftp_upload_folder(sftp, folder, hdt_remote_path)
+
+                sftp.close()
+                transport.close()
+                self._log("  [SFTP] ✅ Dossier uploadé", "success")
+
+                # ── 2. Créer le torrent et démarrer le seeding ─────────────────
+                self._emit("bdinfo_hdt_status", {"msg": "Création torrent HDT…"})
                 self._create_torrent_rutorrent(base, hdt_remote_path, {"HDT": hdt_announce}, private=True)
+
                 self._emit("bdinfo_hdt_done", {
                     "ok": True, "base": base, "path": hdt_remote_path
                 })
+
             except Exception as e:
                 import traceback
                 traceback.print_exc()

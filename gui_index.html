@@ -665,8 +665,11 @@ html.light body::before {
                 style="width:100%;padding:10px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
                 onmouseover="if(!this.disabled)this.style.background='rgba(255,140,0,0.1)'"
                 onmouseout="if(!this.disabled)this.style.background='transparent'">
-                🧲 &nbsp;TORRENT HDT (FULL BD)
+                ↑ &nbsp;SB + 🧲 TORRENT HDT
               </button>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
+                Upload le dossier sur la seedbox → <span style="color:var(--orange);">FULL BD/</span> puis crée le torrent HDT
+              </div>
               <div id="bdi-hdt-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;min-height:14px;word-break:break-all;"></div>
             </div>
           </div>
@@ -981,7 +984,7 @@ function bdiHdtStatus(msg) {
 
 function bdiHdtDone(data) {
   var btn = document.getElementById('bdi-hdt-btn');
-  if (btn) { btn.disabled = false; btn.innerHTML = '🧲 &nbsp;TORRENT HDT (FULL BD)'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '↑ &nbsp;SB + 🧲 TORRENT HDT'; }
   var el = document.getElementById('bdi-hdt-status');
   if (!el) return;
   if (data.ok) {
@@ -998,8 +1001,8 @@ function bdiHdtDone(data) {
 async function bdiTorrentHDT() {
   var btn = document.getElementById('bdi-hdt-btn');
   btn.disabled = true;
-  btn.innerHTML = '⏳ &nbsp;CRÉATION EN COURS…';
-  bdiHdtStatus('Création du torrent HDT en cours…');
+  btn.innerHTML = '⏳ &nbsp;UPLOAD + TORRENT EN COURS…';
+  bdiHdtStatus('Upload seedbox + création torrent HDT…');
   try {
     await window.pywebview.api.torrent_bdinfo_hdt();
   } catch(e) {
