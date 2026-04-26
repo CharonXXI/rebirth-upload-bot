@@ -84,18 +84,9 @@ def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str
 
                     encoder = MultipartEncoder(fields=fields)
                     monitor = MultipartEncoderMonitor(encoder, progress_callback)
-
-                    # requests lit MultipartEncoder en chunks de 16KB par défaut
-                    # → on wrappe pour forcer des lectures de 8MB et saturer le réseau
-                    class _BigChunk:
-                        """Proxy qui force read() en chunks de 8MB."""
-                        CHUNK = 8 * 1024 * 1024
-                        def __init__(self, m): self._m = m; self.content_type = m.content_type
-                        def read(self, size=-1): return self._m.read(self.CHUNK if size > 0 else -1)
-
                     headers = {"Content-Type": monitor.content_type}
 
-                    response = requests.post(endpoint, data=_BigChunk(monitor), headers=headers,
+                    response = requests.post(endpoint, data=monitor, headers=headers,
                                              timeout=(10, None))
                     response.raise_for_status()
                     rprint(f"[green]Upload terminé :[/green] {f_obj.name}")
