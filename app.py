@@ -2161,24 +2161,93 @@ class API:
         return None
 
     def _ftp_upload(self, files, remote_path):
-        import ftplib, time, socket
+        """Upload vers la seedbox. Port 22 → SFTP paramiko. Autre → FTP TLS legacy."""
+        import time
         host     = os.getenv("SFTP_HOST_FTP", "")
-        port     = int(os.getenv("SFTP_PORT", "23421"))
+        port     = int(os.getenv("SFTP_PORT", "22"))
         user     = os.getenv("SFTP_USER", "")
         password = os.getenv("SFTP_PASS", "")
 
+        # ── SFTP via SSH (port 22) ─────────────────────────────────────────────
+        if port == 22:
+            try:
+                import paramiko
+            except ImportError:
+                import subprocess as _sp
+                _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
+                         "--break-system-packages", "--quiet"], capture_output=True)
+                import paramiko  # noqa: F811
+
+            self._log("Connexion SFTP vers " + host + "…")
+            transport = paramiko.Transport((host, port))
+            transport.connect(username=user, password=password)
+            sftp = paramiko.SFTPClient.from_transport(transport)
+
+            # Créer le dossier distant récursivement
+            parts = remote_path.strip("/").split("/")
+            cur = ""
+            for part in parts:
+                cur += "/" + part
+                try:
+                    sftp.stat(cur)
+                except FileNotFoundError:
+                    sftp.mkdir(cur)
+                    self._log("Dossier SFTP créé : " + cur)
+
+            for f in files:
+                fname    = os.path.basename(f)
+                filesize = os.path.getsize(f)
+                start    = time.time()
+                uploaded = [0]
+                last_emit = [0.0]
+
+                size_str = (str(round(filesize / 1073741824, 2)) + " GiB"
+                            if filesize > 1073741824
+                            else str(round(filesize / 1048576, 1)) + " MiB")
+                self._log("Envoi SFTP : " + fname + " (" + size_str + ")…")
+
+                def _progress(sent, total, _f=fname, _fs=filesize, _st=start,
+                               _up=uploaded, _le=last_emit):
+                    _up[0] = sent
+                    now = time.time()
+                    if now - _le[0] < 1.0:
+                        return
+                    _le[0] = now
+                    elapsed = now - _st
+                    speed = sent / elapsed / 1048576 if elapsed > 0 else 0
+                    pct = int(sent * 100 / total) if total > 0 else 0
+                    h, r2 = divmod(int(elapsed), 3600)
+                    m, s = divmod(r2, 60)
+                    e_str = (str(h) + "h " if h else "") + str(m).zfill(2) + "m " + str(s).zfill(2) + "s"
+                    self._emit("upload_progress", {
+                        "filename": _f, "pct": pct,
+                        "elapsed": e_str + " — " + str(pct) + "% — " + str(round(speed, 1)) + " MB/s"
+                    })
+
+                sftp.put(f, remote_path.rstrip("/") + "/" + fname, callback=_progress)
+
+                elapsed = time.time() - start
+                h, r2 = divmod(int(elapsed), 3600)
+                m, s = divmod(r2, 60)
+                e_str = (str(h) + "h " if h else "") + str(m).zfill(2) + "m " + str(s).zfill(2) + "s"
+                self._log("  ✓ " + fname + " — " + e_str, "success")
+
+            sftp.close()
+            transport.close()
+            return
+
+        # ── FTP TLS legacy (ancien port != 22) ────────────────────────────────
+        import ftplib, socket
         self._log("Connexion FTP vers " + host + "...")
         ftp = ftplib.FTP_TLS()
         ftp.connect(host, port)
         ftp.login(user, password)
         ftp.prot_p()
-        # Augmenter le buffer TCP pour maximiser le débit
         try:
             ftp.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8 * 1024 * 1024)
         except Exception:
             pass
 
-        # Naviguer vers le chemin distant
         parts = remote_path.strip("/").split("/")
         for part in parts:
             try:
@@ -2195,11 +2264,9 @@ class API:
             uploaded = [0]
             last_emit = [0.0]
 
-            if filesize > 1073741824:
-                size_str = str(round(filesize / 1073741824, 2)) + " GiB"
-            else:
-                size_str = str(round(filesize / 1048576, 1)) + " MiB"
-
+            size_str = (str(round(filesize / 1073741824, 2)) + " GiB"
+                        if filesize > 1073741824
+                        else str(round(filesize / 1048576, 1)) + " MiB")
             self._log("Envoi FTP : " + fname + " (" + size_str + ")...")
 
             def progress(data):
@@ -2211,12 +2278,11 @@ class API:
                 elapsed = now - start
                 speed = uploaded[0] / elapsed / 1048576 if elapsed > 0 else 0
                 pct = int(uploaded[0] * 100 / filesize) if filesize > 0 else 0
-                h, r = divmod(int(elapsed), 3600)
-                m, s = divmod(r, 60)
+                h, r2 = divmod(int(elapsed), 3600)
+                m, s = divmod(r2, 60)
                 e_str = (str(h) + "h " if h else "") + str(m).zfill(2) + "m " + str(s).zfill(2) + "s"
                 self._emit("upload_progress", {
-                    "filename": fname,
-                    "pct": pct,
+                    "filename": fname, "pct": pct,
                     "elapsed": e_str + " — " + str(pct) + "% — " + str(round(speed, 1)) + " MB/s"
                 })
 
@@ -2224,8 +2290,8 @@ class API:
                 ftp.storbinary("STOR " + fname, fh, 1048576, progress)
 
             elapsed = time.time() - start
-            h, r = divmod(int(elapsed), 3600)
-            m, s = divmod(r, 60)
+            h, r2 = divmod(int(elapsed), 3600)
+            m, s = divmod(r2, 60)
             e_str = (str(h) + "h " if h else "") + str(m).zfill(2) + "m " + str(s).zfill(2) + "s"
             self._log("  ✓ " + fname + " — " + e_str, "success")
 
