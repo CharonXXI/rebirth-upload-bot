@@ -3205,9 +3205,20 @@ class API:
         self._log(f"  [SSH] mktorrent : {mk_path}")
 
         # ── 3. Lancer mktorrent ───────────────────────────────────────────────
+        # -s (source) rend l'info hash unique par tracker et permet le
+        # cross-seeding immédiat si le tracker utilise ce champ pour matcher.
+        SOURCE_TAGS = {
+            "TOS":    "TheOldSchool",
+            "ABN":    "ABN",
+            "C411":   "C411",
+            "TORR9":  "Torr9",
+            "LACALE": "LaCale",
+        }
+        source_tag = SOURCE_TAGS.get(tk_name.upper(), tk_name)
         priv_flag = "-p " if private else ""
         cmd = (f"mktorrent {priv_flag}-l 22 "
                f"-a '{announce}' "
+               f"-s '{source_tag}' "
                f"-o '{tmp_remote}' "
                f"'{remote_path}' 2>&1")
         self._log(f"  [SSH] {cmd}")

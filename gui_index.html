@@ -1168,10 +1168,8 @@ async function tsbLoadFiles() {
 }
 
 function tsbSelect(name, basePath) {
-  // Retirer l'extension si présente pour le champ filename
   document.getElementById('tsb-filename').value = name;
-  var stem = name.replace(/\.[^.]+$/, '');
-  document.getElementById('tsb-remote-path').value = basePath.replace(/\/$/, '') + '/' + stem;
+  document.getElementById('tsb-remote-path').value = basePath.replace(/\/$/, '') + '/' + name;
   // Highlight la ligne sélectionnée
   document.querySelectorAll('.tsb-file-row').forEach(function(r) {
     r.style.background = 'transparent';
