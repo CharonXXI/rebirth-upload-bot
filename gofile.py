@@ -92,7 +92,6 @@ def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str
                         CHUNK = 8 * 1024 * 1024
                         def __init__(self, m): self._m = m; self.content_type = m.content_type
                         def read(self, size=-1): return self._m.read(self.CHUNK if size > 0 else -1)
-                        def __len__(self): return len(self._m)
 
                     headers = {"Content-Type": monitor.content_type}
 
