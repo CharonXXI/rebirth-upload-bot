@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.7.0-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.7.1-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -265,6 +265,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.7.1
+- Feat : **espace disque seedbox** affiché en bas du sidebar (`SB : X.XX Tio / Y.YY Tio`)
+- Feat : rafraîchissement automatique toutes les 60 secondes
+- Fix : calcul `used = total - available` pour matcher l'affichage ruTorrent (blocs réservés inclus)
+- Fix : `df -P` pour éviter le wrap des noms de filesystem longs
+
 ### v2.7.0
 - **Torrent SB opérationnel** — création via SSH + mktorrent côté seedbox, chargement automatique dans ruTorrent pour seeding immédiat
 - Feat : méthode SSH prioritaire dans la cascade de création torrent (port 22 détecté automatiquement)
@@ -351,7 +357,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.7.0** — macOS & Windows
+**REBiRTH Upload Bot v2.7.1** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

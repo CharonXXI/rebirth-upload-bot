@@ -289,7 +289,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.7.0</div>
+      <div class="logo-sub">UPLOAD BOT v2.7.1</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -1648,7 +1648,10 @@ window.addEventListener('pywebviewready', function() {
   try {
     window.pywebview.api.load_theme().then(function(t){ applyTheme(t); });
   } catch(e){}
-  setTimeout(loadSbDisk, 2000);
+  setTimeout(function() {
+    loadSbDisk();
+    setInterval(loadSbDisk, 60000); // rafraîchissement toutes les minutes
+  }, 2000);
 });
 </script>
 <div id="toast-container"></div>
