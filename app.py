@@ -192,6 +192,42 @@ class API:
         except Exception as e:
             return {"error": str(e)}
 
+    def get_seedbox_space(self):
+        """Retourne l'espace utilisé/disponible/total sur la seedbox via SSH df."""
+        try:
+            import paramiko
+        except ImportError:
+            return {"error": "paramiko absent"}
+        host = os.getenv("SFTP_HOST_FTP", "")
+        port = int(os.getenv("SFTP_PORT", "22"))
+        user = os.getenv("SFTP_USER", "")
+        pwd  = os.getenv("SFTP_PASS", "")
+        path = os.getenv("SFTP_PATH", "/home/rtorrent/rtorrent/download/REBiRTH")
+        if not host or not user:
+            return {"error": "SSH non configuré"}
+        try:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(host, port=port, username=user, password=pwd,
+                           timeout=10, allow_agent=False, look_for_keys=False)
+            _, out, _ = client.exec_command(f"df -B1 '{path}' 2>/dev/null || df -B1 /", timeout=10)
+            lines = out.read().decode("utf-8", errors="replace").strip().splitlines()
+            client.close()
+            # Ligne header + ligne data (peut être sur 2 lignes si path long)
+            data = " ".join(lines[1:]).split()
+            # df -B1: Filesystem 1B-blocks Used Available Use% Mounted
+            total_b = int(data[1])
+            used_b  = int(data[2])
+            avail_b = int(data[3])
+            def fmt(b):
+                for unit in ("o", "Kio", "Mio", "Gio", "Tio"):
+                    if b < 1024 or unit == "Tio":
+                        return f"{b:.2f} {unit}" if unit != "o" else f"{b} {unit}"
+                    b /= 1024
+            return {"used": fmt(used_b), "avail": fmt(avail_b), "total": fmt(total_b)}
+        except Exception as e:
+            return {"error": str(e)}
+
     def run_torrent_sb(self, params: dict):
         threading.Thread(target=self._torrent_sb, args=(params,), daemon=True).start()
         return {"ok": True}

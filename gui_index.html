@@ -319,6 +319,7 @@ html.light body::before {
         <span><span class="status-dot"></span>READY</span>
         <button id="theme-toggle" onclick="toggleTheme()" title="Mode jour / nuit" style="background:none;border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:11px;padding:3px 8px;cursor:pointer;transition:all .15s;letter-spacing:1px;">☀ JOUR</button>
       </div>
+      <div id="sb-disk-info" style="margin-top:7px;font-size:9px;color:var(--text-dim);letter-spacing:1px;opacity:0.7;">SB : —</div>
     </div>
   </div>
   <div id="main">
@@ -1626,12 +1627,28 @@ function applyTheme(theme) {
   if (btn) btn.textContent = isLight ? '🌙 NUIT' : '☀ JOUR';
 }
 
+function loadSbDisk() {
+  try {
+    window.pywebview.api.get_seedbox_space().then(function(r) {
+      var el = document.getElementById('sb-disk-info');
+      if (!el) return;
+      if (r && r.used !== undefined && r.total !== undefined) {
+        el.textContent = 'SB : ' + r.used + ' / ' + r.total;
+        el.title = r.avail + ' disponible';
+      } else {
+        el.textContent = 'SB : —';
+      }
+    });
+  } catch(e) {}
+}
+
 window.addEventListener('pywebviewready', function() {
   loadConfig();
   loadTrackers();
   try {
     window.pywebview.api.load_theme().then(function(t){ applyTheme(t); });
   } catch(e){}
+  setTimeout(loadSbDisk, 2000);
 });
 </script>
 <div id="toast-container"></div>
