@@ -86,8 +86,7 @@ def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str
                     monitor = MultipartEncoderMonitor(encoder, progress_callback)
                     headers = {"Content-Type": monitor.content_type}
 
-                    response = requests.post(endpoint, data=monitor, headers=headers,
-                                             timeout=(10, None))
+                    response = requests.post(endpoint, data=monitor, headers=headers)
                     response.raise_for_status()
                     rprint(f"[green]Upload terminé :[/green] {f_obj.name}")
                     return response
