@@ -224,8 +224,10 @@ class API:
             parts = line.split()
             # total used avail filesystem
             total_b = int(parts[0])
-            used_b  = int(parts[1])
             avail_b = int(parts[2])
+            # Calculer used = total - avail (comme ruTorrent)
+            # df "Used" exclut les blocs réservés root, total-avail les inclut
+            used_b  = total_b - avail_b
             def fmt(b):
                 for unit in ("o", "Kio", "Mio", "Gio", "Tio"):
                     if b < 1024 or unit == "Tio":
