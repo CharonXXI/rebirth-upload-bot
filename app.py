@@ -3434,7 +3434,7 @@ class API:
         if o:
             self._log("  [SSH] " + o[:400])
 
-        # ── 4. SFTP download du .torrent ──────────────────────────────────────
+        # ── 4. SFTP download du .torrent (sans supprimer — gardé pour rtxmlrpc) ──
         sftp = client.open_sftp()
         try:
             try:
@@ -3446,62 +3446,99 @@ class API:
             buf = io.BytesIO()
             sftp.getfo(tmp_remote, buf)
             torrent_bytes = buf.getvalue()
-            try:
-                sftp.remove(tmp_remote)
-            except Exception:
-                pass
         finally:
             sftp.close()
-        client.close()
+        # Ne pas fermer client ici — on en a besoin pour rtxmlrpc (step 5)
 
         if not torrent_bytes or torrent_bytes.lstrip()[:1] != b"d":
+            _exec(f"rm -f '{tmp_remote}'")
+            client.close()
             raise Exception("Contenu .torrent invalide (pas bencoded)")
         self._log(f"  [SSH] ✅ .torrent OK — {len(torrent_bytes):,} octets")
 
-        # ── 5. Charger dans ruTorrent via XML-RPC (3 appels séparés) ────────────
-        # Problème avec load.raw_start_verbose + d.directory.set=... inline :
-        # rtorrent parse la chaîne de commande et supprime les slashes du chemin.
-        # Solution : load.raw (sans start), puis d.directory.set(hash, dir),
-        # puis d.start(hash) — les slashes sont du contenu XML pur, pas touchés.
-        if rt_url:
-            import base64 as _b64, hashlib as _hl, time as _t
-            parent_dir = str(Path(remote_path).parent)
-            rpc_url    = rt_url.rstrip("/") + "/RPC2"
-            ct         = {"Content-Type": "text/xml"}
-            auth_pair  = (rt_user, rt_pass)
+        # ── 5. Charger dans rtorrent ──────────────────────────────────────────
+        # Stratégie : rtxmlrpc via SSH (SCGI direct, aucun proxy PHP)
+        # → les slashes du chemin ne sont jamais touchés.
+        # Fallback : HTTP XML-RPC via ruTorrent /RPC2 si rtxmlrpc absent.
+        import hashlib as _hl, time as _t
 
-            # ── Extraire l'info hash du .torrent (SHA1 du dict info bencoded) ──
-            def _info_hash(tb):
-                marker = b"4:info"
-                idx = tb.find(marker)
-                if idx < 0:
-                    return None
-                pos = idx + len(marker)
-                if tb[pos:pos+1] != b"d":
-                    return None
-                depth = 0
-                while pos < len(tb):
-                    c = chr(tb[pos])
-                    if c in ("d", "l"):
-                        depth += 1; pos += 1
-                    elif c == "e":
-                        depth -= 1; pos += 1
-                        if depth == 0:
-                            break
-                    elif c == "i":
-                        pos = tb.index(b"e", pos + 1) + 1
-                    elif c.isdigit():
-                        colon = tb.index(b":", pos)
-                        slen  = int(tb[pos:colon])
-                        pos   = colon + 1 + slen
-                    else:
-                        return None
-                return _hl.sha1(tb[idx + len(marker):pos]).hexdigest().upper()
+        # Chemin parent via opération string pure (Path() sur Windows convertit en \)
+        parent_dir = remote_path.rstrip("/").rsplit("/", 1)[0] or "/"
 
+        # ── Extraire l'info hash (SHA1 du dict info bencoded) ─────────────────
+        def _info_hash(tb):
+            marker = b"4:info"
+            idx = tb.find(marker)
+            if idx < 0:
+                return None
+            pos = idx + len(marker)
+            if tb[pos:pos+1] != b"d":
+                return None
+            depth = 0
+            while pos < len(tb):
+                c = chr(tb[pos])
+                if c in ("d", "l"):
+                    depth += 1; pos += 1
+                elif c == "e":
+                    depth -= 1; pos += 1
+                    if depth == 0:
+                        break
+                elif c == "i":
+                    pos = tb.index(b"e", pos + 1) + 1
+                elif c.isdigit():
+                    colon = tb.index(b":", pos)
+                    slen  = int(tb[pos:colon])
+                    pos   = colon + 1 + slen
+                else:
+                    return None
+            return _hl.sha1(tb[idx + len(marker):pos]).hexdigest().upper()
+
+        info_hash = _info_hash(torrent_bytes)
+        self._log(f"  [SSH] info_hash = {info_hash or '(erreur)'}")
+
+        # ── Détection de rtxmlrpc ──────────────────────────────────────────────
+        rxtool, _ = _exec("which rtxmlrpc 2>/dev/null || echo ''")
+        rxtool = rxtool.strip()
+        self._log(f"  [SSH] rtxmlrpc = {rxtool or '(absent)'}")
+
+        loaded_ok = False
+
+        if rxtool and info_hash:
             try:
-                torrent_b64 = _b64.b64encode(torrent_bytes).decode()
+                # 5a. Charger sans démarrer (load.normal = load sans start)
+                o, e = _exec(f"{rxtool} load.normal '' '{tmp_remote}'", timeout=30)
+                self._log(f"  [SSH] rtxmlrpc load.normal → {(o or e or 'ok')[:200]}")
 
-                # 5a. Charger le torrent (sans démarrer, sans directory inline)
+                _t.sleep(1)  # rtorrent enregistre le torrent
+
+                # 5b. Définir le répertoire — SCGI direct, aucune sanitisation
+                o, e = _exec(
+                    f"{rxtool} d.directory.set {info_hash} '{parent_dir}'", timeout=10)
+                self._log(f"  [SSH] rtxmlrpc d.directory.set → {(o or e or 'ok')[:200]}")
+                self._log(f"  [SSH] directory = {parent_dir}")
+
+                # 5c. Démarrer le seeding
+                o, e = _exec(f"{rxtool} d.start {info_hash}", timeout=10)
+                self._log(f"  [SSH] rtxmlrpc d.start → {(o or e or 'ok')[:200]}")
+
+                loaded_ok = True
+                self._log("  [SSH] ✅ Torrent chargé et seeding démarré", "success")
+
+            except Exception as e_rxt:
+                self._log(f"  [SSH] ⚠ rtxmlrpc : {e_rxt}", "warn")
+
+        if not loaded_ok and rt_url:
+            # Fallback HTTP XML-RPC via ruTorrent /RPC2
+            # Note : le proxy PHP peut modifier les slashes du chemin —
+            # si le répertoire est toujours mauvais, vérifier que rtxmlrpc est dispo.
+            self._log("  [ruT] Fallback HTTP XML-RPC…", "warn")
+            try:
+                import base64 as _b64
+                torrent_b64 = _b64.b64encode(torrent_bytes).decode()
+                rpc_url   = rt_url.rstrip("/") + "/RPC2"
+                ct        = {"Content-Type": "text/xml"}
+                auth_pair = (rt_user, rt_pass)
+
                 xml_load = (
                     '<?xml version="1.0"?>'
                     '<methodCall><methodName>load.raw</methodName>'
@@ -3514,42 +3551,38 @@ class API:
                 resp_load = requests.post(rpc_url, data=xml_load, headers=ct,
                                           auth=auth_pair, verify=False, timeout=30)
                 self._log(f"  [ruT] load.raw → HTTP {resp_load.status_code}")
+                _t.sleep(1)
 
-                # 5b. Extraire l'info hash pour cibler le torrent
-                info_hash = _info_hash(torrent_bytes)
-                if not info_hash:
-                    raise Exception("Impossible d'extraire l'info hash")
-                self._log(f"  [ruT] info_hash = {info_hash}")
+                if info_hash:
+                    xml_dir = (
+                        '<?xml version="1.0"?>'
+                        '<methodCall><methodName>d.directory.set</methodName>'
+                        '<params>'
+                        f'<param><value><string>{info_hash}</string></value></param>'
+                        f'<param><value><string>{parent_dir}</string></value></param>'
+                        '</params></methodCall>'
+                    )
+                    resp_dir = requests.post(rpc_url, data=xml_dir, headers=ct,
+                                             auth=auth_pair, verify=False, timeout=10)
+                    self._log(f"  [ruT] d.directory.set → HTTP {resp_dir.status_code} — {parent_dir}")
 
-                _t.sleep(1)   # laisser rtorrent enregistrer le torrent
-
-                # 5c. Définir le répertoire — slashes préservés en tant que XML string
-                xml_dir = (
-                    '<?xml version="1.0"?>'
-                    '<methodCall><methodName>d.directory.set</methodName>'
-                    '<params>'
-                    f'<param><value><string>{info_hash}</string></value></param>'
-                    f'<param><value><string>{parent_dir}</string></value></param>'
-                    '</params></methodCall>'
-                )
-                resp_dir = requests.post(rpc_url, data=xml_dir, headers=ct,
-                                         auth=auth_pair, verify=False, timeout=10)
-                self._log(f"  [ruT] d.directory.set → HTTP {resp_dir.status_code} — {parent_dir}")
-
-                # 5d. Démarrer le seeding
-                xml_start = (
-                    '<?xml version="1.0"?>'
-                    '<methodCall><methodName>d.start</methodName>'
-                    '<params>'
-                    f'<param><value><string>{info_hash}</string></value></param>'
-                    '</params></methodCall>'
-                )
-                resp_start = requests.post(rpc_url, data=xml_start, headers=ct,
-                                           auth=auth_pair, verify=False, timeout=10)
-                self._log(f"  [ruT] d.start → HTTP {resp_start.status_code}")
+                    xml_start = (
+                        '<?xml version="1.0"?>'
+                        '<methodCall><methodName>d.start</methodName>'
+                        '<params>'
+                        f'<param><value><string>{info_hash}</string></value></param>'
+                        '</params></methodCall>'
+                    )
+                    resp_start = requests.post(rpc_url, data=xml_start, headers=ct,
+                                               auth=auth_pair, verify=False, timeout=10)
+                    self._log(f"  [ruT] d.start → HTTP {resp_start.status_code}")
 
             except Exception as e_rut:
-                self._log(f"  [ruT] ⚠ XML-RPC : {e_rut}", "warn")
+                self._log(f"  [ruT] ⚠ : {e_rut}", "warn")
+
+        # Suppression du fichier tmp sur la seedbox
+        _exec(f"rm -f '{tmp_remote}'")
+        client.close()
 
         return torrent_bytes
 
