@@ -2228,8 +2228,13 @@ class API:
 
             self._log("Connexion SFTP vers " + host + "…")
             transport = paramiko.Transport((host, port))
+            # ── Optimisations débit SFTP ──────────────────────────────────────
+            transport.window_size        = 67108864   # 64 MB (défaut 2 MB)
+            transport.packetizer.REKEY_BYTES   = pow(2, 40)  # évite rekey en cours d'upload
+            transport.packetizer.REKEY_PACKETS = pow(2, 40)
             transport.connect(username=user, password=password)
             sftp = paramiko.SFTPClient.from_transport(transport)
+            sftp.MAX_REQUEST_SIZE = 1048576  # paquets 1 MB (défaut 32 KB)
 
             # Créer le dossier distant récursivement
             parts = remote_path.strip("/").split("/")

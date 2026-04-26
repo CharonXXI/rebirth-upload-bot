@@ -53,6 +53,23 @@ def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str
     file_size = f_obj.stat().st_size
     token = os.getenv("GOFILE_TOKEN")
 
+    # Session persistante avec TCP keep-alive et buffer réseau optimisé
+    session = requests.Session()
+    adapter = requests.adapters.HTTPAdapter(
+        pool_connections=1,
+        pool_maxsize=1,
+        max_retries=0,
+    )
+    session.mount("https://", adapter)
+    # Buffer socket 8 MB pour éviter les micro-stalls
+    import socket as _socket
+    _orig_create = _socket.create_connection
+    def _patched_create(*a, **kw):
+        s = _orig_create(*a, **kw)
+        s.setsockopt(_socket.SOL_SOCKET, _socket.SO_SNDBUF, 8 * 1024 * 1024)
+        return s
+    _socket.create_connection = _patched_create
+
     for endpoint in _get_best_endpoints():
         rprint(f"[cyan]Tentative sur :[/cyan] {endpoint}")
         try:
@@ -88,7 +105,8 @@ def upload(file: str, folder_id: Optional[str] = None, guest_token: Optional[str
                         "Content-Type": monitor.content_type,
                     }
 
-                    response = requests.post(endpoint, data=monitor, headers=headers)
+                    response = session.post(endpoint, data=monitor, headers=headers,
+                                            timeout=(10, None))  # connect 10s, pas de timeout lecture
                     response.raise_for_status()
                     rprint(f"[green]Upload terminé :[/green] {f_obj.name}")
                     return response
