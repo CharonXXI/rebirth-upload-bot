@@ -153,34 +153,55 @@ source venv/bin/activate && python3 app.py
 ## 🔄 Workflow complet
 
 ```
-Selectionner le .mkv
+─────────────────────────────────────────────
+Workflow principal (MKV / REMUX)
+─────────────────────────────────────────────
+Sélectionner le .mkv
         │
         ▼
 Remplir Source / Note / Autre info
 Cocher les trackers : ABN / TOS / C411 / Torr9 / LaCale
         │
         ▼
-Choisir type NFO : UTF-8 ou CP437
-Choisir plateforme : Gofile / BuzzHeavier / Ignorer
+Choisir type NFO : UTF-8 (LaCale · C411 · Torr9)
+                   CP437 (TOS · ABN)
+Choisir plateforme : BuzzHeavier / Gofile / Ignorer
         │
         ▼
       LANCER
         │
-        ├─ [TMDB]     Recherche + confirmation
+        ├─ [TMDB]     Recherche automatique + confirmation / changement d'ID
         ├─ [NFO]      Génération UTF-8 + CP437
-        ├─ [UPLOAD]   Gofile ou BuzzHeavier
-        ├─ [DISCORD]  Notification embed
-        ├─ [FINAL]    Création FINAL/nom_film/
-        └─ [FTP]      Upload seedbox via FTP TLS
+        ├─ [UPLOAD]   BuzzHeavier (recommandé > 10 GB) ou Gofile (failover 7 serveurs)
+        ├─ [DISCORD]  Notification embed (poster TMDB, liens, source, trackers, note)
+        ├─ [FINAL]    Création FINAL/nom_film/ avec le bon NFO par tracker
+        └─ [SFTP]     Upload complet du dossier FINAL sur la seedbox (SSH port 22)
 
 ─────────────────────────────────────────────
-Workflow BD Info (indépendant)
+Workflow Torrent SB (après upload seedbox)
+─────────────────────────────────────────────
+Onglet TORRENT SB
+        │
+        ▼
+Recharger la liste seedbox → cliquer sur le film
+        │
+        ▼
+Cocher les trackers → CRÉER TORRENTS SB
+        │
+        ├─ [SSH]      Connexion paramiko → mktorrent côté seedbox
+        │              -p (privé) · -l 22 (4 MiB) · -s source_tag par tracker
+        │              → hash unique par tracker (TOS=TheOldSchool, etc.)
+        ├─ [SFTP]     Rapatriement du .torrent → sauvegardé dans TORRENTS/
+        └─ [ruTorrent] Chargement via addtorrent.php → seeding immédiat
+
+─────────────────────────────────────────────
+Workflow BD Info (COMPLETE BLURAY)
 ─────────────────────────────────────────────
 Onglet BD INFO
         │
         ▼
-  SCANNER (optionnel — ouvre BDInfo via Whisky)
-  ou directement :
+  SCANNER (optionnel — ouvre BDInfo v0.7.5.6 via Wine/Whisky)
+  ou directement depuis un rapport existant :
         │
         ▼
   Dans BDInfo v0.7.5.6 :
@@ -192,13 +213,14 @@ Onglet BD INFO
         │
         ├─ Conversion RTF → texte brut (si TextEdit)
         ├─ Extraction DISC INFO / PLAYLIST REPORT / VIDEO / AUDIO / SUBTITLES
-        ├─ Sauvegarde THE_DISC_LABEL.txt + .nfo dans BDINFO/
+        ├─ Renommage automatique avec le Disc Label (ex: DISC_LABEL.nfo)
+        ├─ Sauvegarde .txt + .nfo dans BDINFO/
         ├─ Affichage dans la preview
         └─ BDInfo/Wine fermé automatiquement
                    │
                    ▼
         Choisir BuzzHeavier / Gofile → ENVOYER
-        └─ ZIP (dossier + NFO) uploadé en un seul fichier
+        └─ ZIP (dossier COMPLETE BLURAY + NFO) uploadé en un seul fichier
 ```
 
 ---
