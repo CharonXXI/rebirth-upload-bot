@@ -269,6 +269,10 @@ rebirth-upload-bot/
 - **Torrent SB opérationnel** — création via SSH + mktorrent côté seedbox, chargement automatique dans ruTorrent pour seeding immédiat
 - Feat : méthode SSH prioritaire dans la cascade de création torrent (port 22 détecté automatiquement)
 - Feat : un `.torrent` par tracker coché, sauvegardé dans `TORRENTS/`
+- Feat : **source tag par tracker** — info hash unique par tracker via `-s` mktorrent (`TOS=TheOldSchool`, `ABN`, `C411`, `Torr9`, `LaCale`) — cross-seeding immédiat sur TOS sans re-télécharger
+- Feat : migration seedbox complète en **SFTP/SSH paramiko** (port 22) — `list_seedbox_files` et `_ftp_upload` réécrits
+- Fix : `tsbSelect()` — suppression du `.replace(/\.[^.]+$/, '')` qui tronquait le nom du dossier (ex: `.AVC-REBiRTH` retiré à tort)
+- Fix : `Path.stem` → `Path.name` côté Python pour `remote_path` — même troncature corrigée
 - Fix : mise à jour credentials seedbox (nouveau VPS avec accès SSH complet)
 
 ### v2.6.0
@@ -347,7 +351,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.6.0** — macOS & Windows
+**REBiRTH Upload Bot v2.7.0** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
