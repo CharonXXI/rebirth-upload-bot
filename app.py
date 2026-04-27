@@ -1943,6 +1943,7 @@ class API:
 
         # Lister tous les fichiers à uploader (hors éléments cachés macOS)
         files_to_upload = []
+        skipped = []
         total_bytes = 0
         for local_f in sorted(local_path.rglob("*")):
             if not local_f.is_file():
@@ -1951,13 +1952,21 @@ class API:
             # Ignorer tout composant du chemin commençant par '.'
             # (._*, .DS_Store, .Spotlight-V100/, .fseventsd/, .Trashes/, etc.)
             if any(part.startswith(".") for part in rel.parts):
-                self._log(f"  [SFTP] ⤼ ignoré (caché) : {rel}")
+                skipped.append((rel, local_f.stat().st_size))
                 continue
             files_to_upload.append((local_f, rel))
             total_bytes += local_f.stat().st_size
 
-        total_gib = round(total_bytes / 1073741824, 2)
-        self._log(f"  [SFTP] {len(files_to_upload)} fichiers à uploader — {total_gib} GiB")
+        skipped_bytes = sum(s for _, s in skipped)
+        total_gib   = round(total_bytes / 1073741824, 2)
+        skipped_mib = round(skipped_bytes / 1048576, 1)
+
+        msg_scan = (f"Scan : {len(files_to_upload)} fichiers — {total_gib} GiB à uploader"
+                    + (f" | {len(skipped)} cachés ignorés ({skipped_mib} MiB)" if skipped else ""))
+        self._log(f"  [SFTP] {msg_scan}")
+        self._emit("bdinfo_hdt_status", {"msg": msg_scan})
+        for rel_s, sz_s in skipped:
+            self._log(f"  [SFTP] ⤼ ignoré : {rel_s} ({round(sz_s/1048576,1)} MiB)")
 
         uploaded_bytes = 0
         for local_f, rel in files_to_upload:
@@ -1999,7 +2008,9 @@ class API:
             self._log(f"  [SFTP] ✓ {rel} — {m:02d}m{s:02d}s", "success")
 
         done_gib = round(uploaded_bytes / 1073741824, 2)
-        self._log(f"  [SFTP] Total envoyé : {done_gib} GiB / {total_gib} GiB", "success")
+        msg_done = f"Upload terminé : {done_gib} GiB envoyés"
+        self._log(f"  [SFTP] {msg_done}", "success")
+        self._emit("bdinfo_hdt_status", {"msg": msg_done})
 
     def torrent_bdinfo_hdt(self):
         """Upload le dossier FULL BD sur la seedbox puis crée le torrent HD-Torrents.
