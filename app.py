@@ -2059,7 +2059,7 @@ class API:
 
                 # ── 2. Créer le torrent et démarrer le seeding ─────────────────
                 self._emit("bdinfo_hdt_status", {"msg": "Création torrent HDT…"})
-                self._create_torrent_rutorrent(base, hdt_remote_path, {"HDT": hdt_announce}, private=True)
+                self._create_torrent_rutorrent(base, hdt_remote_path, {"HDT": hdt_announce}, private=True, auto_start=False)
 
                 self._emit("bdinfo_hdt_done", {
                     "ok": True, "base": base, "path": hdt_remote_path
@@ -3354,7 +3354,7 @@ class API:
     # ──────────────────────────────────────────────────────────────────────────
     # Méthode SSH : mktorrent côté seedbox + SFTP + chargement ruTorrent
     # ──────────────────────────────────────────────────────────────────────────
-    def _create_torrent_via_ssh(self, base, remote_path, announce, private, tk_name):
+    def _create_torrent_via_ssh(self, base, remote_path, announce, private, tk_name, auto_start=True):
         """Crée un torrent via SSH+mktorrent directement sur la seedbox.
         1. SSH connect (paramiko)
         2. Vérifie/installe mktorrent
@@ -3520,12 +3520,15 @@ class API:
                 self._log(f"  [SSH] rtxmlrpc d.directory.set → {(o or e or 'ok')[:200]}")
                 self._log(f"  [SSH] directory = {parent_dir}")
 
-                # 5c. Démarrer le seeding
-                o, e = _exec(f"{rxtool} d.start {info_hash}", timeout=10)
-                self._log(f"  [SSH] rtxmlrpc d.start → {(o or e or 'ok')[:200]}")
+                # 5c. Démarrer le seeding (optionnel)
+                if auto_start:
+                    o, e = _exec(f"{rxtool} d.start {info_hash}", timeout=10)
+                    self._log(f"  [SSH] rtxmlrpc d.start → {(o or e or 'ok')[:200]}")
+                    self._log("  [SSH] ✅ Torrent chargé et seeding démarré", "success")
+                else:
+                    self._log("  [SSH] ✅ Torrent chargé (en pause — seed manuel requis)", "success")
 
                 loaded_ok = True
-                self._log("  [SSH] ✅ Torrent chargé et seeding démarré", "success")
 
             except Exception as e_rxt:
                 self._log(f"  [SSH] ⚠ rtxmlrpc : {e_rxt}", "warn")
@@ -3569,16 +3572,19 @@ class API:
                                              auth=auth_pair, verify=False, timeout=10)
                     self._log(f"  [ruT] d.directory.set → HTTP {resp_dir.status_code} — {parent_dir}")
 
-                    xml_start = (
-                        '<?xml version="1.0"?>'
-                        '<methodCall><methodName>d.start</methodName>'
-                        '<params>'
-                        f'<param><value><string>{info_hash}</string></value></param>'
-                        '</params></methodCall>'
-                    )
-                    resp_start = requests.post(rpc_url, data=xml_start, headers=ct,
-                                               auth=auth_pair, verify=False, timeout=10)
-                    self._log(f"  [ruT] d.start → HTTP {resp_start.status_code}")
+                    if auto_start:
+                        xml_start = (
+                            '<?xml version="1.0"?>'
+                            '<methodCall><methodName>d.start</methodName>'
+                            '<params>'
+                            f'<param><value><string>{info_hash}</string></value></param>'
+                            '</params></methodCall>'
+                        )
+                        resp_start = requests.post(rpc_url, data=xml_start, headers=ct,
+                                                   auth=auth_pair, verify=False, timeout=10)
+                        self._log(f"  [ruT] d.start → HTTP {resp_start.status_code}")
+                    else:
+                        self._log("  [ruT] d.start ignoré (auto_start=False — seed manuel requis)")
 
             except Exception as e_rut:
                 self._log(f"  [ruT] ⚠ : {e_rut}", "warn")
@@ -3707,7 +3713,7 @@ class API:
                   + str(len(result)) + " o)", "success")
         return result
 
-    def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True):
+    def _create_torrent_rutorrent(self, base, remote_path, announce_urls, private=True, auto_start=True):
         """Crée les torrents via le plugin create de ruTorrent (hash côté seedbox).
         Piece size 4 MiB. Récupère le .torrent en cascade :
           A) HTTP GET sur le plugin create (bail rapide si retourne [])
@@ -3795,7 +3801,8 @@ class API:
             if ftp_port == 22:
                 try:
                     torrent_bytes = self._create_torrent_via_ssh(
-                        base, remote_path, announce, bool(private), tk_name)
+                        base, remote_path, announce, bool(private), tk_name,
+                        auto_start=auto_start)
                 except Exception as e_ssh:
                     self._log("  ⚠ [SSH] " + str(e_ssh), "warn")
 
