@@ -2002,10 +2002,27 @@ class API:
         """
         def _worker():
             try:
-                folder = getattr(self, "_bdi_last_folder", "")
-                if not folder or not Path(folder).exists():
+                bdi_folder = getattr(self, "_bdi_last_folder", "")
+                if not bdi_folder:
                     self._emit("bdinfo_hdt_done", {
-                        "ok": False, "error": "Aucune source locale — sélectionne et scanne d'abord un dossier BDMV"
+                        "ok": False, "error": "Aucune source — sélectionne et scanne d'abord un dossier BDMV"
+                    })
+                    return
+
+                # Pour la seedbox : chercher en priorité dans FILMS/
+                # (le dossier scanné peut être sur un disque externe ou ailleurs)
+                folder_name = Path(bdi_folder).name
+                films_candidate = BASE_DIR / "FILMS" / folder_name
+                if films_candidate.exists() and films_candidate.is_dir():
+                    folder = str(films_candidate)
+                    self._log(f"  [HDT] Source FILMS/ : {folder}")
+                elif Path(bdi_folder).exists():
+                    folder = bdi_folder
+                    self._log(f"  [HDT] Source (scan) : {folder}")
+                else:
+                    self._emit("bdinfo_hdt_done", {
+                        "ok": False,
+                        "error": f"Dossier introuvable dans FILMS/ ni à l'emplacement scanné : {folder_name}"
                     })
                     return
 
