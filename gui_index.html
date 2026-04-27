@@ -518,11 +518,6 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tsb-c411"   checked/><span class="tck-lbl">C411</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-lacale" checked/><span class="tck-lbl">LaCale</span></label>
-              <label class="tck-row" title="HDT utilise /FULL BD — chemin séparé">
-                <input type="checkbox" id="tsb-hdt"/>
-                <span class="tck-lbl">HDT</span>
-                <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-left:4px;">(FULL BD)</span>
-              </label>
             </div>
           </div>
 
@@ -1267,7 +1262,7 @@ function _tsbLog(msg, cls) {
 }
 
 function _tsbGetTrackers() {
-  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-lacale':'LaCale', 'tsb-hdt':'HDT' };
+  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-lacale':'LaCale' };
   return Object.entries(map).filter(function(kv){
     var el = document.getElementById(kv[0]); return el && el.checked;
   }).map(function(kv){ return kv[1]; }).join(' ');

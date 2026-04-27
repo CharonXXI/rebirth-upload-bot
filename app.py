@@ -274,7 +274,6 @@ class API:
                 "C411":   os.getenv("TRACKER_C411", ""),
                 "TORR9":  os.getenv("TRACKER_TORR9", ""),
                 "LACALE": os.getenv("TRACKER_LACALE", ""),
-                "HDT":    os.getenv("TRACKER_HDT", ""),
             }
             checked = [t.strip().upper() for t in trackers.split() if t.strip()]
             active  = {k: v for k, v in announces.items() if v and k.upper() in checked}
@@ -288,19 +287,7 @@ class API:
             if not active:
                 raise Exception("Aucun tracker configuré pour les cases cochées. Vérifie les announces dans Config.")
 
-            # HDT utilise un répertoire différent sur la seedbox (FULL BD)
-            hdt_announce = active.pop("HDT", None)
-            active_hdt = {"HDT": hdt_announce} if hdt_announce else {}
-            active_regular = active  # trackers restants (REBiRTH path)
-
-            if active_regular:
-                self._create_torrent_rutorrent(base, remote_path, active_regular, private=bool(private))
-
-            if active_hdt:
-                hdt_sftp_path = os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD")
-                hdt_remote_path = hdt_sftp_path.rstrip("/") + "/" + base
-                self._log("  HDT remote_path : " + hdt_remote_path)
-                self._create_torrent_rutorrent(base, hdt_remote_path, active_hdt, private=bool(private))
+            self._create_torrent_rutorrent(base, remote_path, active, private=bool(private))
 
             self._emit("done", {"nfo_only": False, "url": "Torrents SB créés !"})
 
