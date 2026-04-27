@@ -1954,10 +1954,9 @@ class API:
         for local_f in sorted(local_path.rglob("*")):
             if not local_f.is_file():
                 continue
-            # Ignorer fichiers cachés et dossier BACKUP
-            if any(p.startswith(".") for p in local_f.parts):
-                continue
-            if "BACKUP" in local_f.parts:
+            # Ignorer uniquement les fichiers système macOS (resource forks, DS_Store)
+            # NE PAS filtrer BACKUP/ — mktorrent en a besoin pour la vérification du torrent
+            if local_f.name.startswith("._") or local_f.name == ".DS_Store":
                 continue
 
             rel      = local_f.relative_to(local_path)
