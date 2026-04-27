@@ -3901,11 +3901,13 @@ class API:
                 except Exception as e_local:
                     self._log("  ⚠ [LOCAL] " + str(e_local), "warn")
 
-            # ── 4. Sauvegarde locale ────────────────────────────────────────────
+            # ── 4. Sauvegarde locale dans TORRENTS/<tracker>/ ──────────────────
             if torrent_bytes:
-                torrent_name = base + "__" + tk_name + ".torrent"
-                (torrents_local / torrent_name).write_bytes(torrent_bytes)
-                self._log("  💾 Sauvegardé → TORRENTS/" + torrent_name, "success")
+                tk_dir = torrents_local / tk_name
+                tk_dir.mkdir(exist_ok=True)
+                torrent_name = base + ".torrent"
+                (tk_dir / torrent_name).write_bytes(torrent_bytes)
+                self._log(f"  💾 Sauvegardé → TORRENTS/{tk_name}/{torrent_name}", "success")
             else:
                 self._log("  ⚠ .torrent non récupéré — seeding actif sur la SB", "warn")
 
