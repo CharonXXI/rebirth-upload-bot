@@ -1918,7 +1918,10 @@ class API:
 
     def _sftp_upload_folder(self, sftp, local_dir: str, remote_dir: str):
         """Upload récursif d'un dossier local vers la seedbox via SFTP.
-        Crée les sous-dossiers distants à la volée. Exclut les fichiers cachés (.) et BACKUP/.
+        Crée les sous-dossiers distants à la volée.
+        Exclut tout fichier/dossier dont un composant du chemin relatif commence par '.'
+        (resource forks ._*, .DS_Store, .Spotlight-V100/, .fseventsd/, etc.)
+        NE filtre PAS BACKUP/ — mktorrent en a besoin pour la vérification du torrent.
         """
         import time as _time
 
@@ -1938,16 +1941,28 @@ class API:
         # Créer le dossier racine distant
         _mkdir_p(sftp, remote_dir)
 
+        # Lister tous les fichiers à uploader (hors éléments cachés macOS)
+        files_to_upload = []
+        total_bytes = 0
         for local_f in sorted(local_path.rglob("*")):
             if not local_f.is_file():
                 continue
-            # Ignorer uniquement les fichiers système macOS (resource forks, DS_Store)
-            # NE PAS filtrer BACKUP/ — mktorrent en a besoin pour la vérification du torrent
-            if local_f.name.startswith("._") or local_f.name == ".DS_Store":
+            rel = local_f.relative_to(local_path)
+            # Ignorer tout composant du chemin commençant par '.'
+            # (._*, .DS_Store, .Spotlight-V100/, .fseventsd/, .Trashes/, etc.)
+            if any(part.startswith(".") for part in rel.parts):
+                self._log(f"  [SFTP] ⤼ ignoré (caché) : {rel}")
                 continue
+            files_to_upload.append((local_f, rel))
+            total_bytes += local_f.stat().st_size
 
-            rel      = local_f.relative_to(local_path)
-            remote_f = remote_dir.rstrip("/") + "/" + str(rel).replace("\\", "/")
+        total_gib = round(total_bytes / 1073741824, 2)
+        self._log(f"  [SFTP] {len(files_to_upload)} fichiers à uploader — {total_gib} GiB")
+
+        uploaded_bytes = 0
+        for local_f, rel in files_to_upload:
+
+            remote_f      = remote_dir.rstrip("/") + "/" + str(rel).replace("\\", "/")
             remote_parent = remote_dir.rstrip("/") + "/" + str(rel.parent).replace("\\", "/")
 
             # Créer les sous-dossiers intermédiaires
@@ -1978,9 +1993,13 @@ class API:
 
             sftp.put(str(local_f), remote_f, callback=_cb)
 
+            uploaded_bytes += filesize
             elapsed = _time.time() - start
             m, s = divmod(int(elapsed), 60)
             self._log(f"  [SFTP] ✓ {rel} — {m:02d}m{s:02d}s", "success")
+
+        done_gib = round(uploaded_bytes / 1073741824, 2)
+        self._log(f"  [SFTP] Total envoyé : {done_gib} GiB / {total_gib} GiB", "success")
 
     def torrent_bdinfo_hdt(self):
         """Upload le dossier FULL BD sur la seedbox puis crée le torrent HD-Torrents.
