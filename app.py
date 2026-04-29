@@ -3982,6 +3982,98 @@ class API:
         })
 
 
+    def discord_search_tmdb(self, query: str):
+        """Recherche un film sur TMDB et retourne les résultats via _emit."""
+        def _run():
+            try:
+                api_key = os.getenv("API_KEY", "")
+                lang    = os.getenv("LANGUAGE", "fr-FR")
+                q = query.strip()
+                if q.isdigit():
+                    url = (f"https://api.themoviedb.org/3/movie/{q}"
+                           f"?api_key={api_key}&language={lang}")
+                    r = requests.get(url, timeout=10)
+                    data = r.json()
+                    results = [data] if "id" in data else []
+                else:
+                    url = (f"https://api.themoviedb.org/3/search/movie"
+                           f"?api_key={api_key}&language={lang}"
+                           f"&query={requests.utils.quote(q)}&include_adult=false")
+                    r = requests.get(url, timeout=10)
+                    results = r.json().get("results", [])[:20]
+                self._emit("discord_search_done", {"ok": True, "results": results})
+            except Exception as e:
+                self._emit("discord_search_done", {"ok": False, "error": str(e)})
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True}
+
+    def discord_send_notification(self, data: dict):
+        """Envoie un embed Discord de notification d'upload."""
+        def _run():
+            try:
+                webhook_url = os.getenv("WEBHOOK_URL", "")
+                if not webhook_url:
+                    self._emit("discord_send_done",
+                               {"ok": False, "error": "WEBHOOK_URL non configuré dans le .env"})
+                    return
+
+                movie   = data.get("movie", {})
+                rel     = data.get("release_name", "NOM_INCONNU")
+                is_maj  = data.get("is_maj", False)
+                uploads = data.get("uploads", {})
+
+                title       = movie.get("title", "")
+                year        = (movie.get("release_date") or "????")[:4]
+                poster_path = movie.get("poster_path")
+                film_id     = movie.get("id")
+                img_url     = (f"https://image.tmdb.org/t/p/w500{poster_path}"
+                               if poster_path else None)
+
+                status_lines = []
+                for site, info in uploads.items():
+                    s      = info.get("status", "")
+                    reason = info.get("reason", "").strip()
+                    icon   = (":white_check_mark:" if s == "Uploadé"
+                              else (":clock4:" if s == "Pending" else ":x:"))
+                    line = f"**{site} :** {icon}"
+                    if s != "Uploadé" and reason:
+                        line += f" **`[{reason}]`**"
+                    status_lines.append(line)
+
+                maj_text     = "🚨 MISE A JOUR 🚨\n" if is_maj else ""
+                upload_block = "\n\n".join(status_lines)
+
+                desc = (f"ID TMDB : **{film_id}**\n\n"
+                        f"**Nom de la Release :**\n"
+                        f"```fix\n{rel}```\n"
+                        f"**Statut des Uploads :**\n"
+                        f"{maj_text}\n"
+                        + upload_block)
+
+                embed = {
+                    "title":       f"🎬 {title} ({year})",
+                    "description": desc,
+                    "color":       16776960 if is_maj else 15548997,
+                }
+                if img_url:
+                    embed["thumbnail"] = {"url": img_url}
+
+                resp = requests.post(
+                    webhook_url,
+                    json={"content": "@everyone", "embeds": [embed]},
+                    timeout=10
+                )
+                if resp.status_code in (200, 204):
+                    self._emit("discord_send_done", {"ok": True})
+                else:
+                    self._emit("discord_send_done",
+                               {"ok": False, "error": f"HTTP {resp.status_code}"})
+            except Exception as e:
+                self._emit("discord_send_done", {"ok": False, "error": str(e)})
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True}
+
+
 if __name__ == "__main__":
     api = API()
 

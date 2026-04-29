@@ -158,6 +158,49 @@ html.light body::before {
 #btn-save { margin-top:24px; padding:11px 28px; background:transparent; border:1px solid var(--orange); border-radius:4px; color:var(--orange); font-family:var(--sans); font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all .15s; }
 #btn-save:hover { background:var(--orange-dim); }
 
+/* ── PAGE DISCORD ── */
+#page-discord { padding:24px; overflow-y:auto; }
+.disc-search-bar { display:flex; gap:10px; margin-bottom:20px; align-items:center; }
+.disc-search-input { flex:1; background:var(--bg3); border:1px solid var(--border2); border-radius:4px; color:var(--text-bright); font-family:var(--mono); font-size:12px; padding:9px 12px; outline:none; transition:border-color .15s; }
+.disc-search-input:focus { border-color:var(--orange); }
+.disc-search-input::placeholder { color:var(--text-dim); }
+.disc-search-btn { padding:9px 18px; background:var(--orange); border:none; border-radius:4px; color:#000; font-family:var(--sans); font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all .15s; white-space:nowrap; }
+.disc-search-btn:hover { background:var(--orange2); }
+.disc-movie-row { display:flex; align-items:center; gap:14px; background:var(--bg3); border:1px solid var(--border2); border-radius:6px; padding:10px 14px; margin-bottom:8px; transition:all .15s; }
+.disc-movie-row:hover { border-color:var(--orange); background:var(--orange-dim); }
+.disc-poster { width:46px; height:68px; object-fit:cover; border-radius:3px; flex-shrink:0; }
+.disc-poster-ph { width:46px; height:68px; background:var(--bg2); border-radius:3px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:9px; flex-shrink:0; }
+.disc-movie-info { flex:1; min-width:0; }
+.disc-movie-title { font-family:var(--sans); font-size:14px; font-weight:700; color:var(--text-bright); margin-bottom:3px; }
+.disc-movie-year { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:1px; }
+.disc-select-btn { padding:7px 14px; background:transparent; border:1px solid var(--orange); border-radius:4px; color:var(--orange); font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer; transition:all .15s; white-space:nowrap; flex-shrink:0; }
+.disc-select-btn:hover { background:var(--orange-dim); }
+/* Form */
+#disc-form { display:none; }
+#disc-form.show { display:block; }
+#disc-results.hide { display:none; }
+.disc-form-header { display:flex; align-items:center; gap:18px; margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid var(--border); }
+.disc-form-poster { width:80px; height:120px; object-fit:cover; border-radius:4px; flex-shrink:0; }
+.disc-form-poster-ph { width:80px; height:120px; background:var(--bg2); border-radius:4px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:10px; flex-shrink:0; }
+.disc-form-title { font-family:var(--sans); font-size:18px; font-weight:700; color:var(--text-bright); margin-bottom:4px; }
+.disc-form-year  { font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:1px; }
+.disc-tracker-row { display:flex; align-items:center; gap:12px; background:var(--bg3); border:1px solid var(--border2); border-radius:4px; padding:10px 14px; margin-bottom:8px; }
+.disc-tk-name { font-family:var(--mono); font-size:12px; font-weight:700; color:var(--text-bright); width:64px; letter-spacing:1px; flex-shrink:0; }
+.disc-status-sel { background:var(--bg2); border:1px solid var(--border2); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; padding:6px 8px; outline:none; cursor:pointer; transition:border-color .15s; }
+.disc-status-sel:focus { border-color:var(--orange); }
+.disc-reason-inp { flex:1; background:var(--bg2); border:1px solid var(--border2); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; padding:6px 10px; outline:none; transition:border-color .15s; }
+.disc-reason-inp:focus { border-color:var(--orange); }
+.disc-reason-inp::placeholder { color:var(--text-dim); }
+.disc-maj-row { display:flex; align-items:center; gap:10px; margin:16px 0; padding:12px 14px; border:1px solid var(--border2); border-radius:4px; background:var(--bg3); cursor:pointer; user-select:none; transition:border-color .15s; }
+.disc-maj-row:hover { border-color:var(--orange); }
+.disc-maj-check { width:16px; height:16px; accent-color:var(--orange); cursor:pointer; }
+.disc-maj-label { font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:1px; cursor:pointer; }
+.disc-send-btn { width:100%; padding:13px; background:var(--orange); border:none; border-radius:4px; color:#000; font-family:var(--sans); font-size:14px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all .15s; margin-top:20px; }
+.disc-send-btn:hover { background:var(--orange2); transform:translateY(-1px); box-shadow:0 4px 20px var(--orange-glow); }
+.disc-send-btn:disabled { background:#333; color:#666; cursor:not-allowed; transform:none; box-shadow:none; }
+.disc-back-btn { padding:8px 16px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--text-dim); font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer; transition:all .15s; margin-bottom:20px; }
+.disc-back-btn:hover { border-color:var(--orange); color:var(--orange); }
+
 /* TMDB confirm */
 #tmdb-confirm {
   display:none;
@@ -309,6 +352,9 @@ html.light body::before {
       </div>
       <div class="nav-item" data-page="bdinfo" onclick="showPage('bdinfo', this)">
         <span class="nav-icon">💿</span> BD Info
+      </div>
+      <div class="nav-item" data-page="discord" onclick="showPage('discord', this)">
+        <span class="nav-icon">🔔</span> Discord
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
@@ -692,6 +738,50 @@ html.light body::before {
         <div class="config-grid" id="config-grid"></div>
         <button id="btn-save" onclick="saveConfig()">💾 &nbsp;SAUVEGARDER</button>
       </div>
+
+      <!-- ═══════════════════════════════════════════════════ DISCORD -->
+      <div id="page-discord" class="page">
+        <div class="section-label">Notification Discord</div>
+
+        <!-- Barre de recherche -->
+        <div class="disc-search-bar">
+          <input id="disc-search-inp" class="disc-search-input" placeholder="Nom du film ou ID TMDB…"
+                 onkeydown="if(event.key==='Enter') discordSearch()"/>
+          <button class="disc-search-btn" onclick="discordSearch()">🔍 RECHERCHER</button>
+        </div>
+
+        <!-- Résultats -->
+        <div id="disc-results"></div>
+
+        <!-- Formulaire de notification -->
+        <div id="disc-form">
+          <button class="disc-back-btn" onclick="discordBack()">← Retour aux résultats</button>
+          <div class="disc-form-header">
+            <div id="disc-form-poster-wrap"></div>
+            <div>
+              <div class="disc-form-title" id="disc-form-title"></div>
+              <div class="disc-form-year"  id="disc-form-year"></div>
+            </div>
+          </div>
+
+          <div class="section-label">Nom de la release</div>
+          <input id="disc-release" class="disc-search-input" style="margin-bottom:16px;"
+                 placeholder="ex: Film.2025.FRA.BluRay.REMUX-REBiRTH"/>
+
+          <label class="disc-maj-row" onclick="document.getElementById('disc-maj').click()">
+            <input type="checkbox" id="disc-maj" class="disc-maj-check"/>
+            <span class="disc-maj-label">🚨 MISE À JOUR</span>
+          </label>
+
+          <div class="section-label">Statut des trackers</div>
+          <div id="disc-trackers"></div>
+
+          <button class="disc-send-btn" id="disc-send-btn" onclick="discordSend()">
+            📣 &nbsp;ENVOYER SUR DISCORD
+          </button>
+          <div id="disc-send-status" style="margin-top:10px;font-family:var(--mono);font-size:11px;text-align:center;"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -740,6 +830,8 @@ window._emit = function(event, data) {
   if (event === 'bdinfo_hide_input')    bdiHideInput();
   if (event === 'bdinfo_hdt_status')    bdiHdtStatus(data.msg);
   if (event === 'bdinfo_hdt_done')      bdiHdtDone(data);
+  if (event === 'discord_search_done')  discordOnSearchDone(data);
+  if (event === 'discord_send_done')    discordOnSendDone(data);
 };
 
 // ── BD Info ──────────────────────────────────────────────────────────────────
@@ -1696,6 +1788,139 @@ function loadSbDisk() {
       }
     });
   } catch(e) {}
+}
+
+// ── DISCORD ──────────────────────────────────────────────────────────────────
+
+var _discCurrentMovie = null;
+var _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE'];
+
+function discordSearch() {
+  var q = document.getElementById('disc-search-inp').value.trim();
+  if (!q) return;
+  var res = document.getElementById('disc-results');
+  res.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:20px 0;letter-spacing:1px;">RECHERCHE EN COURS…</div>';
+  try { window.pywebview.api.discord_search_tmdb(q); } catch(e) {}
+}
+
+function discordOnSearchDone(data) {
+  var res = document.getElementById('disc-results');
+  res.innerHTML = '';
+  if (!data.ok) {
+    res.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--red);padding:10px 0;">Erreur : ' + (data.error||'?') + '</div>';
+    return;
+  }
+  var movies = data.results || [];
+  if (!movies.length) {
+    res.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:10px 0;letter-spacing:1px;">Aucun résultat.</div>';
+    return;
+  }
+  movies.forEach(function(m) {
+    var year = (m.release_date || '????').slice(0, 4);
+    var row = document.createElement('div');
+    row.className = 'disc-movie-row';
+    var posterHtml = m.poster_path
+      ? '<img class="disc-poster" src="https://image.tmdb.org/t/p/w92' + m.poster_path + '" alt=""/>'
+      : '<div class="disc-poster-ph">N/A</div>';
+    row.innerHTML = posterHtml +
+      '<div class="disc-movie-info">' +
+        '<div class="disc-movie-title">' + (m.title || '') + '</div>' +
+        '<div class="disc-movie-year">' + year + ' — ID ' + m.id + '</div>' +
+      '</div>' +
+      '<button class="disc-select-btn">SÉLECTIONNER</button>';
+    row.querySelector('.disc-select-btn').addEventListener('click', function() { discordSelectMovie(m); });
+    res.appendChild(row);
+  });
+}
+
+function discordSelectMovie(movie) {
+  _discCurrentMovie = movie;
+  var year = (movie.release_date || '????').slice(0, 4);
+
+  // Poster
+  var wrap = document.getElementById('disc-form-poster-wrap');
+  wrap.innerHTML = movie.poster_path
+    ? '<img class="disc-form-poster" src="https://image.tmdb.org/t/p/w185' + movie.poster_path + '" alt=""/>'
+    : '<div class="disc-form-poster-ph">N/A</div>';
+
+  document.getElementById('disc-form-title').textContent = movie.title || '';
+  document.getElementById('disc-form-year').textContent  = year + ' — ID TMDB : ' + movie.id;
+  document.getElementById('disc-release').value = '';
+  document.getElementById('disc-maj').checked   = false;
+  document.getElementById('disc-send-status').textContent = '';
+
+  // Lignes trackers
+  var cont = document.getElementById('disc-trackers');
+  cont.innerHTML = '';
+  _discTrackers.forEach(function(tk) {
+    var row = document.createElement('div');
+    row.className = 'disc-tracker-row';
+    row.innerHTML =
+      '<span class="disc-tk-name">' + tk + '</span>' +
+      '<select class="disc-status-sel" id="disc-tk-' + tk + '-status">' +
+        '<option value="Uploadé">✅ Uploadé</option>' +
+        '<option value="Pending">⏳ Pending</option>' +
+        '<option value="Non uploadé">❌ Non uploadé</option>' +
+      '</select>' +
+      '<input class="disc-reason-inp" id="disc-tk-' + tk + '-reason" placeholder="Raison si erreur…"/>';
+    cont.appendChild(row);
+  });
+
+  document.getElementById('disc-results').classList.add('hide');
+  document.getElementById('disc-form').classList.add('show');
+}
+
+function discordBack() {
+  document.getElementById('disc-form').classList.remove('show');
+  document.getElementById('disc-results').classList.remove('hide');
+}
+
+function discordSend() {
+  if (!_discCurrentMovie) return;
+  var rel = document.getElementById('disc-release').value.trim();
+  var isMaj = document.getElementById('disc-maj').checked;
+  var uploads = {};
+  _discTrackers.forEach(function(tk) {
+    var status = document.getElementById('disc-tk-' + tk + '-status').value;
+    var reason = document.getElementById('disc-tk-' + tk + '-reason').value.trim();
+    uploads[tk] = { status: status, reason: reason };
+  });
+
+  var btn = document.getElementById('disc-send-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳  ENVOI EN COURS…';
+  document.getElementById('disc-send-status').textContent = '';
+
+  try {
+    window.pywebview.api.discord_send_notification({
+      movie: _discCurrentMovie,
+      release_name: rel,
+      is_maj: isMaj,
+      uploads: uploads
+    });
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '📣  ENVOYER SUR DISCORD';
+    document.getElementById('disc-send-status').style.color = 'var(--red)';
+    document.getElementById('disc-send-status').textContent = 'Erreur : ' + e;
+  }
+}
+
+function discordOnSendDone(data) {
+  var btn = document.getElementById('disc-send-btn');
+  btn.disabled = false;
+  btn.textContent = '📣  ENVOYER SUR DISCORD';
+  var st = document.getElementById('disc-send-status');
+  if (data.ok) {
+    st.style.color = 'var(--green)';
+    st.textContent = '✅ Notification envoyée !';
+    showToast('✓ Discord notifié', 'success');
+    setTimeout(function() { discordBack(); }, 1500);
+  } else {
+    st.style.color = 'var(--red)';
+    st.textContent = '❌ Erreur : ' + (data.error || '?');
+    showToast('Erreur Discord : ' + (data.error || '?'), 'error');
+  }
 }
 
 window.addEventListener('pywebviewready', function() {
