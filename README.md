@@ -224,6 +224,32 @@ Onglet BD INFO
                    ▼
         Choisir BuzzHeavier / Gofile → ENVOYER
         └─ ZIP (dossier COMPLETE BLURAY + NFO) uploadé en un seul fichier
+
+─────────────────────────────────────────────
+Workflow Discord (notification canal)
+─────────────────────────────────────────────
+Onglet 🔔 DISCORD
+        │
+        ▼
+Choisir le mode en haut de page :
+  ┌─ REBiRTH → liste SFTP_PATH · 5 trackers · WEBHOOK_URL
+  └─ FULL BD  → liste SFTP_PATH_HDT · HDT uniquement · WEBHOOK_HDT_URL
+        │
+        ▼
+Cliquer sur un fichier dans la liste seedbox
+  └─ Titre extrait automatiquement → recherche TMDB lancée
+        │
+        ▼
+Sélectionner le film dans les résultats TMDB
+  └─ Formulaire de notification s'ouvre :
+       · Nom de la release (pré-rempli avec le nom exact du fichier seedbox)
+       · Statut par tracker : ✅ Uploadé / ⏳ Pending / ❌ Non uploadé
+       · Raison (optionnel, ex: "encode en cours")
+       · Case 🚨 MISE À JOUR (embed couleur différente)
+        │
+        ▼
+📣 ENVOYER SUR DISCORD
+  └─ Embed envoyé : poster TMDB · titre · ID TMDB · release · statuts trackers
 ```
 
 ---
@@ -258,7 +284,19 @@ Onglet BD INFO
 - Upload automatique du dossier FINAL via FTP TLS
 
 ### 💬 Discord
-- Embed avec poster TMDB, liens TMDB/IMDb, source, trackers, note
+Onglet dédié à l'envoi de notifications sur Discord après chaque upload.
+
+**Deux modes** sélectionnables en haut de page :
+- **REBiRTH** — liste les fichiers de `SFTP_PATH`, affiche les 5 trackers (TOS / ABN / C411 / Torr9 / LaCale), envoie sur `WEBHOOK_URL`
+- **FULL BD** — liste les fichiers de `SFTP_PATH_HDT`, affiche HDT uniquement, envoie sur `WEBHOOK_HDT_URL`
+
+**Workflow :**
+1. Cliquer sur un fichier dans la liste seedbox → recherche TMDB automatique
+2. Sélectionner le film → formulaire de notification
+3. Nom de la release pré-rempli avec le nom exact du fichier (modifiable)
+4. Statut par tracker : ✅ Uploadé / ⏳ Pending / ❌ Non uploadé + champ raison
+5. Option 🚨 Mise à jour (embed couleur jaune)
+6. **📣 ENVOYER** → embed envoyé : poster TMDB, titre, ID TMDB, release, statuts
 
 ### 🧲 Torrent SB
 - Création du torrent via **SSH + mktorrent** directement sur la seedbox (piece size 4 MiB, privé)
@@ -272,18 +310,27 @@ Onglet BD INFO
 
 ```
 rebirth-upload-bot/
-├── app.py                  ← Backend Python (PyWebView)
-├── gui_index.html          ← Frontend HTML/CSS/JS
-├── gofile.py               ← Module upload Gofile
-├── auto-up-discord.py      ← Script CLI autonome
-├── V1.env                  ← Configuration (ne pas commiter)
-├── REBiRTH.command         ← Lanceur macOS
-├── REBiRTH.bat             ← Lanceur Windows
-├── NFO_CUSTOM/             ← Générateur NFO
-├── FILMS/                  ← Déposer les .mkv ici
-├── FINAL/                  ← Sortie (MKV + NFO)
-├── TORRENTS/               ← Fichiers .torrent
-└── BDINFO/                 ← Rapports BD Info (.nfo + .txt)
+├── app.py                      ← Backend Python (PyWebView + toute la logique)
+├── gui_index.html              ← Frontend HTML/CSS/JS (interface complète)
+├── gofile.py                   ← Module upload Gofile (failover 7 serveurs)
+├── auto-up-discord.py          ← Script CLI autonome (discord + upload)
+├── notif_upload_discord.py     ← Script standalone tkinter (notification Discord)
+├── V1.env                      ← Configuration (ne pas commiter — gitignored)
+├── REBiRTH.command             ← Lanceur macOS (double-clic)
+├── REBiRTH.bat                 ← Lanceur Windows (double-clic)
+├── NFO_CUSTOM/                 ← Générateur NFO (TMDB, templates, helpers)
+├── BDInfo_v0/                  ← BDInfo v0.7.5.6 (BDInfo.exe + DLLs — non commité)
+├── FILMS/                      ← Déposer les .mkv / dossiers COMPLETE BLURAY ici
+├── FINAL/                      ← Sortie encodage (MKV + NFO par tracker)
+│   └── Nom.Du.Film.2025.../    ← Un sous-dossier par release
+├── TORRENTS/                   ← Fichiers .torrent par tracker
+│   ├── TOS/                    ← .torrent TheOldSchool
+│   ├── ABN/                    ← .torrent ABNormal
+│   ├── C411/                   ← .torrent Czone411
+│   ├── Torr9/                  ← .torrent Torr9
+│   ├── LACALE/                 ← .torrent LaCale
+│   └── HDT/                    ← .torrent HD-Torrents (FULL BD)
+└── BDINFO/                     ← Rapports BD Info (.txt + .nfo par Disc Label)
 ```
 
 ---
