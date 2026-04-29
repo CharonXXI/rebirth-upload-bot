@@ -159,7 +159,11 @@ html.light body::before {
 #btn-save:hover { background:var(--orange-dim); }
 
 /* ── PAGE DISCORD ── */
-#page-discord { padding:24px; overflow-y:auto; }
+#page-discord { padding:24px; overflow:hidden; display:none; flex-direction:column; }
+#page-discord.active { display:flex; animation:pageFadeIn 0.18s ease forwards; }
+#disc-main { flex:1; min-height:0; display:flex; flex-direction:column; }
+#disc-form { display:none; flex:1; overflow-y:auto; }
+#disc-form.show { display:block; }
 .disc-search-bar { display:flex; gap:10px; margin-bottom:20px; align-items:center; }
 .disc-search-input { flex:1; background:var(--bg3); border:1px solid var(--border2); border-radius:4px; color:var(--text-bright); font-family:var(--mono); font-size:12px; padding:9px 12px; outline:none; transition:border-color .15s; }
 .disc-search-input:focus { border-color:var(--orange); }
@@ -200,6 +204,10 @@ html.light body::before {
 .disc-send-btn:disabled { background:#333; color:#666; cursor:not-allowed; transform:none; box-shadow:none; }
 .disc-back-btn { padding:8px 16px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--text-dim); font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer; transition:all .15s; margin-bottom:20px; }
 .disc-back-btn:hover { border-color:var(--orange); color:var(--orange); }
+.disc-sb-row { display:flex; align-items:center; padding:7px 10px; border:1px solid var(--border2); border-radius:4px; background:var(--bg3); cursor:pointer; transition:all .15s; flex-shrink:0; }
+.disc-sb-row:hover { border-color:var(--orange); background:var(--orange-dim); }
+.disc-sb-row.disc-sb-selected { border-color:var(--orange); background:var(--orange-dim); }
+.disc-sb-row.disc-sb-selected span:last-child { color:var(--orange); }
 
 /* TMDB confirm */
 #tmdb-confirm {
@@ -353,7 +361,7 @@ html.light body::before {
       <div class="nav-item" data-page="bdinfo" onclick="showPage('bdinfo', this)">
         <span class="nav-icon">💿</span> BD Info
       </div>
-      <div class="nav-item" data-page="discord" onclick="showPage('discord', this)">
+      <div class="nav-item" data-page="discord" onclick="showPage('discord', this); discordLoadFiles()">
         <span class="nav-icon">🔔</span> Discord
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
@@ -741,21 +749,42 @@ html.light body::before {
 
       <!-- ═══════════════════════════════════════════════════ DISCORD -->
       <div id="page-discord" class="page">
-        <div class="section-label">Notification Discord</div>
 
-        <!-- Barre de recherche -->
-        <div class="disc-search-bar">
-          <input id="disc-search-inp" class="disc-search-input" placeholder="Nom du film ou ID TMDB…"
-                 onkeydown="if(event.key==='Enter') discordSearch()"/>
-          <button class="disc-search-btn" onclick="discordSearch()">🔍 RECHERCHER</button>
+        <!-- ── Vue liste seedbox + résultats TMDB ── -->
+        <div id="disc-main">
+          <div style="display:flex;gap:20px;height:100%;min-height:0;">
+
+            <!-- Colonne gauche : fichiers seedbox -->
+            <div style="width:340px;min-width:340px;display:flex;flex-direction:column;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <div class="section-label" style="margin-bottom:0;flex:1;">Fichiers Seedbox</div>
+                <button id="disc-sb-refresh" onclick="discordLoadFiles()"
+                        style="padding:4px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:10px;cursor:pointer;letter-spacing:1px;margin-left:10px;"
+                        onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">↺ REFRESH</button>
+              </div>
+              <div id="disc-sb-files" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+            </div>
+
+            <!-- Séparateur -->
+            <div style="width:1px;background:var(--border);flex-shrink:0;"></div>
+
+            <!-- Colonne droite : recherche TMDB + résultats -->
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+              <div class="section-label">Recherche TMDB</div>
+              <div class="disc-search-bar" style="margin-bottom:14px;">
+                <input id="disc-search-inp" class="disc-search-input" placeholder="Nom du film ou ID TMDB…"
+                       onkeydown="if(event.key==='Enter') discordSearch()"/>
+                <button class="disc-search-btn" onclick="discordSearch()">🔍</button>
+              </div>
+              <div id="disc-results" style="flex:1;overflow-y:auto;"></div>
+            </div>
+
+          </div>
         </div>
 
-        <!-- Résultats -->
-        <div id="disc-results"></div>
-
-        <!-- Formulaire de notification -->
+        <!-- ── Formulaire de notification ── -->
         <div id="disc-form">
-          <button class="disc-back-btn" onclick="discordBack()">← Retour aux résultats</button>
+          <button class="disc-back-btn" onclick="discordBack()">← Retour</button>
           <div class="disc-form-header">
             <div id="disc-form-poster-wrap"></div>
             <div>
@@ -1792,8 +1821,70 @@ function loadSbDisk() {
 
 // ── DISCORD ──────────────────────────────────────────────────────────────────
 
-var _discCurrentMovie = null;
-var _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE'];
+var _discCurrentMovie  = null;
+var _discSelectedFile  = null;
+var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE'];
+
+// Extrait un titre TMDB depuis un nom de release (retire tags techniques)
+function discExtractTitle(name) {
+  var patterns = [
+    /^(.+?)[.\s](\d{4})[.\s_]/,
+    /^(.+?)[.\s](FRA|FRENCH|ENG|VOSTFR|MULTi|MULTI|VFF)[.\s_]/i,
+    /^(.+?)[.\s](COMPLETE|REMUX|BluRay|BDRip|HDRip|WEBRip|WEB)[.\s_]/i,
+  ];
+  for (var i = 0; i < patterns.length; i++) {
+    var m = name.match(patterns[i]);
+    if (m) return m[1].replace(/[._]/g, ' ').trim();
+  }
+  return name.replace(/[._-]/g, ' ').split(/\s+/).slice(0, 4).join(' ');
+}
+
+async function discordLoadFiles() {
+  var btn  = document.getElementById('disc-sb-refresh');
+  var list = document.getElementById('disc-sb-files');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  list.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);padding:10px 0;letter-spacing:1px;">Connexion…</div>';
+  try {
+    var result = await window.pywebview.api.list_seedbox_files();
+    if (btn) { btn.textContent = '↺ REFRESH'; btn.disabled = false; }
+    if (result.error) {
+      list.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--red);padding:8px;">✗ ' + result.error + '</div>';
+      return;
+    }
+    if (!result.files || !result.files.length) {
+      list.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);padding:8px;">Aucun fichier.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    result.files.forEach(function(name) {
+      var row = document.createElement('div');
+      row.className = 'disc-sb-row';
+      row.setAttribute('data-name', name);
+      row.innerHTML =
+        '<span style="color:var(--orange);margin-right:6px;font-size:10px;">📁</span>' +
+        '<span style="font-family:var(--mono);font-size:10px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + name + '</span>';
+      row.addEventListener('click', function() { discordPickFile(name); });
+      list.appendChild(row);
+    });
+  } catch(e) {
+    if (btn) { btn.textContent = '↺ REFRESH'; btn.disabled = false; }
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--red);padding:8px;">Erreur</div>';
+  }
+}
+
+function discordPickFile(name) {
+  _discSelectedFile = name;
+  // Highlight
+  document.querySelectorAll('.disc-sb-row').forEach(function(r) {
+    r.classList.toggle('disc-sb-selected', r.getAttribute('data-name') === name);
+  });
+  // Pré-remplir le nom de release
+  document.getElementById('disc-release') && (document.getElementById('disc-release').value = name);
+  // Extraire le titre et lancer la recherche TMDB
+  var title = discExtractTitle(name);
+  document.getElementById('disc-search-inp').value = title;
+  discordSearch();
+}
 
 function discordSearch() {
   var q = document.getElementById('disc-search-inp').value.trim();
@@ -1845,7 +1936,7 @@ function discordSelectMovie(movie) {
 
   document.getElementById('disc-form-title').textContent = movie.title || '';
   document.getElementById('disc-form-year').textContent  = year + ' — ID TMDB : ' + movie.id;
-  document.getElementById('disc-release').value = '';
+  document.getElementById('disc-release').value = _discSelectedFile || '';
   document.getElementById('disc-maj').checked   = false;
   document.getElementById('disc-send-status').textContent = '';
 
@@ -1866,13 +1957,13 @@ function discordSelectMovie(movie) {
     cont.appendChild(row);
   });
 
-  document.getElementById('disc-results').classList.add('hide');
+  document.getElementById('disc-main').style.display = 'none';
   document.getElementById('disc-form').classList.add('show');
 }
 
 function discordBack() {
   document.getElementById('disc-form').classList.remove('show');
-  document.getElementById('disc-results').classList.remove('hide');
+  document.getElementById('disc-main').style.display = '';
 }
 
 function discordSend() {
@@ -1915,7 +2006,7 @@ function discordOnSendDone(data) {
     st.style.color = 'var(--green)';
     st.textContent = '✅ Notification envoyée !';
     showToast('✓ Discord notifié', 'success');
-    setTimeout(function() { discordBack(); }, 1500);
+    setTimeout(function() { discordBack(); _discSelectedFile = null; }, 1500);
   } else {
     st.style.color = 'var(--red)';
     st.textContent = '❌ Erreur : ' + (data.error || '?');
