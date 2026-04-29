@@ -784,31 +784,36 @@ html.light body::before {
 
         <!-- ── Formulaire de notification ── -->
         <div id="disc-form">
-          <button class="disc-back-btn" onclick="discordBack()">← Retour</button>
-          <div class="disc-form-header">
-            <div id="disc-form-poster-wrap"></div>
-            <div>
-              <div class="disc-form-title" id="disc-form-title"></div>
-              <div class="disc-form-year"  id="disc-form-year"></div>
+
+          <!-- Ligne 1 : retour + poster + titre + MAJ -->
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+            <button class="disc-back-btn" style="margin-bottom:0;flex-shrink:0;" onclick="discordBack()">← Retour</button>
+            <div id="disc-form-poster-wrap" style="flex-shrink:0;"></div>
+            <div style="flex:1;min-width:0;">
+              <div class="disc-form-title" id="disc-form-title" style="font-size:15px;"></div>
+              <div class="disc-form-year"  id="disc-form-year"  style="font-size:10px;margin-top:2px;"></div>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0;padding:8px 12px;border:1px solid var(--border2);border-radius:4px;background:var(--bg3);transition:border-color .15s;" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">
+              <input type="checkbox" id="disc-maj" class="disc-maj-check"/>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;white-space:nowrap;">🚨 MISE À JOUR</span>
+            </label>
           </div>
 
-          <div class="section-label">Nom de la release</div>
-          <input id="disc-release" class="disc-search-input" style="margin-bottom:16px;"
-                 placeholder="ex: Film.2025.FRA.BluRay.REMUX-REBiRTH"/>
+          <!-- Ligne 2 : release name -->
+          <div style="margin-bottom:10px;">
+            <div class="section-label" style="margin-bottom:6px;">Nom de la release</div>
+            <input id="disc-release" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--green);font-family:var(--mono);font-size:11px;padding:7px 10px;outline:none;transition:border-color .15s;"
+                   placeholder="ex: Film.2025.FRA.BluRay.REMUX-REBiRTH" onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border2)'"/>
+          </div>
 
-          <label class="disc-maj-row">
-            <input type="checkbox" id="disc-maj" class="disc-maj-check"/>
-            <span class="disc-maj-label">🚨 MISE À JOUR</span>
-          </label>
+          <!-- Lignes 3+ : trackers en grille 2 colonnes -->
+          <div class="section-label" style="margin-bottom:6px;">Statut des trackers</div>
+          <div id="disc-trackers" style="display:grid;grid-template-columns:1fr 1fr;gap:7px;"></div>
 
-          <div class="section-label">Statut des trackers</div>
-          <div id="disc-trackers"></div>
-
-          <button class="disc-send-btn" id="disc-send-btn" onclick="discordSend()">
+          <button class="disc-send-btn" id="disc-send-btn" onclick="discordSend()" style="margin-top:14px;padding:11px;">
             📣 &nbsp;ENVOYER SUR DISCORD
           </button>
-          <div id="disc-send-status" style="margin-top:10px;font-family:var(--mono);font-size:11px;text-align:center;"></div>
+          <div id="disc-send-status" style="margin-top:8px;font-family:var(--mono);font-size:11px;text-align:center;"></div>
         </div>
       </div>
     </div>
@@ -1929,8 +1934,8 @@ function discordSelectMovie(movie) {
   // Poster
   var wrap = document.getElementById('disc-form-poster-wrap');
   wrap.innerHTML = movie.poster_path
-    ? '<img class="disc-form-poster" src="https://image.tmdb.org/t/p/w185' + movie.poster_path + '" alt=""/>'
-    : '<div class="disc-form-poster-ph">N/A</div>';
+    ? '<img style="width:52px;height:78px;object-fit:cover;border-radius:3px;" src="https://image.tmdb.org/t/p/w92' + movie.poster_path + '" alt=""/>'
+    : '<div style="width:52px;height:78px;background:var(--bg2);border-radius:3px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:9px;">N/A</div>';
 
   document.getElementById('disc-form-title').textContent = movie.title || '';
   document.getElementById('disc-form-year').textContent  = year + ' — ID TMDB : ' + movie.id;
@@ -1944,14 +1949,15 @@ function discordSelectMovie(movie) {
   _discTrackers.forEach(function(tk) {
     var row = document.createElement('div');
     row.className = 'disc-tracker-row';
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:7px 10px;';
     row.innerHTML =
-      '<span class="disc-tk-name">' + tk + '</span>' +
-      '<select class="disc-status-sel" id="disc-tk-' + tk + '-status">' +
+      '<span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text-bright);width:52px;flex-shrink:0;letter-spacing:1px;">' + tk + '</span>' +
+      '<select class="disc-status-sel" id="disc-tk-' + tk + '-status" style="font-size:10px;padding:4px 6px;">' +
         '<option value="Uploadé">✅ Uploadé</option>' +
         '<option value="Pending">⏳ Pending</option>' +
         '<option value="Non uploadé">❌ Non uploadé</option>' +
       '</select>' +
-      '<input class="disc-reason-inp" id="disc-tk-' + tk + '-reason" placeholder="Raison si erreur…"/>';
+      '<input class="disc-reason-inp" id="disc-tk-' + tk + '-reason" placeholder="Raison…" style="font-size:10px;padding:4px 8px;"/>';
     cont.appendChild(row);
   });
 
