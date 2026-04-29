@@ -797,7 +797,7 @@ html.light body::before {
           <input id="disc-release" class="disc-search-input" style="margin-bottom:16px;"
                  placeholder="ex: Film.2025.FRA.BluRay.REMUX-REBiRTH"/>
 
-          <label class="disc-maj-row" onclick="document.getElementById('disc-maj').click()">
+          <label class="disc-maj-row">
             <input type="checkbox" id="disc-maj" class="disc-maj-check"/>
             <span class="disc-maj-label">🚨 MISE À JOUR</span>
           </label>
@@ -1878,9 +1878,7 @@ function discordPickFile(name) {
   document.querySelectorAll('.disc-sb-row').forEach(function(r) {
     r.classList.toggle('disc-sb-selected', r.getAttribute('data-name') === name);
   });
-  // Pré-remplir le nom de release
-  document.getElementById('disc-release') && (document.getElementById('disc-release').value = name);
-  // Extraire le titre et lancer la recherche TMDB
+  // Extraire le titre pour la recherche TMDB (ne modifie PAS le champ release)
   var title = discExtractTitle(name);
   document.getElementById('disc-search-inp').value = title;
   discordSearch();
