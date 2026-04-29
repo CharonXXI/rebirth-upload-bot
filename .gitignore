@@ -18,5 +18,5 @@ theme.txt
 .env
 .DS_Store
 NFO_CUSTOM/.DS_Store
-".git 2/"
-".gitignore 2"
+.git 2/
+.gitignore 2

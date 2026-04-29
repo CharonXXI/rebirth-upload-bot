@@ -340,7 +340,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH</div>
-      <div class="logo-sub">UPLOAD BOT v2.8.0</div>
+      <div class="logo-sub">UPLOAD BOT v2.8.1</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -750,6 +750,20 @@ html.light body::before {
       <!-- ═══════════════════════════════════════════════════ DISCORD -->
       <div id="page-discord" class="page">
 
+        <!-- ── Sélecteur de mode ── -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-shrink:0;">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;">MODE :</span>
+          <button id="disc-mode-rebirth" onclick="discordSetMode('rebirth')"
+                  style="padding:6px 18px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;border:1px solid var(--orange);background:var(--orange);color:#000;transition:all .15s;">
+            REBiRTH
+          </button>
+          <button id="disc-mode-hdt" onclick="discordSetMode('hdt')"
+                  style="padding:6px 18px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text-dim);transition:all .15s;">
+            FULL BD
+          </button>
+          <span id="disc-mode-label" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-left:6px;">→ Canal REBiRTH · 5 trackers</span>
+        </div>
+
         <!-- ── Vue liste seedbox + résultats TMDB ── -->
         <div id="disc-main">
           <div style="display:flex;gap:20px;height:100%;min-height:0;">
@@ -757,7 +771,7 @@ html.light body::before {
             <!-- Colonne gauche : fichiers seedbox -->
             <div style="width:340px;min-width:340px;display:flex;flex-direction:column;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                <div class="section-label" style="margin-bottom:0;flex:1;">Fichiers Seedbox</div>
+                <div class="section-label" style="margin-bottom:0;flex:1;" id="disc-sb-label">Fichiers Seedbox</div>
                 <button id="disc-sb-refresh" onclick="discordLoadFiles()"
                         style="padding:4px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:10px;cursor:pointer;letter-spacing:1px;margin-left:10px;"
                         onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">↺ REFRESH</button>
@@ -1524,7 +1538,8 @@ function onError(d) {
 
 var CONFIG_FIELDS = [
   { key:'GOFILE_TOKEN',       label:'Gofile Token',           secret:true  },
-  { key:'WEBHOOK_URL',        label:'Discord Webhook URL',    secret:true  },
+  { key:'WEBHOOK_URL',        label:'Discord Webhook (REBiRTH)', secret:true  },
+  { key:'WEBHOOK_HDT_URL',   label:'Discord Webhook (FULL BD)', secret:true  },
   { key:'API_KEY',            label:'TMDB API Key',           secret:true  },
   { key:'LANGUAGE',           label:'Langue TMDB',            secret:false },
   { key:'BUZZHEAVIER_ACC_ID', label:'BuzzHeavier Account ID', secret:true  },
@@ -1828,6 +1843,7 @@ function loadSbDisk() {
 
 var _discCurrentMovie  = null;
 var _discSelectedFile  = null;
+var _discMode          = 'rebirth';
 var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE'];
 
 // Extrait un titre TMDB depuis un nom de release (retire tags techniques)
@@ -1850,7 +1866,9 @@ async function discordLoadFiles() {
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   list.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);padding:10px 0;letter-spacing:1px;">Connexion…</div>';
   try {
-    var result = await window.pywebview.api.list_seedbox_files();
+    var result = _discMode === 'hdt'
+      ? await window.pywebview.api.list_seedbox_files_hdt()
+      : await window.pywebview.api.list_seedbox_files();
     if (btn) { btn.textContent = '↺ REFRESH'; btn.disabled = false; }
     if (result.error) {
       list.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--red);padding:8px;">✗ ' + result.error + '</div>';
@@ -1970,6 +1988,51 @@ function discordBack() {
   document.getElementById('disc-main').style.display = '';
 }
 
+function discordSetMode(mode) {
+  _discMode = mode;
+  _discSelectedFile = null;
+  _discCurrentMovie = null;
+
+  // Tracker list
+  if (mode === 'hdt') {
+    _discTrackers = ['HDT'];
+  } else {
+    _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE'];
+  }
+
+  // Button styles
+  var btnR = document.getElementById('disc-mode-rebirth');
+  var btnH = document.getElementById('disc-mode-hdt');
+  var lbl  = document.getElementById('disc-mode-label');
+  var sbLbl = document.getElementById('disc-sb-label');
+  if (mode === 'hdt') {
+    btnR.style.background = 'transparent';
+    btnR.style.color      = 'var(--text-dim)';
+    btnR.style.borderColor = 'var(--border2)';
+    btnH.style.background = 'var(--orange)';
+    btnH.style.color      = '#000';
+    btnH.style.borderColor = 'var(--orange)';
+    lbl.textContent = '→ Canal FULL BD · HDT uniquement';
+    if (sbLbl) sbLbl.textContent = 'Fichiers FULL BD';
+  } else {
+    btnH.style.background = 'transparent';
+    btnH.style.color      = 'var(--text-dim)';
+    btnH.style.borderColor = 'var(--border2)';
+    btnR.style.background = 'var(--orange)';
+    btnR.style.color      = '#000';
+    btnR.style.borderColor = 'var(--orange)';
+    lbl.textContent = '→ Canal REBiRTH · 5 trackers';
+    if (sbLbl) sbLbl.textContent = 'Fichiers Seedbox';
+  }
+
+  // Reset UI & reload files
+  document.getElementById('disc-form').classList.remove('show');
+  document.getElementById('disc-main').style.display = '';
+  document.getElementById('disc-results').innerHTML = '';
+  document.getElementById('disc-search-inp').value = '';
+  discordLoadFiles();
+}
+
 function discordSend() {
   if (!_discCurrentMovie) return;
   var rel = document.getElementById('disc-release').value.trim();
@@ -1991,7 +2054,8 @@ function discordSend() {
       movie: _discCurrentMovie,
       release_name: rel,
       is_maj: isMaj,
-      uploads: uploads
+      uploads: uploads,
+      mode: _discMode
     });
   } catch(e) {
     btn.disabled = false;

@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.8.0-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.8.1-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -108,7 +108,8 @@ GOFILE_TOKEN=ton_token_gofile
 BUZZHEAVIER_ACC_ID=ton_account_id
 
 # ── Discord ───────────────────────────
-WEBHOOK_URL=ton_webhook_discord
+WEBHOOK_URL=ton_webhook_discord_rebirth
+WEBHOOK_HDT_URL=ton_webhook_discord_fullbd
 
 # ── Seedbox FTP ───────────────────────
 SFTP_HOST=https://ton-filebrowser.seedbox.link
@@ -129,6 +130,8 @@ TRACKER_TOS=https://tos.com/announce/PASSKEY
 TRACKER_C411=https://c411.com/announce/PASSKEY
 TRACKER_TORR9=https://torr9.com/announce/PASSKEY
 TRACKER_LACALE=https://lacale.com/announce/PASSKEY
+TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
+SFTP_PATH_HDT=/home/rtorrent/rtorrent/download/FULL BD
 
 # ── BD Info ───────────────────────────
 BDINFO_WIN_EXE=/chemin/vers/BDInfo.exe   # requis pour l'onglet BD Info
@@ -287,6 +290,14 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.8.1
+- Feat : **onglet Discord → mode FULL BD** — toggle REBiRTH / FULL BD en haut de la page
+  - Mode REBiRTH : liste les fichiers de `SFTP_PATH`, 5 trackers (TOS / ABN / C411 / Torr9 / LaCale), envoie sur `WEBHOOK_URL`
+  - Mode FULL BD : liste les fichiers de `SFTP_PATH_HDT`, tracker HDT uniquement, envoie sur `WEBHOOK_HDT_URL`
+- Feat : nouvelle variable `.env` : `WEBHOOK_HDT_URL` (canal Discord dédié FULL BD)
+- Feat : page Paramètres — deux champs webhook distincts (REBiRTH et FULL BD)
+- Fix : `notif_upload_discord.py` — suppression des clés en dur (WEBHOOK_URL et API_KEY lus depuis `.env`)
+
 ### v2.8.0
 - Feat : **tracker HD-Torrents (HDT)** — ajout dans Config, Torrent SB et BD Info
 - Feat : onglet **BD Info → bouton TORRENT HDT** — crée le torrent depuis la seedbox et démarre le seeding dans `/FULL BD`
@@ -386,7 +397,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.8.0** — macOS & Windows
+**REBiRTH Upload Bot v2.8.1** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

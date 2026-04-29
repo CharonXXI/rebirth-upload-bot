@@ -58,6 +58,7 @@ class API:
             "TRACKER_LACALE":     os.getenv("TRACKER_LACALE", ""),
             "TRACKER_HDT":        os.getenv("TRACKER_HDT", ""),
             "SFTP_PATH_HDT":      os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD"),
+            "WEBHOOK_HDT_URL":    os.getenv("WEBHOOK_HDT_URL", ""),
             "BDINFO_CLI_PATH":    os.getenv("BDINFO_CLI_PATH", ""),
         }
 
@@ -173,6 +174,65 @@ class API:
                 return {"error": str(e)}
 
         # ── FTP TLS legacy (ancien port != 22) ────────────────────────────────
+        import ftplib
+        try:
+            ftp = ftplib.FTP_TLS()
+            ftp.connect(host, port, timeout=10)
+            ftp.login(user, password)
+            ftp.prot_p()
+            for part in path.strip("/").split("/"):
+                ftp.cwd(part)
+            entries = []
+            ftp.retrlines("LIST", entries.append)
+            ftp.quit()
+            folders = []
+            for entry in entries:
+                parts_e = entry.split()
+                if parts_e and parts_e[-1] not in (".", ".."):
+                    folders.append(parts_e[-1])
+            folders.sort(key=lambda x: x.lower())
+            return {"files": folders, "path": path}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def list_seedbox_files_hdt(self):
+        """Retourne la liste des entrées présentes dans SFTP_PATH_HDT (FULL BD).
+        Port 22 → SFTP via paramiko. Autre port → FTP TLS legacy."""
+        host     = os.getenv("SFTP_HOST_FTP", "")
+        port     = int(os.getenv("SFTP_PORT", "22"))
+        user     = os.getenv("SFTP_USER", "")
+        password = os.getenv("SFTP_PASS", "")
+        path     = os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD")
+
+        if not host:
+            return {"error": "SFTP_HOST_FTP non configuré"}
+
+        if port == 22:
+            try:
+                import paramiko
+            except ImportError:
+                import subprocess as _sp
+                _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
+                         "--break-system-packages", "--quiet"], capture_output=True)
+                import paramiko  # noqa: F811
+            try:
+                transport = paramiko.Transport((host, port))
+                transport.connect(username=user, password=password)
+                sftp = paramiko.SFTPClient.from_transport(transport)
+                try:
+                    entries = sftp.listdir_attr(path)
+                    names = sorted([e.filename for e in entries
+                                    if e.filename not in (".", "..")],
+                                   key=lambda x: x.lower())
+                    return {"files": names, "path": path}
+                except FileNotFoundError:
+                    return {"error": f"Dossier introuvable : {path}"}
+                finally:
+                    sftp.close()
+                    transport.close()
+            except Exception as e:
+                return {"error": str(e)}
+
         import ftplib
         try:
             ftp = ftplib.FTP_TLS()
@@ -4011,11 +4071,19 @@ class API:
         """Envoie un embed Discord de notification d'upload."""
         def _run():
             try:
-                webhook_url = os.getenv("WEBHOOK_URL", "")
-                if not webhook_url:
-                    self._emit("discord_send_done",
-                               {"ok": False, "error": "WEBHOOK_URL non configuré dans le .env"})
-                    return
+                mode = data.get("mode", "rebirth")
+                if mode == "hdt":
+                    webhook_url = os.getenv("WEBHOOK_HDT_URL", "")
+                    if not webhook_url:
+                        self._emit("discord_send_done",
+                                   {"ok": False, "error": "WEBHOOK_HDT_URL non configuré dans le .env"})
+                        return
+                else:
+                    webhook_url = os.getenv("WEBHOOK_URL", "")
+                    if not webhook_url:
+                        self._emit("discord_send_done",
+                                   {"ok": False, "error": "WEBHOOK_URL non configuré dans le .env"})
+                        return
 
                 movie   = data.get("movie", {})
                 rel     = data.get("release_name", "NOM_INCONNU")

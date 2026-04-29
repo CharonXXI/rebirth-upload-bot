@@ -88,7 +88,8 @@ API_KEY=ta_cle_tmdb
 LANGUAGE=fr-FR
 GOFILE_TOKEN=ton_token_gofile
 BUZZHEAVIER_ACC_ID=ton_account_id
-WEBHOOK_URL=ton_webhook_discord
+WEBHOOK_URL=ton_webhook_discord_rebirth
+WEBHOOK_HDT_URL=ton_webhook_discord_fullbd
 SFTP_HOST=https://ton-filebrowser.seedbox.link
 SFTP_HOST_FTP=ton-host-ftp.seedbox.link
 SFTP_PORT=23421
@@ -105,6 +106,7 @@ TRACKER_TORR9=https://torr9.com/announce/PASSKEY
 TRACKER_LACALE=https://lacale.com/announce/PASSKEY
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
 SFTP_PATH_HDT=/home/rtorrent/rtorrent/download/FULL BD
+WEBHOOK_HDT_URL=ton_webhook_discord_fullbd
 
 # BD Info (optionnel — chemin auto-détecté si absent)
 # BDINFO_CLI_PATH=C:\Users\TonUser\BDInfoCLI\BDInfo\bin\Release\net8.0\win-x64\BDInfo.exe
