@@ -4141,6 +4141,102 @@ class API:
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True}
 
+    # ── Gestionnaire de fichiers seedbox ──────────────────────────────────────
+
+    _SBF_ROOT = "/home/rtorrent/rtorrent/download"
+
+    def list_seedbox_dir(self, path: str):
+        """Liste le contenu d'un répertoire seedbox via SFTP.
+        Restreint à /home/rtorrent/rtorrent/download et ses sous-dossiers."""
+        import stat as _stat
+        if not path.startswith(self._SBF_ROOT) or ".." in path:
+            return {"error": "Chemin non autorisé"}
+
+        host     = os.getenv("SFTP_HOST_FTP", "")
+        port     = int(os.getenv("SFTP_PORT", "22"))
+        user     = os.getenv("SFTP_USER", "")
+        password = os.getenv("SFTP_PASS", "")
+        if not host:
+            return {"error": "SFTP_HOST_FTP non configuré"}
+
+        try:
+            import paramiko
+        except ImportError:
+            import subprocess as _sp
+            _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
+                     "--break-system-packages", "--quiet"], capture_output=True)
+            import paramiko  # noqa: F811
+        try:
+            transport = paramiko.Transport((host, port))
+            transport.connect(username=user, password=password)
+            sftp = paramiko.SFTPClient.from_transport(transport)
+            try:
+                entries = sftp.listdir_attr(path)
+                result = []
+                for e in entries:
+                    if e.filename in (".", ".."):
+                        continue
+                    is_dir = bool(e.st_mode and _stat.S_ISDIR(e.st_mode))
+                    result.append({
+                        "name":   e.filename,
+                        "is_dir": is_dir,
+                        "size":   e.st_size or 0,
+                    })
+                result.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+                return {"entries": result, "path": path}
+            except FileNotFoundError:
+                return {"error": f"Dossier introuvable : {path}"}
+            finally:
+                sftp.close()
+                transport.close()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def delete_seedbox_item(self, path: str):
+        """Supprime un fichier ou dossier seedbox via SSH sudo rm -rf."""
+        if not path.startswith(self._SBF_ROOT) or ".." in path:
+            self._emit("sbf_delete_done", {"ok": False, "error": "Chemin non autorisé"})
+            return {"ok": False}
+
+        def _run():
+            host     = os.getenv("SFTP_HOST_FTP", "")
+            port     = int(os.getenv("SFTP_PORT", "22"))
+            user     = os.getenv("SFTP_USER", "")
+            password = os.getenv("SFTP_PASS", "")
+            if not host:
+                self._emit("sbf_delete_done", {"ok": False, "error": "SSH non configuré"})
+                return
+            try:
+                import paramiko
+            except ImportError:
+                import subprocess as _sp
+                _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
+                         "--break-system-packages", "--quiet"], capture_output=True)
+                import paramiko  # noqa: F811
+            try:
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                client.connect(host, port=port, username=user, password=password,
+                               timeout=15, allow_agent=False, look_for_keys=False)
+                safe = path.replace("'", "'\\''")
+                _, stdout, stderr = client.exec_command(
+                    f"sudo rm -rf '{safe}'", timeout=120
+                )
+                exit_code = stdout.channel.recv_exit_status()
+                err_msg   = stderr.read().decode("utf-8", errors="replace").strip()
+                client.close()
+                if exit_code == 0:
+                    self._emit("sbf_delete_done", {"ok": True, "path": path})
+                else:
+                    self._emit("sbf_delete_done",
+                               {"ok": False,
+                                "error": err_msg or f"exit {exit_code}"})
+            except Exception as e:
+                self._emit("sbf_delete_done", {"ok": False, "error": str(e)})
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True}
+
 
 if __name__ == "__main__":
     api = API()

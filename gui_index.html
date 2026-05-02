@@ -158,6 +158,36 @@ html.light body::before {
 #btn-save { margin-top:24px; padding:11px 28px; background:transparent; border:1px solid var(--orange); border-radius:4px; color:var(--orange); font-family:var(--sans); font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all .15s; }
 #btn-save:hover { background:var(--orange-dim); }
 
+/* ── PAGE FICHIERS SB ── */
+#page-sbfiles { padding:24px; overflow:hidden; display:none; flex-direction:column; }
+#page-sbfiles.active { display:flex; animation:pageFadeIn 0.18s ease forwards; }
+.sbf-breadcrumb { display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-bottom:14px; font-family:var(--mono); font-size:10px; color:var(--text-dim); background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:7px 12px; }
+.sbf-crumb { color:var(--text-dim); cursor:pointer; letter-spacing:.5px; transition:color .15s; }
+.sbf-crumb:hover { color:var(--orange); }
+.sbf-crumb-sep { color:var(--border2); margin:0 2px; }
+.sbf-crumb-last { color:var(--text-bright); cursor:default; }
+.sbf-list { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+.sbf-row { display:flex; align-items:center; gap:10px; padding:7px 12px; border-radius:4px; background:var(--bg2); border:1px solid transparent; transition:border-color .12s, background .12s; }
+.sbf-row:hover { border-color:var(--border2); background:var(--bg3); }
+.sbf-icon { font-size:13px; flex-shrink:0; width:18px; text-align:center; }
+.sbf-name { flex:1; font-family:var(--mono); font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sbf-name.is-dir { color:var(--orange); cursor:pointer; }
+.sbf-name.is-dir:hover { text-decoration:underline; }
+.sbf-size { font-family:var(--mono); font-size:10px; color:var(--text-dim); flex-shrink:0; width:64px; text-align:right; }
+.sbf-del-btn { flex-shrink:0; padding:4px 9px; background:transparent; border:1px solid var(--border2); border-radius:3px; color:var(--text-dim); font-family:var(--mono); font-size:10px; cursor:pointer; letter-spacing:.5px; transition:all .15s; }
+.sbf-del-btn:hover { border-color:#e05555; color:#e05555; background:rgba(224,85,85,.08); }
+/* Modal confirmation suppression */
+#sbf-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:9999; align-items:center; justify-content:center; }
+#sbf-confirm-overlay.show { display:flex; }
+#sbf-confirm-box { background:var(--bg2); border:1px solid var(--border2); border-radius:6px; padding:28px 32px; max-width:440px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,.6); }
+.sbf-confirm-title { font-family:var(--mono); font-size:13px; font-weight:700; color:#e05555; letter-spacing:1px; margin-bottom:12px; }
+.sbf-confirm-name { font-family:var(--mono); font-size:11px; color:var(--text-bright); background:var(--bg3); border:1px solid var(--border); border-radius:4px; padding:8px 12px; word-break:break-all; margin-bottom:18px; }
+.sbf-confirm-btns { display:flex; gap:10px; justify-content:flex-end; }
+.sbf-confirm-cancel { padding:8px 18px; background:var(--bg3); border:1px solid var(--border2); border-radius:4px; color:var(--text-dim); font-family:var(--mono); font-size:11px; cursor:pointer; letter-spacing:1px; transition:all .15s; }
+.sbf-confirm-cancel:hover { border-color:var(--text-dim); color:var(--text); }
+.sbf-confirm-ok { padding:8px 18px; background:#e05555; border:1px solid #e05555; border-radius:4px; color:#fff; font-family:var(--mono); font-size:11px; font-weight:700; cursor:pointer; letter-spacing:1px; transition:all .15s; }
+.sbf-confirm-ok:hover { background:#c03030; border-color:#c03030; }
+
 /* ── PAGE DISCORD ── */
 #page-discord { padding:24px; overflow:hidden; display:none; flex-direction:column; }
 #page-discord.active { display:flex; animation:pageFadeIn 0.18s ease forwards; }
@@ -363,6 +393,9 @@ html.light body::before {
       </div>
       <div class="nav-item" data-page="discord" onclick="showPage('discord', this); discordLoadFiles()">
         <span class="nav-icon">🔔</span> Discord
+      </div>
+      <div class="nav-item" data-page="sbfiles" onclick="showPage('sbfiles', this); sbfLoad('/home/rtorrent/rtorrent/download')">
+        <span class="nav-icon">🗂️</span> Fichiers SB
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
@@ -769,7 +802,7 @@ html.light body::before {
           <div style="display:flex;gap:20px;height:100%;min-height:0;">
 
             <!-- Colonne gauche : fichiers seedbox -->
-            <div style="width:340px;min-width:340px;display:flex;flex-direction:column;">
+            <div style="width:480px;min-width:480px;display:flex;flex-direction:column;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
                 <div class="section-label" style="margin-bottom:0;flex:1;" id="disc-sb-label">Fichiers Seedbox</div>
                 <button id="disc-sb-refresh" onclick="discordLoadFiles()"
@@ -834,6 +867,40 @@ html.light body::before {
   </div>
 </div>
 
+      <!-- ══════════════════════════════════════════════ FICHIERS SB -->
+      <div id="page-sbfiles" class="page">
+
+        <!-- Barre d'outils -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-shrink:0;">
+          <div class="section-label" style="margin-bottom:0;flex:1;">Gestionnaire de fichiers Seedbox</div>
+          <button id="sbf-refresh-btn" onclick="sbfRefresh()"
+                  style="padding:5px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:10px;cursor:pointer;letter-spacing:1px;transition:all .15s;"
+                  onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">↺ REFRESH</button>
+        </div>
+
+        <!-- Breadcrumb -->
+        <div class="sbf-breadcrumb" id="sbf-breadcrumb"></div>
+
+        <!-- Liste -->
+        <div class="sbf-list" id="sbf-list">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:16px 0;letter-spacing:1px;">Chargement…</div>
+        </div>
+
+      </div>
+
+<!-- Modal confirmation suppression -->
+<div id="sbf-confirm-overlay">
+  <div id="sbf-confirm-box">
+    <div class="sbf-confirm-title">🗑 CONFIRMER LA SUPPRESSION</div>
+    <div class="sbf-confirm-name" id="sbf-confirm-name"></div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:18px;letter-spacing:.5px;">Cette action est irréversible. Le fichier sera supprimé définitivement de la seedbox.</div>
+    <div class="sbf-confirm-btns">
+      <button class="sbf-confirm-cancel" onclick="sbfCancelDelete()">ANNULER</button>
+      <button class="sbf-confirm-ok" id="sbf-confirm-ok-btn" onclick="sbfConfirmDelete()">🗑 SUPPRIMER</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal sélection trackers torrent -->
 <div id="torrent-modal-overlay">
   <div id="torrent-modal">
@@ -880,6 +947,7 @@ window._emit = function(event, data) {
   if (event === 'bdinfo_hdt_done')      bdiHdtDone(data);
   if (event === 'discord_search_done')  discordOnSearchDone(data);
   if (event === 'discord_send_done')    discordOnSendDone(data);
+  if (event === 'sbf_delete_done')      sbfOnDeleteDone(data);
 };
 
 // ── BD Info ──────────────────────────────────────────────────────────────────
@@ -2079,6 +2147,152 @@ function discordOnSendDone(data) {
     st.style.color = 'var(--red)';
     st.textContent = '❌ Erreur : ' + (data.error || '?');
     showToast('Erreur Discord : ' + (data.error || '?'), 'error');
+  }
+}
+
+// ══════════════════════════════════════════════════════ FICHIERS SB
+var _sbfCurrentPath   = '/home/rtorrent/rtorrent/download';
+var _sbfPendingDelete = null;
+var _SBF_ROOT         = '/home/rtorrent/rtorrent/download';
+
+function sbfFmtSize(bytes) {
+  if (!bytes) return '—';
+  if (bytes >= 1099511627776) return (bytes / 1099511627776).toFixed(2) + ' TiB';
+  if (bytes >= 1073741824)    return (bytes / 1073741824).toFixed(2) + ' GiB';
+  if (bytes >= 1048576)       return (bytes / 1048576).toFixed(1) + ' MiB';
+  if (bytes >= 1024)          return (bytes / 1024).toFixed(0) + ' KiB';
+  return bytes + ' B';
+}
+
+function sbfBreadcrumb(path) {
+  var crumb = document.getElementById('sbf-breadcrumb');
+  crumb.innerHTML = '';
+  // root part
+  var rootSpan = document.createElement('span');
+  rootSpan.className = 'sbf-crumb';
+  rootSpan.textContent = 'download';
+  rootSpan.title = _SBF_ROOT;
+  rootSpan.onclick = function() { sbfLoad(_SBF_ROOT); };
+  crumb.appendChild(rootSpan);
+
+  var rel = path.slice(_SBF_ROOT.length);
+  var parts = rel.split('/').filter(function(p) { return p.length > 0; });
+  var built = _SBF_ROOT;
+  parts.forEach(function(part, i) {
+    built += '/' + part;
+    var sep = document.createElement('span');
+    sep.className = 'sbf-crumb-sep';
+    sep.textContent = ' / ';
+    crumb.appendChild(sep);
+    var p = built; // capture
+    if (i === parts.length - 1) {
+      var last = document.createElement('span');
+      last.className = 'sbf-crumb-last';
+      last.textContent = part;
+      crumb.appendChild(last);
+    } else {
+      var sp = document.createElement('span');
+      sp.className = 'sbf-crumb';
+      sp.textContent = part;
+      sp.onclick = function() { sbfLoad(p); };
+      crumb.appendChild(sp);
+    }
+  });
+}
+
+async function sbfLoad(path) {
+  _sbfCurrentPath = path;
+  sbfBreadcrumb(path);
+  var list = document.getElementById('sbf-list');
+  var btn  = document.getElementById('sbf-refresh-btn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  list.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);padding:14px 0;letter-spacing:1px;">Connexion…</div>';
+  try {
+    var res = await window.pywebview.api.list_seedbox_dir(path);
+    if (btn) { btn.textContent = '↺ REFRESH'; btn.disabled = false; }
+    if (res.error) {
+      list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--red);padding:10px;">✗ ' + res.error + '</div>';
+      return;
+    }
+    var entries = res.entries || [];
+    if (!entries.length) {
+      list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:10px;">Dossier vide.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    entries.forEach(function(e) {
+      var fullPath = path.replace(/\/$/, '') + '/' + e.name;
+      var row = document.createElement('div');
+      row.className = 'sbf-row';
+
+      var icon = document.createElement('span');
+      icon.className = 'sbf-icon';
+      icon.textContent = e.is_dir ? '📁' : '📄';
+
+      var name = document.createElement('span');
+      name.className = 'sbf-name' + (e.is_dir ? ' is-dir' : '');
+      name.textContent = e.name;
+      if (e.is_dir) {
+        name.onclick = (function(p) { return function() { sbfLoad(p); }; })(fullPath);
+      }
+
+      var size = document.createElement('span');
+      size.className = 'sbf-size';
+      size.textContent = e.is_dir ? '' : sbfFmtSize(e.size);
+
+      var del = document.createElement('button');
+      del.className = 'sbf-del-btn';
+      del.textContent = '🗑 SUP';
+      del.onclick = (function(p, n) { return function() { sbfAskDelete(p, n); }; })(fullPath, e.name);
+
+      row.appendChild(icon);
+      row.appendChild(name);
+      row.appendChild(size);
+      row.appendChild(del);
+      list.appendChild(row);
+    });
+  } catch(e) {
+    if (btn) { btn.textContent = '↺ REFRESH'; btn.disabled = false; }
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--red);padding:10px;">Erreur de connexion.</div>';
+  }
+}
+
+function sbfRefresh() { sbfLoad(_sbfCurrentPath); }
+
+function sbfAskDelete(path, name) {
+  _sbfPendingDelete = path;
+  document.getElementById('sbf-confirm-name').textContent = name;
+  document.getElementById('sbf-confirm-overlay').classList.add('show');
+}
+
+function sbfCancelDelete() {
+  _sbfPendingDelete = null;
+  document.getElementById('sbf-confirm-overlay').classList.remove('show');
+}
+
+function sbfConfirmDelete() {
+  if (!_sbfPendingDelete) return;
+  var btn = document.getElementById('sbf-confirm-ok-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Suppression…';
+  try {
+    window.pywebview.api.delete_seedbox_item(_sbfPendingDelete);
+  } catch(e) {
+    sbfCancelDelete();
+    showToast('Erreur SSH : ' + e, 'error');
+  }
+}
+
+function sbfOnDeleteDone(data) {
+  document.getElementById('sbf-confirm-overlay').classList.remove('show');
+  var btn = document.getElementById('sbf-confirm-ok-btn');
+  if (btn) { btn.disabled = false; btn.textContent = '🗑 SUPPRIMER'; }
+  _sbfPendingDelete = null;
+  if (data.ok) {
+    showToast('✓ Supprimé', 'success');
+    sbfRefresh();
+  } else {
+    showToast('Erreur suppression : ' + (data.error || '?'), 'error');
   }
 }
 
