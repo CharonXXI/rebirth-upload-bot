@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.8.1-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.8.2-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -47,6 +47,7 @@
 | 🌱 **Seedbox** | Upload complet via FTP TLS |
 | 🧲 **Torrent SB** | Création torrent via SSH+mktorrent côté seedbox, chargement automatique dans ruTorrent |
 | 💿 **BD Info** | Rapport exact via **BDInfo v0.7.5.6** (Wine/Whisky) — DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
+| 🗂️ **Fichiers SB** | Explorateur de fichiers seedbox — navigation dans les sous-dossiers, suppression via SSH sudo |
 | 🎛️ **Trackers** | Page dédiée pour gérer les announces URL |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
 | 🌙 **Interface** | PyWebView moderne avec mode jour/nuit, animations, toasts |
@@ -226,6 +227,22 @@ Onglet BD INFO
         └─ ZIP (dossier COMPLETE BLURAY + NFO) uploadé en un seul fichier
 
 ─────────────────────────────────────────────
+Workflow Fichiers SB (gestionnaire seedbox)
+─────────────────────────────────────────────
+Onglet 🗂️ FICHIERS SB
+        │
+        ▼
+Navigation depuis /home/rtorrent/rtorrent/download
+  └─ Breadcrumb cliquable pour remonter dans l'arborescence
+  └─ Cliquer sur un 📁 dossier pour entrer dedans
+        │
+        ▼
+Bouton 🗑 SUP sur un fichier ou dossier
+  └─ Modal de confirmation (action irréversible)
+  └─ SSH sudo rm -rf → suppression même si owner = rtorrent
+  └─ Refresh automatique après suppression
+
+─────────────────────────────────────────────
 Workflow Discord (notification canal)
 ─────────────────────────────────────────────
 Onglet 🔔 DISCORD
@@ -298,6 +315,16 @@ Onglet dédié à l'envoi de notifications sur Discord après chaque upload.
 5. Option 🚨 Mise à jour (embed couleur jaune)
 6. **📣 ENVOYER** → embed envoyé : poster TMDB, titre, ID TMDB, release, statuts
 
+### 🗂️ Fichiers SB
+Explorateur de fichiers intégré pour gérer le contenu de la seedbox directement depuis le bot.
+
+- Arborescence navigable depuis `/home/rtorrent/rtorrent/download`
+- Breadcrumb cliquable pour remonter dans l'arborescence
+- Entrées triées : dossiers en premier, puis fichiers — avec taille affichée
+- Bouton **🗑 SUP** par entrée avec modal de confirmation
+- Suppression via **SSH `sudo rm -rf`** — contourne les permissions `rtorrent` (pas besoin de FileZilla)
+- Refresh automatique après chaque suppression
+
 ### 🧲 Torrent SB
 - Création du torrent via **SSH + mktorrent** directement sur la seedbox (piece size 4 MiB, privé)
 - Chargement automatique dans ruTorrent pour seeding immédiat
@@ -336,6 +363,17 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.8.2
+- Feat : **onglet Fichiers SB** — explorateur de fichiers seedbox intégré
+  - Navigation dans `/home/rtorrent/rtorrent/download` et ses sous-dossiers
+  - Breadcrumb cliquable pour remonter dans l'arborescence
+  - Dossiers en premier, taille affichée pour les fichiers
+  - Bouton 🗑 SUP par entrée avec modal de confirmation
+  - Suppression via SSH `sudo rm -rf` (contourne les permissions `rtorrent`)
+  - Refresh automatique après suppression
+- Feat : **Discord → colonne fichiers seedbox élargie** (340 → 480 px pour voir les noms complets)
+- Fix : page Fichiers SB placée hors du conteneur principal (page blanche)
 
 ### v2.8.1
 - Feat : **onglet Discord → mode FULL BD** — toggle REBiRTH / FULL BD en haut de la page
@@ -439,12 +477,13 @@ rebirth-upload-bot/
 - `V1.env` n'est jamais publié sur GitHub
 - BD Info nécessite BDInfo v0.7.5.6 + Whisky (voir section Installation)
 - Torrent SB nécessite un accès SSH sur port 22 et `mktorrent` installé sur la seedbox
+- Fichiers SB nécessite un accès SSH sur port 22 et les droits `sudo` pour supprimer les fichiers `rtorrent`
 
 ---
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.8.1** — macOS & Windows
+**REBiRTH Upload Bot v2.8.2** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
