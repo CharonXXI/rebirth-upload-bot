@@ -72,6 +72,7 @@ html.light body::before {
 .history-badge.tk-c411   { color:#c77dff; border-color:rgba(199,125,255,0.3);  background:rgba(199,125,255,0.07); }
 .history-badge.tk-torr9  { color:#ff9f43; border-color:rgba(255,159,67,0.3);   background:rgba(255,159,67,0.07); }
 .history-badge.tk-lacale { color:#ff6b9d; border-color:rgba(255,107,157,0.3);  background:rgba(255,107,157,0.07); }
+.history-badge.tk-nexum  { color:#00e5cc; border-color:rgba(0,229,204,0.3);     background:rgba(0,229,204,0.07); }
 /* Toast notifications */
 #toast-container { position:fixed; bottom:24px; right:24px; z-index:9998; display:flex; flex-direction:column-reverse; gap:8px; pointer-events:none; }
 .toast { font-family:var(--mono); font-size:11px; padding:10px 16px; border-radius:4px; border:1px solid; letter-spacing:1px; opacity:0; transform:translateX(24px); transition:opacity .25s ease, transform .25s ease; max-width:340px; line-height:1.4; }
@@ -442,6 +443,7 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tck-c411"   checked/><span class="tck-lbl">C411</span></label>
               <label class="tck-row"><input type="checkbox" id="tck-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
               <label class="tck-row"><input type="checkbox" id="tck-lacale" checked/><span class="tck-lbl">LaCale</span></label>
+              <label class="tck-row"><input type="checkbox" id="tck-nexum" checked/><span class="tck-lbl">Nexum</span></label>
             </div>
           </div>
           <div class="field-group">
@@ -450,7 +452,7 @@ html.light body::before {
           </div>
           <div class="section-label">Type NFO</div>
           <div class="nfo-toggle">
-            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>LaCale · C411 · Torr9</small></button>
+            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>LaCale · C411 · Torr9 · Nexum</small></button>
             <button class="nfo-btn"        id="nfo-cp437" onclick="setNFO('cp437')">📄 CP437<br><small>TOS · ABN</small></button>
           </div>
           <div class="section-label">Plateforme</div>
@@ -537,6 +539,10 @@ html.light body::before {
           <span class="tracker-name">HDT</span>
           <input id="tk-hdt" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
         </div>
+        <div class="tracker-row">
+          <span class="tracker-name">NEXUM</span>
+          <input id="tk-nexum" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
         <button id="btn-save-trackers" onclick="saveTrackers()" style="margin-top:16px;padding:11px 28px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">
           💾 &nbsp;SAUVEGARDER
         </button>
@@ -605,6 +611,7 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tsb-c411"   checked/><span class="tck-lbl">C411</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-lacale" checked/><span class="tck-lbl">LaCale</span></label>
+              <label class="tck-row"><input type="checkbox" id="tsb-nexum" checked/><span class="tck-lbl">Nexum</span></label>
             </div>
           </div>
 
@@ -1290,7 +1297,7 @@ function setPlatform(p) {
 }
 
 function _getTrackers() {
-  var map = { 'tck-abn':'ABN', 'tck-tos':'TOS', 'tck-c411':'C411', 'tck-torr9':'Torr9', 'tck-lacale':'LaCale' };
+  var map = { 'tck-abn':'ABN', 'tck-tos':'TOS', 'tck-c411':'C411', 'tck-torr9':'Torr9', 'tck-lacale':'LaCale', 'tck-nexum':'Nexum' };
   return Object.entries(map).filter(function(kv) {
     var el = document.getElementById(kv[0]);
     return el && el.checked;
@@ -1395,7 +1402,7 @@ var _tsbRunning = false;
 // Synchronise les cases trackers depuis la page Upload vers Torrent SB
 function tsbSyncTrackers() {
   var map = { 'tck-abn':'tsb-abn', 'tck-tos':'tsb-tos', 'tck-c411':'tsb-c411',
-              'tck-torr9':'tsb-torr9', 'tck-lacale':'tsb-lacale' };
+              'tck-torr9':'tsb-torr9', 'tck-lacale':'tsb-lacale', 'tck-nexum':'tsb-nexum' };
   Object.entries(map).forEach(function(kv) {
     var src = document.getElementById(kv[0]);
     var dst = document.getElementById(kv[1]);
@@ -1471,7 +1478,7 @@ function _tsbLog(msg, cls) {
 }
 
 function _tsbGetTrackers() {
-  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-lacale':'LaCale' };
+  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-lacale':'LaCale', 'tsb-nexum':'Nexum' };
   return Object.entries(map).filter(function(kv){
     var el = document.getElementById(kv[0]); return el && el.checked;
   }).map(function(kv){ return kv[1]; }).join(' ');
@@ -1655,7 +1662,7 @@ async function saveConfig() {
   setTimeout(function() { btn.textContent = '💾  SAUVEGARDER'; }, 2000);
 }
 
-var TRACKER_KEYS = ['abn','tos','c411','torr9','lacale','hdt'];
+var TRACKER_KEYS = ['abn','tos','c411','torr9','lacale','hdt','nexum'];
 
 async function saveTrackers() {
   var cfg = {};
@@ -1777,8 +1784,8 @@ async function clearHistory() {
   renderHistory();
 }
 
-var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TORR9', 'LACALE'];
-var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TORR9:'Torr9', LACALE:'LaCale' };
+var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TORR9', 'LACALE', 'NEXUM'];
+var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TORR9:'Torr9', LACALE:'LaCale', NEXUM:'Nexum' };
 
 async function renderStatsPage() {
   var entries = await window.pywebview.api.load_history() || [];
@@ -1796,7 +1803,7 @@ async function renderStatsPage() {
   }).length;
 
   // Trackers — détection parmi les 5 connus uniquement
-  var tkCounts = { ABN:0, TOS:0, C411:0, TORR9:0, LACALE:0 };
+  var tkCounts = { ABN:0, TOS:0, C411:0, TORR9:0, LACALE:0, NEXUM:0 };
   entries.forEach(function(e) {
     if (!e.trackers) return;
     var up = e.trackers.toUpperCase();
@@ -1913,7 +1920,7 @@ function loadSbDisk() {
 var _discCurrentMovie  = null;
 var _discSelectedFile  = null;
 var _discMode          = 'rebirth';
-var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE'];
+var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE', 'Nexum'];
 
 // Extrait un titre TMDB depuis un nom de release (retire tags techniques)
 function discExtractTitle(name) {
@@ -2066,7 +2073,7 @@ function discordSetMode(mode) {
   if (mode === 'hdt') {
     _discTrackers = ['HDT'];
   } else {
-    _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE'];
+    _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'LACALE', 'Nexum'];
   }
 
   // Button styles

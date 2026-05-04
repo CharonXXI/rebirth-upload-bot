@@ -105,6 +105,7 @@ TRACKER_C411=https://c411.com/announce/PASSKEY
 TRACKER_TORR9=https://torr9.com/announce/PASSKEY
 TRACKER_LACALE=https://lacale.com/announce/PASSKEY
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
+TRACKER_NEXUM=https://nexum-core.com/announce/PASSKEY
 SFTP_PATH_HDT=/home/rtorrent/rtorrent/download/FULL BD
 WEBHOOK_HDT_URL=ton_webhook_discord_fullbd
 

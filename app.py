@@ -56,6 +56,7 @@ class API:
             "TRACKER_C411":       os.getenv("TRACKER_C411", ""),
             "TRACKER_TORR9":      os.getenv("TRACKER_TORR9", ""),
             "TRACKER_LACALE":     os.getenv("TRACKER_LACALE", ""),
+            "TRACKER_NEXUM":      os.getenv("TRACKER_NEXUM", ""),
             "TRACKER_HDT":        os.getenv("TRACKER_HDT", ""),
             "SFTP_PATH_HDT":      os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD"),
             "WEBHOOK_HDT_URL":    os.getenv("WEBHOOK_HDT_URL", ""),
@@ -334,6 +335,7 @@ class API:
                 "C411":   os.getenv("TRACKER_C411", ""),
                 "TORR9":  os.getenv("TRACKER_TORR9", ""),
                 "LACALE": os.getenv("TRACKER_LACALE", ""),
+                "NEXUM":  os.getenv("TRACKER_NEXUM", ""),
             }
             checked = [t.strip().upper() for t in trackers.split() if t.strip()]
             active  = {k: v for k, v in announces.items() if v and k.upper() in checked}
@@ -3514,6 +3516,7 @@ class API:
             "TORR9":  "Torr9",
             "LACALE": "LaCale",
             "HDT":    "HD-Torrents",
+            "NEXUM":  "Nexum",
         }
         source_tag = SOURCE_TAGS.get(tk_name.upper(), tk_name)
         priv_flag = "-p " if private else ""
