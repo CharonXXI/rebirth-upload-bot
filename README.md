@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.8.2-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.8.3-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -48,7 +48,7 @@
 | 🧲 **Torrent SB** | Création torrent via SSH+mktorrent côté seedbox, chargement automatique dans ruTorrent |
 | 💿 **BD Info** | Rapport exact via **BDInfo v0.7.5.6** (Wine/Whisky) — DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
 | 🗂️ **Fichiers SB** | Explorateur de fichiers seedbox — navigation dans les sous-dossiers, suppression via SSH sudo |
-| 🎛️ **Trackers** | Page dédiée pour gérer les announces URL |
+| 🎛️ **Trackers** | Page dédiée pour gérer les announces URL (ABN · TOS · C411 · Torr9 · LaCale · HDT · Nexum) |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
 | 🌙 **Interface** | PyWebView moderne avec mode jour/nuit, animations, toasts |
 
@@ -250,7 +250,7 @@ Onglet 🔔 DISCORD
         │
         ▼
 Choisir le mode en haut de page :
-  ┌─ REBiRTH → liste SFTP_PATH · 5 trackers · WEBHOOK_URL
+  ┌─ REBiRTH → liste SFTP_PATH · 6 trackers · WEBHOOK_URL
   └─ FULL BD  → liste SFTP_PATH_HDT · HDT uniquement · WEBHOOK_HDT_URL
         │
         ▼
@@ -305,7 +305,7 @@ Sélectionner le film dans les résultats TMDB
 Onglet dédié à l'envoi de notifications sur Discord après chaque upload.
 
 **Deux modes** sélectionnables en haut de page :
-- **REBiRTH** — liste les fichiers de `SFTP_PATH`, affiche les 5 trackers (TOS / ABN / C411 / Torr9 / LaCale), envoie sur `WEBHOOK_URL`
+- **REBiRTH** — liste les fichiers de `SFTP_PATH`, affiche les 6 trackers (TOS / ABN / C411 / Torr9 / LaCale / Nexum), envoie sur `WEBHOOK_URL`
 - **FULL BD** — liste les fichiers de `SFTP_PATH_HDT`, affiche HDT uniquement, envoie sur `WEBHOOK_HDT_URL`
 
 **Workflow :**
@@ -357,13 +357,25 @@ rebirth-upload-bot/
 │   ├── C411/                   ← .torrent Czone411
 │   ├── Torr9/                  ← .torrent Torr9
 │   ├── LACALE/                 ← .torrent LaCale
-│   └── HDT/                    ← .torrent HD-Torrents (FULL BD)
+│   ├── HDT/                    ← .torrent HD-Torrents (FULL BD)
+│   └── NEXUM/                  ← .torrent Nexum
 └── BDINFO/                     ← Rapports BD Info (.txt + .nfo par Disc Label)
 ```
 
 ---
 
 ## 📝 Changelog
+
+### v2.8.3
+- Feat : **tracker Nexum** (nexum-core.com) — intégration complète
+  - Upload : case à cocher Nexum (UTF-8)
+  - Torrent SB : création `.torrent` avec source tag `Nexum` → `TORRENTS/NEXUM/`
+  - Discord mode REBiRTH : Nexum dans la liste des statuts (6 trackers)
+  - Config Trackers : champ `TRACKER_NEXUM`
+  - Historique : badge cyan `#00e5cc`
+- Feat : **layout trackers Upload** en grille 4 colonnes
+  - Ligne 1 : ABN · TOS · C411 · Torr9
+  - Ligne 2 : — · Nexum · LaCale · —
 
 ### v2.8.2
 - Feat : **onglet Fichiers SB** — explorateur de fichiers seedbox intégré
@@ -479,12 +491,13 @@ rebirth-upload-bot/
 - BD Info nécessite BDInfo v0.7.5.6 + Whisky (voir section Installation)
 - Torrent SB nécessite un accès SSH sur port 22 et `mktorrent` installé sur la seedbox
 - Fichiers SB nécessite un accès SSH sur port 22 et les droits `sudo` pour supprimer les fichiers `rtorrent`
+- Trackers supportés : ABN · TOS · C411 · Torr9 · LaCale · HDT · Nexum
 
 ---
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.8.2** — macOS & Windows
+**REBiRTH Upload Bot v2.8.3** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
