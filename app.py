@@ -2254,9 +2254,10 @@ class API:
             mi_path = None
             if sys.platform == "win32":
                 # Windows : pymediainfo (MediaInfo.dll embarqué, pas de CLI nécessaire)
-                # output='' retourne le texte natif MediaInfo (identique au CLI mediainfo)
+                # output='' + full=False → sortie compacte identique à `mediainfo fichier.mkv`
+                # (full=True par défaut = équivalent --Full → des centaines de lignes verbeux)
                 from pymediainfo import MediaInfo as _MI
-                content_mi = _MI.parse(fp, output='')
+                content_mi = _MI.parse(fp, output='', full=False)
             else:
                 # macOS / Linux : CLI mediainfo (installé via brew)
                 mi_name = os.path.basename(fp) + "_mediainfo.nfo"
