@@ -2254,17 +2254,9 @@ class API:
             mi_path = None
             if sys.platform == "win32":
                 # Windows : pymediainfo (MediaInfo.dll embarqué, pas de CLI nécessaire)
+                # output='' retourne le texte natif MediaInfo (identique au CLI mediainfo)
                 from pymediainfo import MediaInfo as _MI
-                mi = _MI.parse(fp)
-                sections = []
-                for track in mi.tracks:
-                    lines = [track.track_type]
-                    for k, v in track.to_data().items():
-                        if k in ("xml_dom_fragment", "track_type") or v is None:
-                            continue
-                        lines.append(f"{k.replace('_', ' ').title():<40}: {v}")
-                    sections.append("\n".join(lines))
-                content_mi = "\n\n".join(sections)
+                content_mi = _MI.parse(fp, output='')
             else:
                 # macOS / Linux : CLI mediainfo (installé via brew)
                 mi_name = os.path.basename(fp) + "_mediainfo.nfo"
