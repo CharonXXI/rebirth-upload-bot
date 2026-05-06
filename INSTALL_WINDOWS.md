@@ -1,4 +1,4 @@
-# 🪟 Installation Windows — REBiRTH Upload Bot v2.8.3
+# 🪟 Installation Windows — REBiRTH AIO v2.8.4
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 
@@ -134,7 +134,83 @@ pip install -r NFO_CUSTOM\requirements.txt
 
 ---
 
-### Étape 4 — Installer BDInfo (pour l'onglet BD Info)
+### Étape 4 — Installer les outils de l'onglet Remux
+
+> Cette étape est uniquement nécessaire si tu utilises l'onglet **🔄 Remux** du bot (extraction Blu-ray → MKV).
+
+L'onglet Remux nécessite **4 outils externes**. Installe-les tous dans cet ordre.
+
+#### 4a — MakeMKV
+
+**Télécharger :** [https://www.makemkv.com/download/](https://www.makemkv.com/download/)
+
+1. Télécharge **MakeMKV for Windows** (Setup .exe)
+2. Lance l'installeur, clique **Next** à chaque étape
+3. MakeMKV s'installe dans `C:\Program Files (x86)\MakeMKV\`
+
+**Clé beta :** MakeMKV est gratuit pendant la période beta. Si la clé a expiré, va dans MakeMKV → **Help → Register** et entre la clé disponible sur [forum.makemkv.com](https://forum.makemkv.com/forum/viewtopic.php?f=5&t=1053).
+
+**Vérification :** Le bot détecte `makemkvcon.exe` automatiquement via le PATH ou `C:\Program Files (x86)\MakeMKV\makemkvcon.exe`.
+
+---
+
+#### 4b — MKVToolNix
+
+**Télécharger :** [https://mkvtoolnix.download/windows/](https://mkvtoolnix.download/windows/)
+
+1. Télécharge la version **64-bit installer** (.exe)
+2. Lance l'installeur → Next → Install
+3. **Important :** lors de l'installation, laisse cochée l'option **"Add MKVToolNix to PATH"** si elle est proposée
+
+**Vérification :**
+```powershell
+mkvmerge --version
+```
+Tu dois voir `mkvmerge v...`. Sinon, ajoute `C:\Program Files\MKVToolNix\` au PATH manuellement.
+
+---
+
+#### 4c — MediaInfo
+
+**Télécharger :** [https://mediaarea.net/en/MediaInfo/Download/Windows](https://mediaarea.net/en/MediaInfo/Download/Windows)
+
+1. Télécharge **MediaInfo CLI** (pas la version GUI) — cherche le lien "CLI" sur la page
+2. Extrait le ZIP
+3. Place `MediaInfo.exe` dans un dossier et ajoute-le au PATH
+
+> Alternatively, **MediaInfo GUI** suffit si tu installes aussi la version CLI — le bot utilise la CLI.
+
+**Ajouter au PATH manuellement :**
+1. Rechercher **"Variables d'environnement"** dans le menu Démarrer
+2. Cliquer **Variables d'environnement** → dans "Variables système" → `Path` → **Modifier**
+3. **Nouveau** → coller le chemin vers le dossier contenant `MediaInfo.exe`
+4. OK → OK → OK
+
+---
+
+#### 4d — FFmpeg
+
+FFmpeg est utilisé pour extraire les 4 screenshots automatiques après le remux.
+
+**Méthode recommandée via winget :**
+```powershell
+winget install ffmpeg
+```
+
+**Ou manuellement :**
+1. Télécharger : [https://www.gyan.dev/ffmpeg/builds/](https://www.gyan.dev/ffmpeg/builds/) → `ffmpeg-release-essentials.zip`
+2. Extraire dans `C:\ffmpeg\`
+3. Ajouter `C:\ffmpeg\bin\` au PATH (même procédure que MediaInfo ci-dessus)
+
+**Vérification :**
+```powershell
+ffmpeg -version
+ffprobe -version
+```
+
+---
+
+### Étape 5 — Installer BDInfo (pour l'onglet BD Info)
 
 > Cette étape est uniquement nécessaire si tu utilises l'onglet **BD Info** du bot.
 
@@ -159,7 +235,7 @@ Le bot détecte `BDInfo_v0\BDInfo.exe` automatiquement — rien d'autre à confi
 
 ---
 
-### Étape 5 — Configurer le fichier V1.env
+### Étape 6 — Configurer le fichier V1.env
 
 > C'est ici que tu renseignes tes clés d'API, tokens et accès seedbox.
 
@@ -208,7 +284,7 @@ TRACKER_NEXUM=https://nexum-core.com/announce/PASSKEY
 
 ---
 
-### Étape 6 — Lancer le bot
+### Étape 7 — Lancer le bot
 
 **Double-clique sur `REBiRTH.bat`** dans le dossier du projet.
 

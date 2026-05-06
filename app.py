@@ -25,6 +25,19 @@ from NFO_CUSTOM import NFO_v1_7
 
 load_dotenv(ENV_FILE)
 
+# ── Remux Tool (optionnel — actif si remux_tool/gui.py présent) ──────────
+REMUX_DIR = BASE_DIR / "remux_tool"
+_RemuxAPI = None
+try:
+    sys.path.insert(0, str(REMUX_DIR))
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("remux_gui", REMUX_DIR / "gui.py")
+    _rmod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_rmod)
+    _RemuxAPI = _rmod.API
+except Exception as _e:
+    print(f"[remux] non disponible : {_e}")
+
 
 class API:
     def __init__(self):
@@ -34,6 +47,69 @@ class API:
         self._torrent_event      = Event()
         self._torrent_confirmed  = None
         self._bdinfo_input_queue = None   # queue.Queue() créé à chaque scan
+        # Remux tool
+        self._remux = _RemuxAPI() if _RemuxAPI else None
+
+    # ── Helper remux ──────────────────────────────────────────────────────
+    def _rmx(self):
+        """Retourne l'instance RemuxAPI avec la fenêtre partagée."""
+        if not self._remux:
+            raise RuntimeError("Remux tool non disponible")
+        self._remux.window = self.window
+        return self._remux
+
+    # ── Routes Remux (exposées au JS sous le préfixe rmx_) ───────────────
+    def rmx_detect_tools(self):
+        try:    return self._rmx().detect_tools()
+        except Exception as e: return {"ok": False, "error": str(e), "tools": {}}
+
+    def rmx_list_movies(self):
+        try:    return self._rmx().list_movies()
+        except Exception as e: return {"ok": False, "movies": [], "error": str(e)}
+
+    def rmx_analyze(self, movie_entry: str):
+        try:    return self._rmx().analyze(movie_entry)
+        except Exception as e: return {"ok": False, "error": str(e)}
+
+    def rmx_run_remux(self, params: dict):
+        try:    return self._rmx().run_remux(params)
+        except Exception as e: return {"ok": False, "error": str(e)}
+
+    def rmx_cancel(self):
+        try:    return self._rmx().cancel()
+        except Exception as e: return {"ok": False}
+
+    def rmx_history(self):
+        try:    return self._rmx().history()
+        except Exception as e: return {"ok": True, "items": []}
+
+    def rmx_get_config(self):
+        try:    return self._rmx().get_config()
+        except Exception as e: return {"ok": False, "error": str(e)}
+
+    def rmx_save_config(self, cfg: dict):
+        try:    return self._rmx().save_config(cfg)
+        except Exception as e: return {"ok": False, "error": str(e)}
+
+    def rmx_open_folder(self, path: str = ""):
+        try:    return self._rmx().open_folder(path)
+        except Exception as e: return {"ok": False}
+
+    def rmx_test_makemkv(self):
+        try:    return self._rmx().test_makemkv()
+        except Exception as e: return {"ok": False, "error": str(e)}
+
+    def rmx_reset_makemkv_settings(self):
+        try:    return self._rmx().reset_makemkv_settings()
+        except Exception as e: return {"ok": False, "error": str(e)}
+
+    def rmx_extract_screenshots(self, mkv_path: str = "", count: int = 4):
+        try:    return self._rmx().extract_screenshots(mkv_path, count)
+        except Exception as e: return {"ok": False, "error": str(e)}
+
+    def rmx_tmdb_search(self, query: str, year: str = ""):
+        try:    return self._rmx().tmdb_search(query, year)
+        except Exception as e: return {"ok": False, "error": str(e)}
 
     def get_config(self):
         return {
@@ -4244,7 +4320,7 @@ if __name__ == "__main__":
         html = f.read()
 
     window = webview.create_window(
-        "REBiRTH — Upload Bot",
+        "REBiRTH AIO",
         html=html,
         js_api=api,
         width=1100,

@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.8.3-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.8.4-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -37,10 +37,11 @@
 
 ## 🎯 Présentation
 
-**REBiRTH Upload Bot** est une application desktop qui automatise le workflow complet de release :
+**REBiRTH AIO** est une application desktop tout-en-un qui automatise le workflow complet de release : du remux Blu-ray à la notification Discord, en passant par la création de torrents et la gestion seedbox.
 
 | Fonctionnalité | Description |
 |---|---|
+| 🔄 **Remux** | Extraction ISO/BDMV → MKV via MakeMKV + MKVToolNix, sélection des pistes (vidéo/audio/subs), tag VF automatique, nommage REBiRTH |
 | 📄 **NFO** | Génération automatique UTF-8 + CP437 |
 | 🎬 **TMDB** | Recherche avec confirmation et changement d'ID |
 | ☁️ **Upload** | Gofile (failover 7 serveurs) ou BuzzHeavier |
@@ -65,7 +66,8 @@ Voir **[INSTALL_MAC.md](./INSTALL_MAC.md)** pour le guide complet.
 Commandes rapides :
 
 ```bash
-brew install mediainfo
+brew install mediainfo mkvtoolnix ffmpeg
+brew install --cask makemkv
 
 git clone https://github.com/CharonXXI/rebirth-upload-bot.git
 cd rebirth-upload-bot
@@ -93,7 +95,7 @@ export BDINFO_WIN_EXE="$HOME/Desktop/BDInfo_v0/BDInfo.exe"
 
 ### Windows
 
-Voir **[INSTALL_WINDOWS.md](./INSTALL_WINDOWS.md)** pour le guide complet.
+Voir **[INSTALL_WINDOWS.md](./INSTALL_WINDOWS.md)** pour le guide complet (inclut la section onglet Remux).
 
 #### BD Info (Windows)
 
@@ -154,6 +156,8 @@ BDINFO_WIN_EXE=/chemin/vers/BDInfo.exe   # requis pour l'onglet BD Info
 
 **macOS** → Double-cliquer sur `REBiRTH.command`
 
+**Windows** → Double-cliquer sur `REBiRTH.bat`
+
 **Terminal :**
 ```bash
 source venv/bin/activate && python3 app.py
@@ -165,9 +169,34 @@ source venv/bin/activate && python3 app.py
 
 ```
 ─────────────────────────────────────────────
-Workflow principal (MKV / REMUX)
+Workflow Remux (ISO/BDMV → MKV)
 ─────────────────────────────────────────────
-Sélectionner le .mkv
+Onglet 🔄 REMUX
+        │
+        ▼
+Placer l'ISO ou le dossier BDMV dans remux_tool/FULL/
+⟳ Refresh → sélectionner la source
+        │
+        ▼
+ANALYSER → MakeMKV scanne le disque (30 s à 2 min)
+  └─ Sélection automatique du titre principal
+  └─ TMDB récupère le titre FR
+        │
+        ▼
+Sélectionner les pistes (vidéo / audio / subs)
+Renseigner titre et année si besoin
+        │
+        ▼
+▶ LANCER LE REMUX
+  ├─ [MakeMKV]     Extraction titre principal vers tmp
+  ├─ [MediaInfo]   Analyse des pistes du MKV extrait
+  ├─ [MKVMerge]    Remux avec sélection précise des pistes
+  └─ [FILMS/]      MKV final → Bot Upload peut prendre le relais
+
+─────────────────────────────────────────────
+Workflow principal (MKV → Upload)
+─────────────────────────────────────────────
+Sélectionner le .mkv (onglet Upload)
         │
         ▼
 Remplir Source / Note / Autre info
@@ -208,90 +237,42 @@ Cocher les trackers → CRÉER TORRENTS SB
 ─────────────────────────────────────────────
 Workflow BD Info (COMPLETE BLURAY)
 ─────────────────────────────────────────────
-Onglet BD INFO
+Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
         │
         ▼
-  SCANNER (optionnel — ouvre BDInfo v0.7.5.6 via Wine/Whisky)
-  ou directement depuis un rapport existant :
-        │
-        ▼
-  Dans BDInfo v0.7.5.6 :
-    1. Scan Bitrates
-    2. View Report → sauvegarder dans BDINFO/
+  Dans BDInfo : Scan Bitrates → View Report → sauvegarder dans BDINFO/
         │
         ▼
   📂 CHARGER RAPPORT BDINFO
         │
-        ├─ Conversion RTF → texte brut (si TextEdit)
         ├─ Extraction DISC INFO / PLAYLIST REPORT / VIDEO / AUDIO / SUBTITLES
-        ├─ Renommage automatique avec le Disc Label (ex: DISC_LABEL.nfo)
+        ├─ Renommage automatique avec le Disc Label
         ├─ Sauvegarde .txt + .nfo dans BDINFO/
-        ├─ Affichage dans la preview
-        └─ BDInfo/Wine fermé automatiquement
-                   │
-                   ▼
-        Choisir BuzzHeavier / Gofile → ENVOYER
-        └─ ZIP (dossier COMPLETE BLURAY + NFO) uploadé en un seul fichier
-
-─────────────────────────────────────────────
-Workflow Fichiers SB (gestionnaire seedbox)
-─────────────────────────────────────────────
-Onglet 🗂️ FICHIERS SB
-        │
-        ▼
-Navigation depuis /home/rtorrent/rtorrent/download
-  └─ Breadcrumb cliquable pour remonter dans l'arborescence
-  └─ Cliquer sur un 📁 dossier pour entrer dedans
-        │
-        ▼
-Bouton 🗑 SUP sur un fichier ou dossier
-  └─ Modal de confirmation (action irréversible)
-  └─ SSH sudo rm -rf → suppression même si owner = rtorrent
-  └─ Refresh automatique après suppression
-
-─────────────────────────────────────────────
-Workflow Discord (notification canal)
-─────────────────────────────────────────────
-Onglet 🔔 DISCORD
-        │
-        ▼
-Choisir le mode en haut de page :
-  ┌─ REBiRTH → liste SFTP_PATH · 6 trackers · WEBHOOK_URL
-  └─ FULL BD  → liste SFTP_PATH_HDT · HDT uniquement · WEBHOOK_HDT_URL
-        │
-        ▼
-Cliquer sur un fichier dans la liste seedbox
-  └─ Titre extrait automatiquement → recherche TMDB lancée
-        │
-        ▼
-Sélectionner le film dans les résultats TMDB
-  └─ Formulaire de notification s'ouvre :
-       · Nom de la release (pré-rempli avec le nom exact du fichier seedbox)
-       · Statut par tracker : ✅ Uploadé / ⏳ Pending / ❌ Non uploadé
-       · Raison (optionnel, ex: "encode en cours")
-       · Case 🚨 MISE À JOUR (embed couleur différente)
-        │
-        ▼
-📣 ENVOYER SUR DISCORD
-  └─ Embed envoyé : poster TMDB · titre · ID TMDB · release · statuts trackers
+        └─ Upload ZIP → BuzzHeavier ou Gofile
 ```
 
 ---
 
 ## ✨ Fonctionnalités
 
+### 🔄 Remux (onglet intégré)
+- Interface complète dans REBiRTH AIO — pas besoin de lancer un outil séparé
+- Source : ISO ou dossier BDMV dans `remux_tool/FULL/`
+- Analyse automatique via **MakeMKV** (scan du disque, sélection titre principal)
+- Recherche **TMDB** pour récupérer le titre français
+- Sélection manuelle des pistes vidéo / audio / sous-titres avec recommandations auto
+- Tag VF automatique : VFF / VFQ / VFi / VF2 (si VFF+VFQ)
+- Remux via **MKVToolNix** avec titrage correct (VO, VFF, FR FORCED…)
+- Résultat directement dans `FILMS/` — l'onglet Upload peut prendre le relais
+- 📸 **4 Screenshots** : extraction automatique depuis le MKV → `PICS/<titre>/`
+- Console live, barre de progression, étapes en temps réel
+
 ### 💿 BD Info
 - Onglet dédié pour les releases COMPLETE BLURAY
-- Lance **BDInfo v0.7.5.6** (Windows GUI) via Wine/Whisky — bitrates exacts par comptage paquets TS (ex: 24 980 kbps précis)
-- Workflow manuel : Scan Bitrates → View Report → sauvegarder dans `BDINFO/`
-- Bouton **📂 CHARGER RAPPORT BDINFO** : traite le fichier le plus récent du dossier (`.rtf`, `.txt` ou `.nfo`)
-  - Conversion automatique RTF → texte brut (TextEdit sauvegarde en RTF par défaut)
-  - Extraction de la playlist principale (00001.MPLS ou la plus longue)
-  - Contenu filtré : **DISC INFO + PLAYLIST REPORT + VIDEO + AUDIO + SUBTITLES** uniquement
-  - Renommage automatique avec le `Disc Label` (ex: `THE_STRANGERS_CHAPTER_3_BD.nfo`)
-  - Sauvegarde double : `.txt` + `.nfo`
-  - Ferme BDInfo/Wine automatiquement
-- **Upload ZIP** : compresse le dossier COMPLETE BLURAY + NFO → BuzzHeavier ou Gofile
+- Lance **BDInfo v0.7.5.6** via Wine/Whisky (macOS) ou directement (Windows)
+- Workflow : Scan Bitrates → View Report → sauvegarder dans `BDINFO/`
+- Bouton **📂 CHARGER RAPPORT BDINFO** : traite le fichier le plus récent
+- **Upload ZIP** : compresse le dossier COMPLETE BLURAY + NFO
 
 ### 📄 Type NFO
 - **UTF-8** → `(UTF8).nom.nfo` pour LaCale, C411, Torr9
@@ -308,35 +289,17 @@ Sélectionner le film dans les résultats TMDB
 - Upload automatique du dossier FINAL via FTP TLS
 
 ### 💬 Discord
-Onglet dédié à l'envoi de notifications sur Discord après chaque upload.
-
-**Deux modes** sélectionnables en haut de page :
-- **REBiRTH** — liste les fichiers de `SFTP_PATH`, affiche les 6 trackers (TOS / ABN / C411 / Torr9 / LaCale / Nexum), envoie sur `WEBHOOK_URL`
-- **FULL BD** — liste les fichiers de `SFTP_PATH_HDT`, affiche HDT uniquement, envoie sur `WEBHOOK_HDT_URL`
-
-**Workflow :**
-1. Cliquer sur un fichier dans la liste seedbox → recherche TMDB automatique
-2. Sélectionner le film → formulaire de notification
-3. Nom de la release pré-rempli avec le nom exact du fichier (modifiable)
-4. Statut par tracker : ✅ Uploadé / ⏳ Pending / ❌ Non uploadé + champ raison
-5. Option 🚨 Mise à jour (embed couleur jaune)
-6. **📣 ENVOYER** → embed envoyé : poster TMDB, titre, ID TMDB, release, statuts
+- **REBiRTH** — 6 trackers (TOS / ABN / C411 / Torr9 / LaCale / Nexum), webhook REBiRTH
+- **FULL BD** — tracker HDT uniquement, webhook séparé
 
 ### 🗂️ Fichiers SB
-Explorateur de fichiers intégré pour gérer le contenu de la seedbox directement depuis le bot.
-
-- Arborescence navigable depuis `/home/rtorrent/rtorrent/download`
-- Breadcrumb cliquable pour remonter dans l'arborescence
-- Entrées triées : dossiers en premier, puis fichiers — avec taille affichée
-- Bouton **🗑 SUP** par entrée avec modal de confirmation
-- Suppression via **SSH `sudo rm -rf`** — contourne les permissions `rtorrent` (pas besoin de FileZilla)
-- Refresh automatique après chaque suppression
+- Navigation dans `/home/rtorrent/rtorrent/download` et sous-dossiers
+- Suppression via SSH `sudo rm -rf`
 
 ### 🧲 Torrent SB
-- Création du torrent via **SSH + mktorrent** directement sur la seedbox (piece size 4 MiB, privé)
-- Chargement automatique dans ruTorrent pour seeding immédiat
-- Un `.torrent` par tracker coché — sauvegardé dans `TORRENTS/`
-- Requiert un accès SSH sur port 22 (configurer `SFTP_HOST_FTP`, `SFTP_USER`, `SFTP_PASS`, `SFTP_PORT=22`)
+- Création via **SSH + mktorrent** côté seedbox (piece size 4 MiB, privé)
+- Hash unique par tracker via source tag
+- Chargement automatique dans ruTorrent
 
 ---
 
@@ -344,33 +307,46 @@ Explorateur de fichiers intégré pour gérer le contenu de la seedbox directeme
 
 ```
 rebirth-upload-bot/
-├── app.py                      ← Backend Python (PyWebView + toute la logique)
+├── app.py                      ← Backend Python principal (PyWebView + toute la logique)
 ├── gui_index.html              ← Frontend HTML/CSS/JS (interface complète)
 ├── gofile.py                   ← Module upload Gofile (failover 7 serveurs)
-├── auto-up-discord.py          ← Script CLI autonome (discord + upload)
-├── notif_upload_discord.py     ← Script standalone tkinter (notification Discord)
 ├── V1.env                      ← Configuration (ne pas commiter — gitignored)
 ├── REBiRTH.command             ← Lanceur macOS (double-clic)
 ├── REBiRTH.bat                 ← Lanceur Windows (double-clic)
 ├── NFO_CUSTOM/                 ← Générateur NFO (TMDB, templates, helpers)
 ├── BDInfo_v0/                  ← BDInfo v0.7.5.6 (BDInfo.exe + DLLs — non commité)
-├── FILMS/                      ← Déposer les .mkv / dossiers COMPLETE BLURAY ici
-├── FINAL/                      ← Sortie encodage (MKV + NFO par tracker)
-│   └── Nom.Du.Film.2025.../    ← Un sous-dossier par release
+├── remux_tool/                 ← Outil de remux Blu-ray (intégré dans l'onglet Remux)
+│   ├── gui.py                  ← Backend remux (API PyWebView)
+│   ├── makemkv_extract.py      ← Extraction MakeMKV
+│   ├── mediainfo_parse.py      ← Analyse des pistes MediaInfo/ffprobe
+│   ├── mkvtoolnix_remux.py     ← Remux MKVMerge
+│   ├── config.py               ← Configuration remux (dossiers, options)
+│   ├── FULL/                   ← Sources ISO/BDMV (non commité)
+│   └── MAKEMKV_KEY.txt         ← Clé beta MakeMKV
+├── FILMS/                      ← .mkv finaux (remux → ici, puis upload bot)
+├── PICS/                       ← Screenshots extraits par l'onglet Remux
+│   └── Nom Du Film/            ← 4 captures par film
+├── FINAL/                      ← Sortie upload (MKV + NFO par tracker)
 ├── TORRENTS/                   ← Fichiers .torrent par tracker
-│   ├── TOS/                    ← .torrent TheOldSchool
-│   ├── ABN/                    ← .torrent ABNormal
-│   ├── C411/                   ← .torrent Czone411
-│   ├── Torr9/                  ← .torrent Torr9
-│   ├── LACALE/                 ← .torrent LaCale
-│   ├── HDT/                    ← .torrent HD-Torrents (FULL BD)
-│   └── NEXUM/                  ← .torrent Nexum
-└── BDINFO/                     ← Rapports BD Info (.txt + .nfo par Disc Label)
+└── BDINFO/                     ← Rapports BD Info (.txt + .nfo)
 ```
 
 ---
 
 ## 📝 Changelog
+
+### v2.8.4
+- Feat : **onglet Remux intégré** dans REBiRTH AIO — plus besoin de lancer un outil séparé
+  - Analyse MakeMKV directement dans l'interface (30 s à 2 min selon le disque)
+  - Sélection des pistes vidéo / audio / sous-titres avec recommandations auto
+  - Tag VF automatique (VFF / VFQ / VFi / VF2)
+  - Barre de progression + étapes en temps réel + console live
+  - MKV final déposé directement dans `FILMS/` pour enchaîner avec l'upload
+  - 📸 4 Screenshots automatiques → `PICS/<titre du film>/`
+  - TMDB intégré pour récupérer le titre français
+- Fix : boutons Test MakeMKV / Reset MakeMKV / 4 Screens (`toast` → `showToast`)
+- Renommage : **REBiRTH AIO** (titre fenêtre, sidebar, topbar)
+- Réorganisation navigation : Upload · Remux · Trackers · BD Info · Torrent SB · Fichiers SB · Discord · Historique · Stats · Config
 
 ### v2.8.3
 - Feat : **tracker Nexum** (nexum-core.com) — intégration complète
@@ -380,109 +356,25 @@ rebirth-upload-bot/
   - Config Trackers : champ `TRACKER_NEXUM`
   - Historique : badge cyan `#00e5cc`
 - Feat : **layout trackers Upload** en grille 4 colonnes
-  - Ligne 1 : ABN · TOS · C411 · Torr9
-  - Ligne 2 : — · Nexum · LaCale · —
 
 ### v2.8.2
 - Feat : **onglet Fichiers SB** — explorateur de fichiers seedbox intégré
-  - Navigation dans `/home/rtorrent/rtorrent/download` et ses sous-dossiers
-  - Breadcrumb cliquable pour remonter dans l'arborescence
-  - Dossiers en premier, taille affichée pour les fichiers
-  - Bouton 🗑 SUP par entrée avec modal de confirmation
-  - Suppression via SSH `sudo rm -rf` (contourne les permissions `rtorrent`)
-  - Refresh automatique après suppression
-- Feat : **Discord → colonne fichiers seedbox élargie** (340 → 480 px pour voir les noms complets)
-- Fix : page Fichiers SB placée hors du conteneur principal (page blanche)
+- Fix : page Fichiers SB placée hors du conteneur principal
 
 ### v2.8.1
-- Feat : **onglet Discord → mode FULL BD** — toggle REBiRTH / FULL BD en haut de la page
-  - Mode REBiRTH : liste les fichiers de `SFTP_PATH`, 5 trackers (TOS / ABN / C411 / Torr9 / LaCale), envoie sur `WEBHOOK_URL`
-  - Mode FULL BD : liste les fichiers de `SFTP_PATH_HDT`, tracker HDT uniquement, envoie sur `WEBHOOK_HDT_URL`
-- Feat : nouvelle variable `.env` : `WEBHOOK_HDT_URL` (canal Discord dédié FULL BD)
-- Feat : page Paramètres — deux champs webhook distincts (REBiRTH et FULL BD)
-- Fix : `notif_upload_discord.py` — suppression des clés en dur (WEBHOOK_URL et API_KEY lus depuis `.env`)
+- Feat : **onglet Discord → mode FULL BD** — toggle REBiRTH / FULL BD
 
 ### v2.8.0
-- Feat : **tracker HD-Torrents (HDT)** — ajout dans Config, Torrent SB et BD Info
-- Feat : onglet **BD Info → bouton TORRENT HDT** — crée le torrent depuis la seedbox et démarre le seeding dans `/FULL BD`
-- Feat : **Torrent SB → case HDT** — chemin seedbox séparé (`SFTP_PATH_HDT`) pour les FULL Blu-ray
-- Feat : source tag `HD-Torrents` dans mktorrent pour info hash unique sur HDT
-- Feat : variables `.env` : `TRACKER_HDT` (announce URL) + `SFTP_PATH_HDT` (répertoire FULL BD)
+- Feat : **tracker HD-Torrents (HDT)** — Config, Torrent SB, BD Info
 
 ### v2.7.1
-- Feat : **espace disque seedbox** affiché en bas du sidebar (`SB : X.XX Tio / Y.YY Tio`)
-- Feat : rafraîchissement automatique toutes les 60 secondes
-- Fix : calcul `used = total - available` pour matcher l'affichage ruTorrent (blocs réservés inclus)
-- Fix : `df -P` pour éviter le wrap des noms de filesystem longs
+- Feat : **espace disque seedbox** affiché en bas du sidebar
 
 ### v2.7.0
-- **Torrent SB opérationnel** — création via SSH + mktorrent côté seedbox, chargement automatique dans ruTorrent pour seeding immédiat
-- Feat : méthode SSH prioritaire dans la cascade de création torrent (port 22 détecté automatiquement)
-- Feat : un `.torrent` par tracker coché, sauvegardé dans `TORRENTS/`
-- Feat : **source tag par tracker** — info hash unique par tracker via `-s` mktorrent (`TOS=TheOldSchool`, `ABN`, `C411`, `Torr9`, `LaCale`) — cross-seeding immédiat sur TOS sans re-télécharger
-- Feat : migration seedbox complète en **SFTP/SSH paramiko** (port 22) — `list_seedbox_files` et `_ftp_upload` réécrits
-- Fix : `tsbSelect()` — suppression du `.replace(/\.[^.]+$/, '')` qui tronquait le nom du dossier (ex: `.AVC-REBiRTH` retiré à tort)
-- Fix : `Path.stem` → `Path.name` côté Python pour `remote_path` — même troncature corrigée
-- Fix : mise à jour credentials seedbox (nouveau VPS avec accès SSH complet)
+- Feat : **Torrent SB opérationnel** — SSH + mktorrent, source tag par tracker
 
 ### v2.6.0
-- **Refactor BD Info complet** — abandon de BDInfoCLI (.NET) au profit de **BDInfo v0.7.5.6** (Windows GUI via Wine/Whisky)
-- Feat : **bitrates exacts** — BDInfo v0.7.5.6 utilise le comptage paquets TS (ex: 24 980 kbps au lieu de ~9 918 kbps avec BDInfoCLI)
-- Feat : **bouton 📂 CHARGER RAPPORT BDINFO** — traite le rapport le plus récent du dossier `BDINFO/` sans dépendre du timing du scan
-- Feat : **conversion RTF automatique** — TextEdit sauvegarde en `.rtf` ; le bot le convertit en texte brut propre (nettoyage font-table, commandes RTF)
-- Feat : **extraction ciblée** — seules les sections DISC INFO / PLAYLIST REPORT / VIDEO / AUDIO / SUBTITLES sont conservées (FILES, CHAPTERS, STREAM DIAGNOSTICS supprimés)
-- Feat : **renommage par Disc Label** — le fichier brut est remplacé par `DISC_LABEL.txt` + `DISC_LABEL.nfo` (priorité à `Disc Label:` sur `Disc Title:`)
-- Feat : **kill Wine automatique** au clic "Charger rapport" — BDInfo est fermé proprement
-- Feat : **polling .rtf** ajouté en plus de `.txt` / `.nfo`
-- Feat : **mini-tuto intégré** dans l'onglet BD Info (3 étapes)
-- Feat : **lancement direct BDInfo.exe sur Windows** depuis `BDInfo_v0\` sans Wine ni .NET
-- Feat : **section THX dans le NFO** — ManixQC & MenFox centrés entre LiNKS et NO RULES
-- Feat : **LANGUAGE_MAP étendu** — ajout `fr-FR`, `fr-CA`, `no` (Norvégien), `es-419` (Spanish Latin America)
-- Fix : **post-traitement unifié** — même logique extraction/renommage pour le polling Wine et le chargement manuel
-- Fix : **upload BD Info** — `_bdi_last_nfo` correctement exposé après chargement manuel du rapport
-- Fix : **upload BD Info** — détection automatique du dossier COMPLETE.BLURAY dans `FILMS/` pour les deux workflows (scan ou chargement manuel)
-
-### v2.5.9
-- Feat : onglet BD Info complet — scan COMPLETE BLURAY, rapport BDInfoCLI filtré, upload ZIP
-- Feat : identification MPLS intelligente via makemkvcon / BDInfoCLI --list
-- Feat : upload ZIP BD Info (ZIP_STORED, dossier + NFO)
-- Fix : reset section upload au démarrage d'un nouveau scan
-- Fix : détection rapport sur rescan (mtime)
-- Fix : upload 400 BuzzHeavier (exclusion .DS_Store, BACKUP/)
-
-### v2.5.8
-- Fix : upload 400 — filtrage `.DS_Store` / `._*` / `BACKUP/`
-- Feat : UI upload BD Info — toggle BuzzHeavier/Gofile + bouton ENVOYER
-
-### v2.5.7
-- Fix : détection rapport sur rescan — timestamp `scan_start`
-
-### v2.5.6
-- Fix : section upload non réinitialisée entre deux scans
-
-### v2.5.5
-- Feat : upload BD Info inclut le dossier film complet + NFO
-
-### v2.5.4
-- Feat : upload BD Info — envoi `.nfo` vers Gofile ou BuzzHeavier
-
-### v2.5.3
-- Revert : retour v2.5.0 — suppression patches bitrates non concluants
-
-### v2.5.0
-- Fix : filtrage rapport — `.txt` source filtré aussi
-
-### v2.4.9
-- Feat : filtrage rapport BDInfoCLI — DISC INFO → SUBTITLES uniquement
-
-### v2.4.7
-- Feat : flow makemkvcon → BDInfoCLI — identification MPLS principal
-
-### v2.4.0
-- Feat : séparation canaux `bdinfo_status` / `bdinfo_output`
-
-### v2.3.7
-- Feat : onglet BD Info — intégration BDInfoCLI, scan COMPLETE BLURAY
+- Feat : **BD Info** — BDInfo v0.7.5.6 (Windows GUI via Wine/Whisky), bitrates exacts
 
 ### v2.0.0
 - Release initiale PyWebView, failover Gofile 7 serveurs
@@ -494,16 +386,16 @@ rebirth-upload-bot/
 - Pour les fichiers > 10 GB, BuzzHeavier est plus stable que Gofile
 - Le bot empêche automatiquement la mise en veille pendant l'upload
 - `V1.env` n'est jamais publié sur GitHub
-- BD Info nécessite BDInfo v0.7.5.6 + Whisky (voir section Installation)
-- Torrent SB nécessite un accès SSH sur port 22 et `mktorrent` installé sur la seedbox
-- Fichiers SB nécessite un accès SSH sur port 22 et les droits `sudo` pour supprimer les fichiers `rtorrent`
+- L'onglet Remux nécessite : **MakeMKV**, **MKVToolNix**, **MediaInfo**, **ffmpeg** (voir INSTALL_WINDOWS.md)
+- BD Info nécessite BDInfo v0.7.5.6 + Whisky (macOS) ou BDInfo_v0\ (Windows)
+- Torrent SB nécessite un accès SSH port 22 et `mktorrent` installé sur la seedbox
 - Trackers supportés : ABN · TOS · C411 · Torr9 · LaCale · HDT · Nexum
 
 ---
 
 <div align="center">
 
-**REBiRTH Upload Bot v2.8.3** — macOS & Windows
+**REBiRTH AIO v2.8.4** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

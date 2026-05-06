@@ -20,3 +20,10 @@ theme.txt
 NFO_CUSTOM/.DS_Store
 .git 2/
 .gitignore 2
+# remux_tool — données locales et sources volumineuses
+remux_tool/FULL/
+remux_tool/gui_history.json
+remux_tool/__pycache__/
+remux_tool/.venv/
+remux_tool/*.log
+PICS/
