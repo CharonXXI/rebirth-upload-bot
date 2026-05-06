@@ -2258,6 +2258,8 @@ class API:
                 # (full=True par défaut = équivalent --Full → des centaines de lignes verbeux)
                 from pymediainfo import MediaInfo as _MI
                 content_mi = _MI.parse(fp, output='', full=False)
+                # Remplacer le chemin complet par le nom de fichier seul (comme le CLI sur macOS)
+                content_mi = content_mi.replace(fp, os.path.basename(fp))
             else:
                 # macOS / Linux : CLI mediainfo (installé via brew)
                 mi_name = os.path.basename(fp) + "_mediainfo.nfo"
