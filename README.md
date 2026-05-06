@@ -203,7 +203,7 @@ Remplir Source / Note / Autre info
 Cocher les trackers : ABN / TOS / C411 / Torr9 / LaCale / Nexum
         │
         ▼
-Choisir type NFO : UTF-8 (LaCale · C411 · Torr9)
+Choisir type NFO : UTF-8 (LaCale · C411 · Torr9 · Nexum)
                    CP437 (TOS · ABN)
 Choisir plateforme : BuzzHeavier / Gofile / Ignorer
         │
@@ -275,7 +275,7 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 - **Upload ZIP** : compresse le dossier COMPLETE BLURAY + NFO
 
 ### 📄 Type NFO
-- **UTF-8** → `(UTF8).nom.nfo` pour LaCale, C411, Torr9
+- **UTF-8** → `(UTF8).nom.nfo` pour LaCale, C411, Torr9, Nexum
 - **CP437** → `(CP437).nom.nfo` pour TOS, ABN
 
 ### ☁️ Gofile
