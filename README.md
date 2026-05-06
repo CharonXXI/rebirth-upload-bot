@@ -200,7 +200,7 @@ Sélectionner le .mkv (onglet Upload)
         │
         ▼
 Remplir Source / Note / Autre info
-Cocher les trackers : ABN / TOS / C411 / Torr9 / LaCale
+Cocher les trackers : ABN / TOS / C411 / Torr9 / LaCale / Nexum
         │
         ▼
 Choisir type NFO : UTF-8 (LaCale · C411 · Torr9)
