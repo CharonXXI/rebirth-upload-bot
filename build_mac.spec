@@ -23,20 +23,42 @@ a = Analysis(
         'tqdm',
         # Config
         'dotenv',
+        'python_dotenv',
         # Media
         'pymediainfo',
         # NFO / parsing
         'PTN',
-        # FTP / ruTorrent
+        # Torrent
+        'torf',
+        # FTP / ruTorrent / SFTP
         'ftplib',
         'ssl',
         'xmlrpc',
         'xmlrpc.client',
-        # Stdlib
+        'paramiko',
+        'paramiko.transport',
+        'paramiko.auth_handler',
+        'paramiko.sftp_client',
+        # Données / calculs
+        'numpy',
+        'numpy.core',
+        'numpy.core._methods',
+        'numpy.lib.format',
+        # Affichage terminal
+        'rich',
+        'rich.console',
+        'rich.progress',
+        # Stdlib (parfois manquants dans le bundle)
         'uuid',
         'fractions',
         'importlib',
         'importlib.util',
+        'hashlib',
+        'base64',
+        'zipfile',
+        'stat',
+        'glob',
+        'pty',
         # NFO_CUSTOM sous-modules
         'NFO_CUSTOM.NFO_v1_7',
         'NFO_CUSTOM.tmdb_helper',
@@ -82,7 +104,7 @@ app = BUNDLE(
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': True,
-        'CFBundleShortVersionString': '2.5.9',
+        'CFBundleShortVersionString': '2.8.3',
         'CFBundleName': 'REBiRTH',
         'NSRequiresAquaSystemAppearance': False,
     },

@@ -5,8 +5,6 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 from io import BytesIO
-import ctypes
-
 # Desactivation des alertes de deprecation pour Pillow
 import warnings
 warnings.filterwarnings("ignore")

@@ -24,6 +24,8 @@
 
 - [Présentation](#-présentation)
 - [Installation](#-installation)
+  - [📖 Guide macOS complet](./INSTALL_MAC.md)
+  - [📖 Guide Windows complet](./INSTALL_WINDOWS.md)
 - [Configuration](#-configuration)
 - [Lancement](#-lancement)
 - [Workflow](#-workflow-complet)
@@ -58,6 +60,10 @@
 
 ### macOS
 
+Voir **[INSTALL_MAC.md](./INSTALL_MAC.md)** pour le guide complet.
+
+Commandes rapides :
+
 ```bash
 brew install mediainfo
 
@@ -67,9 +73,11 @@ cd rebirth-upload-bot
 python3 -m venv venv
 source venv/bin/activate
 
-pip install pywebview python-dotenv pymediainfo parse-torrent-name
+pip install pywebview python-dotenv requests requests_toolbelt tqdm rich pymediainfo parse-torrent-name numpy paramiko
 pip install -r NFO_CUSTOM/requirements.txt
 ```
+
+Lancement : **double-cliquer sur `REBiRTH.command`**
 
 #### BD Info (via BDInfo v0.7.5.6 + Whisky)
 
@@ -77,13 +85,11 @@ Le bot utilise **BDInfo v0.7.5.6** (version Windows GUI) via Wine/Whisky pour ob
 
 1. Installer **[Whisky](https://github.com/Whisky-App/Whisky/releases)** (wrapper Wine pour macOS)
 2. Placer `BDInfo.exe` et ses DLLs dans un dossier (ex: `~/Desktop/BDInfo_v0/`)
-3. Configurer la variable d'environnement :
+3. Ajouter dans `~/.zshrc` :
 
 ```bash
 export BDINFO_WIN_EXE="$HOME/Desktop/BDInfo_v0/BDInfo.exe"
 ```
-
-> 💡 Ajouter cette ligne dans `~/.zshrc` pour la rendre permanente, ou lancer le bot depuis un terminal avec la variable définie.
 
 ### Windows
 

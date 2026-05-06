@@ -1,7 +1,11 @@
+pywebview
+python-dotenv
 requests
 requests_toolbelt
 tqdm
 rich
 pymediainfo
+parse-torrent-name
 numpy
+paramiko
 # pywinpty  # Windows uniquement — installer manuellement sur Windows si nécessaire
