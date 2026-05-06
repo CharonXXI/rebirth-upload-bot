@@ -25,17 +25,33 @@ a = Analysis(
         'tqdm',
         # Config
         'dotenv',
+        'python_dotenv',
         # Media
         'pymediainfo',
         # NFO / parsing
         'PTN',
         # Torrent
         'torf',
-        # FTP / ruTorrent
+        # FTP / ruTorrent / SFTP
         'ftplib',
         'ssl',
         'xmlrpc',
         'xmlrpc.client',
+        'paramiko',
+        'paramiko.transport',
+        'paramiko.auth_handler',
+        'paramiko.sftp_client',
+        # Données / calculs
+        'numpy',
+        'numpy.core',
+        'numpy.core._methods',
+        'numpy.lib.format',
+        # Affichage terminal (auto-up-discord)
+        'rich',
+        'rich.console',
+        'rich.progress',
+        # BDInfo interactif (optionnel — ne plante pas si absent)
+        'winpty',
         # Stdlib (parfois manquants dans le bundle)
         'ctypes',
         'ctypes.wintypes',
@@ -43,6 +59,11 @@ a = Analysis(
         'fractions',
         'importlib',
         'importlib.util',
+        'hashlib',
+        'base64',
+        'zipfile',
+        'stat',
+        'glob',
         # NFO_CUSTOM sous-modules
         'NFO_CUSTOM.NFO_v1_7',
         'NFO_CUSTOM.tmdb_helper',

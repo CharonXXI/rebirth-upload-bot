@@ -1,7 +1,11 @@
+import os
 import requests
+from dotenv import load_dotenv
 
-# Votre clé API TMDb
-TMDB_API_KEY = "cab621e2bbe649631974b2ddf2452a5b"
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "V1.env"))
+
+# Clé API TMDb lue depuis V1.env (variable API_KEY)
+TMDB_API_KEY = os.getenv("API_KEY", "")
 
 def search_tmdb(title, media_type="movie", language="fr"):
     """
