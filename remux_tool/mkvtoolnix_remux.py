@@ -157,13 +157,19 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
     
     info = _identify(mkvmerge, input_file)
     mm_tracks = info.get("tracks", [])
-    
+
+    # Debug : afficher le mapping mkvmerge id → type/langue
+    print("  [DEBUG] mkvmerge tracks:")
+    for t in mm_tracks:
+        props = t.get("properties", {})
+        print(f"    id={t['id']} type={t.get('type')} lang={props.get('language')} name={props.get('track_name')}")
+
     # === VIDEO ===
     video_tracks = [t for t in mm_tracks if t.get("type") == "video"]
     if not video_tracks:
         raise RuntimeError("Aucune piste video")
     video_id = video_tracks[0]["id"]
-    
+
     # === AUDIO ===
     selected_audio = tracks.get("selected_audio", [])
     audio_mm = [t for t in mm_tracks if t.get("type") == "audio"]
@@ -221,24 +227,37 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
     for mi_track in selected_audio:
         mi_lang = _normalize_lang(mi_track.get("Language", ""))
         mi_title = (mi_track.get("Title") or "").lower()
-        
-        # Chercher la piste correspondante dans mkvmerge
+
+        # ── Matching par StreamOrder (= mkvmerge id) ──────────────────────────
+        # StreamOrder de MediaInfo correspond directement à l'id mkvmerge.
+        # C'est la méthode fiable quand plusieurs pistes ont la même langue.
         found = None
-        search_pool = en_mm if mi_lang == "en" else fr_mm if mi_lang == "fr" else audio_mm
-        
-        for mm_t in search_pool:
-            if mm_t["id"] in audio_ids:
-                continue  # Déjà utilisé
-            if _match_track_by_properties(mm_t, mi_track):
-                found = mm_t
-                break
-        
-        if not found and search_pool:
-            # Fallback: prendre la première non utilisée
-            for mm_t in search_pool:
-                if mm_t["id"] not in audio_ids:
+        stream_order = mi_track.get("StreamOrder")
+        print(f"  [DEBUG] Audio MediaInfo: lang={mi_lang} StreamOrder={stream_order} title={mi_title!r}")
+        if stream_order is not None:
+            so_int = int(stream_order)
+            for mm_t in audio_mm:
+                if mm_t["id"] == so_int:
                     found = mm_t
                     break
+            if found and found["id"] in audio_ids:
+                found = mm_t  # Ne pas ignorer — déjà dans audio_ids = doublon, on skip
+                found = None
+
+        # ── Fallback langue si StreamOrder ne matche pas ──────────────────────
+        if not found:
+            search_pool = en_mm if mi_lang == "en" else fr_mm if mi_lang == "fr" else audio_mm
+            for mm_t in search_pool:
+                if mm_t["id"] in audio_ids:
+                    continue
+                if _match_track_by_properties(mm_t, mi_track):
+                    found = mm_t
+                    break
+            if not found and search_pool:
+                for mm_t in search_pool:
+                    if mm_t["id"] not in audio_ids:
+                        found = mm_t
+                        break
         
         if found:
             audio_ids.append(found["id"])
@@ -395,22 +414,31 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
             lang_name = "Francais"
             lang_tag2 = "FR"
         
+        # ── Matching par StreamOrder (= mkvmerge id) ──────────────────────────
         found = None
-        for mm_t in search_pool:
-            if mm_t["id"] in sub_ids:
-                continue
-            props = mm_t.get("properties", {})
-            mm_title = (props.get("track_name") or "").lower()
-            
-            if mi_title and mm_title and (mi_title in mm_title or mm_title in mi_title):
-                found = mm_t
-                break
-        
-        if not found:
-            for mm_t in search_pool:
-                if mm_t["id"] not in sub_ids:
+        stream_order = mi_track.get("StreamOrder")
+        if stream_order is not None:
+            so_int = int(stream_order)
+            for mm_t in sub_mm:
+                if mm_t["id"] == so_int and mm_t["id"] not in sub_ids:
                     found = mm_t
                     break
+
+        # ── Fallback titre/langue si StreamOrder ne matche pas ────────────────
+        if not found:
+            for mm_t in search_pool:
+                if mm_t["id"] in sub_ids:
+                    continue
+                props = mm_t.get("properties", {})
+                mm_title = (props.get("track_name") or "").lower()
+                if mi_title and mm_title and (mi_title in mm_title or mm_title in mi_title):
+                    found = mm_t
+                    break
+            if not found:
+                for mm_t in search_pool:
+                    if mm_t["id"] not in sub_ids:
+                        found = mm_t
+                        break
         
         if found:
             sub_ids.append(found["id"])

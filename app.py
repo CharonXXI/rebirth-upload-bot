@@ -467,8 +467,8 @@ class API:
 
     def browse_folder_bdinfo(self):
         """Ouvre le Finder pour sélectionner un dossier BDMV (ou son parent)."""
-        films_dir = BASE_DIR / "FILMS"
-        start_dir = str(films_dir) if films_dir.exists() else str(Path.home())
+        full_dir = BASE_DIR / "remux_tool" / "FULL"
+        start_dir = str(full_dir) if full_dir.exists() else str(Path.home())
         result = self.window.create_file_dialog(
             webview.FOLDER_DIALOG,
             directory=start_dir
@@ -553,20 +553,20 @@ class API:
 
         self._bdi_last_nfo = str(_out_nfo)   # expose pour upload_bdinfo_nfo
 
-        # Chercher le dossier COMPLETE.BLURAY dans FILMS/ seulement si pas déjà set par un scan
+        # Chercher le dossier COMPLETE.BLURAY dans remux_tool/FULL/ seulement si pas déjà set par un scan
         if not getattr(self, "_bdi_last_folder", ""):
-            _films_dir = BASE_DIR / "FILMS"
+            _full_dir = BASE_DIR / "remux_tool" / "FULL"
             _matched_folder = ""
-            if _films_dir.exists():
-                for _d in _films_dir.iterdir():
+            if _full_dir.exists():
+                for _d in _full_dir.iterdir():
                     if _d.is_dir() and (_disc_label.upper() in _d.name.upper() or _d.name.upper() in _disc_label.upper()):
                         _matched_folder = str(_d)
                         break
             if _matched_folder:
                 self._bdi_last_folder = _matched_folder
-                self._emit("bdinfo_status", {"msg": "📁 Dossier FILMS détecté : %s" % Path(_matched_folder).name})
+                self._emit("bdinfo_status", {"msg": "📁 Dossier FULL détecté : %s" % Path(_matched_folder).name})
             else:
-                self._emit("bdinfo_status", {"msg": "⚠ Dossier COMPLETE.BLURAY introuvable dans FILMS/ — seul le NFO sera uploadé", "level": "warning"})
+                self._emit("bdinfo_status", {"msg": "⚠ Dossier COMPLETE.BLURAY introuvable dans remux_tool/FULL/ — seul le NFO sera uploadé", "level": "warning"})
 
         self._emit("bdinfo_status", {"msg": "💾 %s (.txt + .nfo)" % _disc_label, "level": "success"})
         self._emit("bdinfo_done", {
@@ -578,8 +578,8 @@ class API:
 
     def browse_iso_bdinfo(self):
         """Ouvre un sélecteur de fichier pour choisir un .iso Blu-ray."""
-        films_dir = BASE_DIR / "FILMS"
-        start_dir = str(films_dir) if films_dir.exists() else str(Path.home())
+        full_dir = BASE_DIR / "remux_tool" / "FULL"
+        start_dir = str(full_dir) if full_dir.exists() else str(Path.home())
         try:
             result = self.window.create_file_dialog(
                 webview.OPEN_DIALOG,

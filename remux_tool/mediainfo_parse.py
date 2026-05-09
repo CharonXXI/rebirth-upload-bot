@@ -184,7 +184,8 @@ def _parse_with_mediainfo(mediainfo: str, file: str) -> Tuple[Dict, List[Dict], 
         elif track_type == "Text":
             t["Language"] = _normalize_language(t.get("Language", ""))
             if "StreamOrder" not in t:
-                t["StreamOrder"] = len(subs) + 1
+                # Index global : video (1) + audio + subs déjà traités
+                t["StreamOrder"] = 1 + len(audio) + len(subs)
             
             # Classifier le type de sous-titre
             title = (t.get("Title") or "").upper()
