@@ -992,15 +992,76 @@ html.light body::before {
       <!-- ═══════════════════════════════════════════════════════════════ -->
       <!-- PAGE FULL BD                                                    -->
       <!-- ═══════════════════════════════════════════════════════════════ -->
-      <div id="page-fullbd" class="page" style="align-items:center; justify-content:center; gap:20px;">
-        <div style="text-align:center; font-family:var(--mono); color:var(--text-dim);">
-          <div style="font-size:48px; margin-bottom:16px;">📀</div>
-          <div style="font-size:13px; letter-spacing:3px; color:var(--orange); text-transform:uppercase; margin-bottom:12px;">Full BD Generator</div>
-          <div style="font-size:11px; line-height:1.8; max-width:380px;">
-            Génération de FULL BD via MakeMKV.<br/>
-            <span style="color:var(--orange);">(BETA)</span> — En cours de développement.
+      <div id="page-fullbd" class="page" style="flex-direction:row; overflow:hidden;">
+
+        <!-- Colonne gauche : contrôles -->
+        <div style="width:380px; min-width:380px; border-right:1px solid var(--border); padding:24px; overflow-y:auto; display:flex; flex-direction:column; gap:18px;">
+
+          <!-- Titre section -->
+          <div class="section-label">📀 &nbsp;Full BD Generator</div>
+
+          <!-- Lecteur détecté -->
+          <div>
+            <div style="font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;">Lecteur Blu-ray</div>
+            <div id="fbd-drive-box" style="background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:12px; font-family:var(--mono); font-size:11px; color:var(--text-dim); min-height:54px; display:flex; align-items:center; gap:10px;">
+              <span id="fbd-drive-icon" style="font-size:20px;">💿</span>
+              <div id="fbd-drive-info" style="flex:1; line-height:1.6;">
+                <span style="color:var(--text-dim);">Aucun lecteur détecté</span>
+              </div>
+            </div>
+            <button onclick="fbdScanDrives()" style="margin-top:8px; width:100%; padding:8px; background:transparent; border:1px solid var(--border2); border-radius:4px; color:var(--text-dim); font-family:var(--mono); font-size:10px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all .15s;"
+              onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'"
+              onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text-dim)'">
+              ⟳ &nbsp;Détecter le lecteur
+            </button>
           </div>
+
+          <!-- Nom du dossier de sortie -->
+          <div>
+            <div style="font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;">Nom du dossier de sortie <span style="color:var(--orange);">FULL/</span></div>
+            <input id="fbd-output-name" type="text" placeholder="ex: Film.2025.FRA.COMPLETE.BLURAY-REBiRTH"
+              style="width:100%; box-sizing:border-box; padding:9px 10px; background:var(--bg2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; outline:none; transition:border .15s;"
+              onfocus="this.style.borderColor='var(--orange)'"
+              onblur="this.style.borderColor='var(--border)'"/>
+            <div style="font-family:var(--mono); font-size:9px; color:var(--text-dim); margin-top:5px; line-height:1.5;">Le nom de disque détecté est pré-rempli automatiquement. Tu peux le modifier.</div>
+          </div>
+
+          <!-- Boutons action -->
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <button id="fbd-btn-start" onclick="fbdStart()"
+              style="width:100%; padding:12px; background:var(--orange); border:none; border-radius:4px; color:#000; font-family:var(--mono); font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:opacity .15s;"
+              onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+              ▶ &nbsp;Lancer le backup
+            </button>
+            <button id="fbd-btn-cancel" onclick="fbdCancel()" disabled
+              style="width:100%; padding:9px; background:transparent; border:1px solid var(--red); border-radius:4px; color:var(--red); font-family:var(--mono); font-size:11px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; opacity:.4; transition:opacity .15s;"
+              onmouseover="if(!this.disabled)this.style.opacity='1'" onmouseout="if(!this.disabled)this.style.opacity='.85'">
+              ✖ &nbsp;Annuler
+            </button>
+          </div>
+
+          <!-- Barre de progression -->
+          <div id="fbd-progress-wrap" style="display:none;">
+            <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-bottom:6px;">
+              <span id="fbd-pct">0%</span>
+              <span id="fbd-eta"></span>
+            </div>
+            <div style="height:4px; background:var(--border); border-radius:2px; overflow:hidden;">
+              <div id="fbd-bar" style="height:100%; width:0%; background:var(--orange); transition:width .4s;"></div>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div id="fbd-status" style="font-family:var(--mono); font-size:10px; color:var(--text-dim); line-height:1.7; min-height:20px;"></div>
+
         </div>
+
+        <!-- Colonne droite : log console -->
+        <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; padding:24px;">
+          <div class="section-label">Console MakeMKV</div>
+          <div id="fbd-console" style="flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:12px; font-family:var(--mono); font-size:10px; color:var(--text-dim); overflow-y:auto; line-height:1.7; white-space:pre-wrap; word-break:break-all;"></div>
+        </div>
+
       </div><!-- /page-fullbd -->
 
       <div id="page-config" class="page">
@@ -2848,7 +2909,126 @@ window._emit = function(event, data) {
   if (event === 'rmx_analyze_status')   rmxHandleAnalyzeStatus(data);
   if (event === 'rmx_screenshots_done') rmxHandleScreenshotsDone(data);
   if (event === 'rmx_error')            toast((data&&data.msg)||'Erreur Remux', 'error');
+  if (event === 'fullbd_status')   fbdOnStatus(data);
+  if (event === 'fullbd_progress') fbdOnProgress(data);
+  if (event === 'fullbd_done')     fbdOnDone(data);
 };
+
+// ══════════════════════════════════════════════════════════════
+// FULL BD
+// ══════════════════════════════════════════════════════════════
+let _fbdDriveId   = null;
+let _fbdRunning   = false;
+
+function fbdLog(msg) {
+  const c = document.getElementById('fbd-console');
+  if (!c) return;
+  c.textContent += msg + '\n';
+  c.scrollTop = c.scrollHeight;
+}
+
+function fbdSetStatus(msg, level) {
+  const el = document.getElementById('fbd-status');
+  if (!el) return;
+  const colors = { success:'var(--green)', error:'var(--red)', warning:'var(--yellow)', info:'var(--text-dim)' };
+  el.style.color = colors[level] || 'var(--text-dim)';
+  el.textContent = msg;
+}
+
+function fbdOnProgress(data) {
+  const wrap = document.getElementById('fbd-progress-wrap');
+  const bar  = document.getElementById('fbd-bar');
+  const pct  = document.getElementById('fbd-pct');
+  const eta  = document.getElementById('fbd-eta');
+  if (!wrap) return;
+  wrap.style.display = 'block';
+  const p = data.pct || 0;
+  bar.style.width = p + '%';
+  pct.textContent = p + '%';
+  eta.textContent = data.eta ? 'ETA ' + data.eta : '';
+}
+
+function fbdOnStatus(data) {
+  fbdSetStatus(data.msg || '', data.level || 'info');
+  if (data.msg) fbdLog(data.msg);
+}
+
+function fbdOnDone(data) {
+  _fbdRunning = false;
+  document.getElementById('fbd-btn-start').disabled  = false;
+  document.getElementById('fbd-btn-cancel').disabled = true;
+  document.getElementById('fbd-btn-cancel').style.opacity = '.4';
+  if (data.ok) {
+    fbdSetStatus(`✅ ${data.folder} (${data.size_gb} GB) — prêt dans FULL/`, 'success');
+    fbdOnProgress({ pct: 100, eta: '' });
+    toast('Full BD créé : ' + data.folder, 'success', 5000);
+  } else {
+    fbdSetStatus('✖ ' + (data.error || 'Erreur inconnue'), 'error');
+    toast('Backup échoué : ' + (data.error || ''), 'error', 5000);
+  }
+}
+
+async function fbdScanDrives() {
+  const infoEl = document.getElementById('fbd-drive-info');
+  const iconEl = document.getElementById('fbd-drive-icon');
+  infoEl.innerHTML = '<span style="color:var(--text-dim);">Scan en cours…</span>';
+  fbdLog('⟳ Scan des lecteurs…');
+  try {
+    const r = await window.pywebview.api.fullbd_list_drives();
+    if (!r.ok) { fbdLog('✖ ' + r.error); fbdSetStatus('✖ ' + r.error, 'error'); return; }
+    if (!r.drives || r.drives.length === 0) {
+      iconEl.textContent = '💿';
+      infoEl.innerHTML = '<span style="color:var(--text-dim);">Aucun disque détecté — insérez un Blu-ray</span>';
+      _fbdDriveId = null;
+      fbdLog('Aucun disque détecté');
+      return;
+    }
+    // Prendre le premier disque trouvé
+    const d = r.drives[0];
+    _fbdDriveId = d.id;
+    iconEl.textContent = '📀';
+    infoEl.innerHTML = `<b style="color:var(--text);">${d.disc_title}</b><br/><span style="color:var(--text-dim);font-size:9px;">${d.drive_name} · disc:${d.id}</span>`;
+    // Pré-remplir le nom de sortie
+    const nameInput = document.getElementById('fbd-output-name');
+    if (nameInput && !nameInput.value) nameInput.value = d.disc_title;
+    fbdLog(`📀 Disque détecté : ${d.disc_title} (disc:${d.id})`);
+    fbdSetStatus(`📀 ${d.disc_title} prêt`, 'success');
+  } catch(e) {
+    fbdLog('✖ Erreur JS : ' + e);
+    fbdSetStatus('✖ ' + e, 'error');
+  }
+}
+
+async function fbdStart() {
+  if (_fbdRunning) return;
+  if (_fbdDriveId === null) { toast('Scannez d\'abord le lecteur', 'warn'); return; }
+  const name = (document.getElementById('fbd-output-name').value || '').trim();
+  if (!name) { toast('Renseignez le nom du dossier de sortie', 'warn'); return; }
+
+  _fbdRunning = true;
+  document.getElementById('fbd-btn-start').disabled  = true;
+  document.getElementById('fbd-btn-cancel').disabled = false;
+  document.getElementById('fbd-btn-cancel').style.opacity = '.85';
+  document.getElementById('fbd-console').textContent = '';
+  fbdOnProgress({ pct: 0, eta: '' });
+  fbdSetStatus('▶ Démarrage…', 'info');
+  fbdLog(`▶ makemkvcon backup --decrypt disc:${_fbdDriveId} → FULL/${name}`);
+
+  try {
+    const r = await window.pywebview.api.fullbd_start_backup(_fbdDriveId, name);
+    if (!r.ok) {
+      fbdOnDone({ ok: false, error: r.error || 'Erreur' });
+    }
+  } catch(e) {
+    fbdOnDone({ ok: false, error: String(e) });
+  }
+}
+
+async function fbdCancel() {
+  if (!_fbdRunning) return;
+  fbdSetStatus('⏹ Annulation…', 'warning');
+  try { await window.pywebview.api.fullbd_cancel(); } catch(e) {}
+}
 
 window.addEventListener('pywebviewready', function() {
   loadConfig();

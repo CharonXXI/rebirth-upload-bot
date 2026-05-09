@@ -4311,6 +4311,171 @@ class API:
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True}
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Full BD — Sauvegarde complète Blu-ray via MakeMKV
+    # ──────────────────────────────────────────────────────────────────────────
+
+    _fullbd_proc   = None   # subprocess en cours
+    _fullbd_cancel = False  # flag d'annulation
+
+    def fullbd_list_drives(self):
+        """Scanne les lecteurs optiques via makemkvcon -r info disc:9999.
+        Retourne la liste des lecteurs avec un disque inséré."""
+        import re as _re
+        try:
+            from remux_tool.makemkv_extract import _find_makemkvcon
+            makemkvcon = _find_makemkvcon()
+        except Exception as e:
+            return {"ok": False, "error": f"makemkvcon introuvable : {e}", "drives": []}
+
+        try:
+            result = subprocess.run(
+                [makemkvcon, "-r", "info", "disc:9999"],
+                capture_output=True, text=True, timeout=30
+            )
+            output = result.stdout + result.stderr
+        except Exception as e:
+            return {"ok": False, "error": str(e), "drives": []}
+
+        # Format : DRV:index,state,f1,f2,"drive_name","disc_title","device_path"
+        # state : 2 = disque accessible, 1 = pas de disque, 0 = ouvert
+        drives = []
+        for line in output.splitlines():
+            m = _re.match(r'DRV:(\d+),(\d+),\d+,\d+,"([^"]*)","([^"]*)","([^"]*)"', line)
+            if not m:
+                continue
+            idx, state, drive_name, disc_title, device = m.groups()
+            state = int(state)
+            if state == 2 and disc_title:  # disque présent et accessible
+                drives.append({
+                    "id":         int(idx),
+                    "drive_name": drive_name,
+                    "disc_title": disc_title,
+                    "device":     device,
+                    "state":      state,
+                })
+
+        return {"ok": True, "drives": drives}
+
+    def fullbd_start_backup(self, drive_id: int, output_name: str):
+        """Lance la sauvegarde FULL BD avec déchiffrement.
+        makemkvcon backup --decrypt disc:X remux_tool/FULL/output_name
+        Émet : fullbd_progress, fullbd_status, fullbd_done"""
+        import re as _re, time as _time
+
+        try:
+            from remux_tool.makemkv_extract import _find_makemkvcon
+            makemkvcon = _find_makemkvcon()
+        except Exception as e:
+            self._emit("fullbd_done", {"ok": False, "error": f"makemkvcon introuvable : {e}"})
+            return {"ok": False}
+
+        full_dir = BASE_DIR / "remux_tool" / "FULL"
+        full_dir.mkdir(parents=True, exist_ok=True)
+        out_path = full_dir / output_name
+
+        if out_path.exists():
+            self._emit("fullbd_done", {"ok": False, "error": f"Le dossier '{output_name}' existe déjà dans FULL/"})
+            return {"ok": False}
+
+        self._fullbd_cancel = False
+
+        def _run():
+            cmd = [
+                makemkvcon, "backup",
+                "--decrypt",
+                "--progress=-same",
+                f"disc:{drive_id}",
+                str(out_path),
+            ]
+            self._emit("fullbd_status", {"msg": f"▶ Backup disque {drive_id} → FULL/{output_name}", "level": "info"})
+            self._emit("fullbd_progress", {"pct": 0, "eta": ""})
+
+            start = _time.time()
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True, bufsize=1,
+                )
+                self._fullbd_proc = proc
+
+                for line in proc.stdout:
+                    if self._fullbd_cancel:
+                        proc.terminate()
+                        self._emit("fullbd_status", {"msg": "🛑 Backup annulé", "level": "warning"})
+                        self._emit("fullbd_done", {"ok": False, "error": "Annulé par l'utilisateur"})
+                        return
+
+                    line = line.strip()
+
+                    # Progress PRGV:current,total,max
+                    m = _re.search(r'PRGV:(\d+),(\d+),(\d+)', line)
+                    if m:
+                        cur, tot, mx = map(int, m.groups())
+                        if mx > 0:
+                            pct = int(cur * 100 / mx)
+                            elapsed = max(0.001, _time.time() - start)
+                            eta_str = ""
+                            if pct > 0:
+                                remain = (100 - pct) / (pct / elapsed)
+                                eta_m, eta_s = int(remain // 60), int(remain % 60)
+                                eta_str = f"{eta_m:02d}:{eta_s:02d}"
+                            self._emit("fullbd_progress", {"pct": pct, "eta": eta_str})
+                        continue
+
+                    # Messages texte visibles
+                    if line.startswith("MSG:") or line.startswith("PRGT:") or line.startswith("PRGC:"):
+                        # Extraire le texte lisible du format MSG:code,flag,count,"text"
+                        mt = _re.search(r'"([^"]{4,})"', line)
+                        if mt:
+                            self._emit("fullbd_status", {"msg": mt.group(1), "level": "info"})
+                    elif line and not line.startswith("DRV:") and not line.startswith("CINFO:"):
+                        self._emit("fullbd_status", {"msg": line, "level": "info"})
+
+                rc = proc.wait()
+                self._fullbd_proc = None
+
+                if rc == 0 and out_path.exists():
+                    # Calculer taille
+                    total_bytes = sum(
+                        f.stat().st_size
+                        for f in out_path.rglob("*") if f.is_file()
+                    )
+                    size_gb = total_bytes / (1024 ** 3)
+                    self._emit("fullbd_progress", {"pct": 100, "eta": ""})
+                    self._emit("fullbd_status", {
+                        "msg": f"✅ Backup terminé — {output_name} ({size_gb:.1f} GB)",
+                        "level": "success"
+                    })
+                    self._emit("fullbd_done", {
+                        "ok": True,
+                        "folder": output_name,
+                        "size_gb": round(size_gb, 2),
+                    })
+                else:
+                    self._emit("fullbd_status", {"msg": f"✖ Backup échoué (code {rc})", "level": "error"})
+                    self._emit("fullbd_done", {"ok": False, "error": f"makemkvcon code {rc}"})
+
+            except Exception as e:
+                self._fullbd_proc = None
+                self._emit("fullbd_status", {"msg": f"✖ Erreur : {e}", "level": "error"})
+                self._emit("fullbd_done", {"ok": False, "error": str(e)})
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True}
+
+    def fullbd_cancel(self):
+        """Annule le backup Full BD en cours."""
+        self._fullbd_cancel = True
+        if self._fullbd_proc and self._fullbd_proc.poll() is None:
+            try:
+                self._fullbd_proc.terminate()
+            except Exception:
+                pass
+        return {"ok": True}
+
 
 if __name__ == "__main__":
     api = API()
