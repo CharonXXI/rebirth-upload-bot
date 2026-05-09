@@ -449,6 +449,9 @@ html.light body::before {
       <div class="nav-item" id="nav-remux" data-page="remux" onclick="showPage('remux', this); rmxOnOpen()">
         <span class="nav-icon">🔄</span> Remux <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
       </div>
+      <div class="nav-item" id="nav-fullbd" data-page="fullbd" onclick="showPage('fullbd', this)">
+        <span class="nav-icon">📀</span> Full BD <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
+      </div>
       <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
         <span class="nav-icon">📡</span> Trackers
       </div>
@@ -985,6 +988,20 @@ html.light body::before {
         </div>
 
       </div><!-- /page-remux -->
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- PAGE FULL BD                                                    -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <div id="page-fullbd" class="page" style="align-items:center; justify-content:center; gap:20px;">
+        <div style="text-align:center; font-family:var(--mono); color:var(--text-dim);">
+          <div style="font-size:48px; margin-bottom:16px;">📀</div>
+          <div style="font-size:13px; letter-spacing:3px; color:var(--orange); text-transform:uppercase; margin-bottom:12px;">Full BD Generator</div>
+          <div style="font-size:11px; line-height:1.8; max-width:380px;">
+            Génération de FULL BD via MakeMKV.<br/>
+            <span style="color:var(--orange);">(BETA)</span> — En cours de développement.
+          </div>
+        </div>
+      </div><!-- /page-fullbd -->
 
       <div id="page-config" class="page">
         <div class="section-label">Configuration</div>
