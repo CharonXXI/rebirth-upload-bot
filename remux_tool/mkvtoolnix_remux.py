@@ -195,9 +195,21 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
         return ("AUDIO DESCRIPTION" in title or "MALVOYANT" in title
                 or re.search(r"\bAD\b", title) is not None)
 
+    # Priorité default audio (sur les dicts MediaInfo, pas mkvmerge) :
+    # 1. EN non-AD  2. VFF non-AD  3. VFI/VOF/VFQ/VF non-AD  4. FR non-AD  5. 1ère non-AD
+
+    def _mi_lang(t):
+        return _normalize_lang(t.get("Language", ""))
+
+    def _mi_is_en(t):
+        return _mi_lang(t) == "en"
+
+    def _mi_is_fr(t):
+        return _mi_lang(t) == "fr"
+
     # 1) première piste EN non-AD
     for t in selected_audio:
-        if _is_english_track(t) and not _is_ad_track(t):
+        if _mi_is_en(t) and not _is_ad_track(t):
             default_audio_oid = id(t)
             break
     # 2) sinon par priorité VF
@@ -205,7 +217,7 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
         priority = ["VFF", "VFI", "VOF", "VFQ", "VF"]
         for vf_type in priority:
             for t in selected_audio:
-                ov = (t.get("_user_vf") or "").upper()
+                ov = (t.get("_user_vf") or t.get("_detected_vf") or "").upper()
                 if ov == vf_type and not _is_ad_track(t):
                     default_audio_oid = id(t)
                     break
@@ -214,7 +226,7 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
     # 3) fallback : 1ère piste FR non-AD
     if default_audio_oid is None:
         for t in selected_audio:
-            if _is_french_track(t) and not _is_ad_track(t):
+            if _mi_is_fr(t) and not _is_ad_track(t):
                 default_audio_oid = id(t)
                 break
     # 4) ultime fallback : 1ère piste tout court non-AD
@@ -349,7 +361,7 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
             audio_details.append({
                 "id": found["id"],
                 "lang": mi_lang,
-                "default": default if mi_lang == "en" else False,
+                "default": default,  # Élu par la priorité globale (EN > VFF > VFQ… jamais AD)
                 "name": full_name,
                 "mi_track": mi_track  # Garder la référence pour l'affichage
             })
