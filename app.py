@@ -2441,7 +2441,7 @@ class API:
 
                 import shutil
                 final_mkv = os.path.join(final_dir, os.path.basename(fp))
-                final_nfo = os.path.join(final_dir, os.path.basename(nfo_to_send))
+                final_nfo = os.path.join(final_dir, base + ".nfo")  # sans tag (UTF8)/(CP437)
                 shutil.copy2(fp, final_mkv)
                 shutil.copy2(nfo_to_send, final_nfo)
                 self._log("FINAL/" + base + "/ pret avec NFO " + nfo_label, "success")
