@@ -232,10 +232,13 @@ class API:
                 _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
                          "--break-system-packages", "--quiet"], capture_output=True)
                 import paramiko  # noqa: F811
+            client = None
             try:
-                transport = paramiko.Transport((host, port))
-                transport.connect(username=user, password=password)
-                sftp = paramiko.SFTPClient.from_transport(transport)
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                client.connect(host, port=port, username=user, password=password,
+                               timeout=8, allow_agent=False, look_for_keys=False)
+                sftp = client.open_sftp()
                 try:
                     entries = sftp.listdir_attr(path)
                     names = sorted([e.filename for e in entries
@@ -246,9 +249,11 @@ class API:
                     return {"error": f"Dossier introuvable : {path}"}
                 finally:
                     sftp.close()
-                    transport.close()
             except Exception as e:
                 return {"error": str(e)}
+            finally:
+                if client:
+                    client.close()
 
         # ── FTP TLS legacy (ancien port != 22) ────────────────────────────────
         import ftplib
@@ -292,10 +297,13 @@ class API:
                 _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
                          "--break-system-packages", "--quiet"], capture_output=True)
                 import paramiko  # noqa: F811
+            client = None
             try:
-                transport = paramiko.Transport((host, port))
-                transport.connect(username=user, password=password)
-                sftp = paramiko.SFTPClient.from_transport(transport)
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                client.connect(host, port=port, username=user, password=password,
+                               timeout=8, allow_agent=False, look_for_keys=False)
+                sftp = client.open_sftp()
                 try:
                     entries = sftp.listdir_attr(path)
                     names = sorted([e.filename for e in entries
@@ -306,9 +314,11 @@ class API:
                     return {"error": f"Dossier introuvable : {path}"}
                 finally:
                     sftp.close()
-                    transport.close()
             except Exception as e:
                 return {"error": str(e)}
+            finally:
+                if client:
+                    client.close()
 
         import ftplib
         try:

@@ -457,7 +457,7 @@ def extract_title(source: str, title_id: int, output_dir: str,
 
     os.makedirs(output_dir, exist_ok=True)
 
-    cmd = [makemkvcon, "mkv", source_norm, str(title_id), output_dir]
+    cmd = [makemkvcon, "-r", "mkv", source_norm, str(title_id), output_dir]
 
     settings_info = None
     # NOTE : on a TESTÉ deux stratégies pour forcer l'inclusion de tous les
@@ -488,11 +488,13 @@ def extract_title(source: str, title_id: int, output_dir: str,
     )
     
     output_file = None
-    
+    all_lines = []   # pour debug si rien trouvé
+
     for line in proc.stdout:
-        line = line.strip()
-        
-        # Progress
+        line = line.rstrip('\r\n')
+        all_lines.append(line)
+
+        # Progress (robot mode: PRGV:current,total,max)
         if "PRGV:" in line:
             match = re.search(r'PRGV:(\d+),(\d+),(\d+)', line)
             if match:
@@ -508,16 +510,44 @@ def extract_title(source: str, title_id: int, output_dir: str,
                     bar = '#' * (pct // 3) + '-' * (33 - pct // 3)
                     sys.stdout.write(f"\r  [{bar}] {pct}% ETA {eta_m:02d}:{eta_s:02d}")
                     sys.stdout.flush()
-        
-        # Fichier de sortie
-        if "MKV file" in line and "created" in line.lower():
-            match = re.search(r'"([^"]+\.mkv)"', line)
-            if match:
-                output_file = match.group(1)
-        
-        # Erreurs
-        if "MSG:5021" in line or "failed" in line.lower():
-            print(f"\n  [ERREUR] {line}")
+            continue
+
+        # Fichier de sortie — MSG:5055 en mode robot : "Written N bytes to file path"
+        if "MSG:5055" in line:
+            m = re.search(r'MSG:5055,\d+,\d+,"([^"]+)","', line)
+            if m:
+                written_msg = m.group(1)
+                mf = re.search(r'"([^"]+\.mkv)"', written_msg)
+                if not mf:
+                    mf = re.search(r'file\s+"?([^\s"]+\.mkv)"?', written_msg)
+                if mf:
+                    output_file = mf.group(1)
+
+        # Fallback : format humain sans -r
+        if not output_file and ("MKV file" in line or "Saving to" in line):
+            m = re.search(r'"([^"]+\.mkv)"', line)
+            if m:
+                output_file = m.group(1)
+
+        # Espace disque insuffisant
+        if "MSG:5038" in line:
+            m = re.search(r'dépasse (\d+) méga.octets.+(\d+) méga.octets disponibles', line)
+            if m:
+                needed, avail = int(m.group(1)), int(m.group(2))
+                print(f"\n  ⚠ Espace disque : {needed} MB requis, {avail} MB disponibles")
+        if "No space left on device" in line or "MSG:2018" in line:
+            raise RuntimeError(
+                "Espace disque insuffisant — libère de l'espace et réessaie "
+                f"(MakeMKV a besoin de plus d'espace dans {output_dir})"
+            )
+        # Échec d'écriture
+        if "MSG:5004" in line and "en échec" in line:
+            m = re.search(r'"(\d+) titres écrits, (\d+) en échec"', line)
+            if m and int(m.group(2)) > 0 and int(m.group(1)) == 0:
+                raise RuntimeError("MakeMKV : 0 titres écrits, vérifier l'espace disque et les logs")
+        # Erreurs critiques
+        if "MSG:5021" in line:
+            print(f"\n  [ERREUR MakeMKV] {line}")
     
     rc = proc.wait()
     print()
@@ -525,15 +555,32 @@ def extract_title(source: str, title_id: int, output_dir: str,
     if rc != 0:
         raise RuntimeError(f"MakeMKV extraction echouee (code {rc})")
     
-    # Trouver le fichier MKV
+    # Trouver le fichier MKV (recherche recursive — MakeMKV peut créer un sous-dossier)
     if not output_file:
-        mkvs = [f for f in os.listdir(output_dir) if f.lower().endswith('.mkv')]
-        if mkvs:
-            mkvs_with_size = [(f, os.path.getsize(os.path.join(output_dir, f))) for f in mkvs]
-            mkvs_with_size.sort(key=lambda x: x[1], reverse=True)
-            output_file = os.path.join(output_dir, mkvs_with_size[0][0])
+        import glob as _glob
+        pattern = os.path.join(output_dir, "**", "*.mkv")
+        mkvs_found = _glob.glob(pattern, recursive=True)
+        # Inclure aussi les extensions en majuscules (Linux case-sensitive)
+        pattern_up = os.path.join(output_dir, "**", "*.MKV")
+        mkvs_found += _glob.glob(pattern_up, recursive=True)
+        if mkvs_found:
+            mkvs_found.sort(key=lambda x: os.path.getsize(x), reverse=True)
+            output_file = mkvs_found[0]
     
     if not output_file or not os.path.isfile(output_file):
+        # Écrire sur le vrai stderr pour bypasser StdoutTee (visible dans le terminal)
+        import sys as _sys
+        _e = _sys.__stderr__
+        _e.write("\n\n===== [DEBUG MakeMKV] =====\n")
+        _e.write(f"output_dir = {output_dir}\n")
+        _e.write(f"output_dir existe = {os.path.isdir(output_dir)}\n")
+        if os.path.isdir(output_dir):
+            _e.write(f"contenu = {os.listdir(output_dir)}\n")
+        _e.write("Sortie MakeMKV (30 dernières lignes) :\n")
+        for _l in all_lines[-30:]:
+            _e.write(f"  {_l}\n")
+        _e.write("===========================\n\n")
+        _e.flush()
         raise RuntimeError("Fichier MKV non trouve apres extraction")
     
     size_gb = os.path.getsize(output_file) / (1024**3)
