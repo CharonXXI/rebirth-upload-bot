@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.8.4-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.0-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -335,6 +335,17 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.9.0
+- Feat : **onglet Full BD (BETA)** — générateur de FULL BLURAY via MakeMKV
+  - Détection automatique du lecteur optique (`makemkvcon -r info disc:9999`)
+  - Backup complet avec déchiffrement (`makemkvcon backup --decrypt`)
+  - Sortie directement dans `remux_tool/FULL/` prête pour l'onglet Remux
+  - Barre de progression + console live + annulation
+- Fix (Remux) : matching des pistes audio/subs par `StreamOrder` MediaInfo = `id` mkvmerge — corrige le décalage quand plusieurs pistes ont la même langue
+- Fix (Remux) : piste audio `Default: Yes` correctement assignée (VFF ou EN selon priorité)
+- Fix (Remux) : dossier d'entrée BD Info → `remux_tool/FULL/` au lieu de `FILMS/`
+- Fix : NFO envoyé sur la seedbox sans tag `(UTF8)`/`(CP437)` dans le nom de fichier
+
 ### v2.8.4
 - Feat : **onglet Remux intégré** dans REBiRTH AIO — plus besoin de lancer un outil séparé
   - Analyse MakeMKV directement dans l'interface (30 s à 2 min selon le disque)
@@ -395,7 +406,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH AIO v2.8.4** — macOS & Windows
+**REBiRTH AIO v2.9.0** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

@@ -1,4 +1,4 @@
-# 🪟 Installation Windows — REBiRTH AIO v2.8.4
+# 🪟 Installation Windows — REBiRTH AIO v2.9.0
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 
