@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.9.0-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.1-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -365,6 +365,11 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.9.1
+- Fix (Seedbox) : `list_seedbox_files` et `list_seedbox_files_hdt` utilisaient `paramiko.Transport` sans timeout → pouvait accrocher indéfiniment. Remplacé par `SSHClient.connect(timeout=8)` — cohérent avec `get_seedbox_space`
+- Fix (Remux/MakeMKV) : ajout du flag `-r` (robot mode) pour un parsing fiable de la sortie MakeMKV ; détection de l'erreur espace disque insuffisant (MSG:2018 / "No space left on device") avec message clair
+- Fix (Remux/MakeMKV) : recherche récursive du MKV extrait (glob `**/*.mkv`) en cas de sous-dossier inattendu ; sélection du fichier le plus volumineux en cas de multiples résultats
+
 ### v2.9.0
 - Feat : **onglet Full BD (BETA)** — générateur de FULL BLURAY via MakeMKV
   - Détection automatique du lecteur optique (`makemkvcon -r info disc:9999`)
@@ -437,7 +442,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH AIO v2.9.0** — macOS & Windows
+**REBiRTH AIO v2.9.1** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

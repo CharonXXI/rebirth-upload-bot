@@ -2596,7 +2596,7 @@ window.addEventListener('pywebviewready', function() {
   setTimeout(function() {
     loadSbDisk();
     setInterval(loadSbDisk, 60000); // rafraîchissement toutes les minutes
-  }, 2000);
+  }, 5000); // délai 5s pour ne pas ralentir le démarrage
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3030,17 +3030,6 @@ async function fbdCancel() {
   try { await window.pywebview.api.fullbd_cancel(); } catch(e) {}
 }
 
-window.addEventListener('pywebviewready', function() {
-  loadConfig();
-  loadTrackers();
-  try {
-    window.pywebview.api.load_theme().then(function(t){ applyTheme(t); });
-  } catch(e){}
-  setTimeout(function() {
-    loadSbDisk();
-    setInterval(loadSbDisk, 60000); // rafraîchissement toutes les minutes
-  }, 2000);
-});
 </script>
 <div id="toast-container"></div>
 </body>
