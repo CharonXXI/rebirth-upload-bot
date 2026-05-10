@@ -41,12 +41,13 @@
 
 | Fonctionnalité | Description |
 |---|---|
+| 📀 **Full BD** | Sauvegarde FULL BLURAY depuis le lecteur optique via MakeMKV (`backup --decrypt`), sortie dans `remux_tool/FULL/` |
 | 🔄 **Remux** | Extraction ISO/BDMV → MKV via MakeMKV + MKVToolNix, sélection des pistes (vidéo/audio/subs), tag VF automatique, nommage REBiRTH |
 | 📄 **NFO** | Génération automatique UTF-8 + CP437 |
 | 🎬 **TMDB** | Recherche avec confirmation et changement d'ID |
 | ☁️ **Upload** | Gofile (failover 7 serveurs) ou BuzzHeavier |
 | 💬 **Discord** | Notification automatique avec embed TMDB |
-| 📁 **FINAL/** | Création automatique avec le bon NFO par tracker |
+| 📁 **FINAL/** | Création automatique avec le bon NFO par tracker (nom de fichier sans tag encodage) |
 | 🌱 **Seedbox** | Upload complet via FTP TLS |
 | 🧲 **Torrent SB** | Création torrent via SSH+mktorrent côté seedbox, chargement automatique dans ruTorrent |
 | 💿 **BD Info** | Rapport exact via **BDInfo v0.7.5.6** (Wine/Whisky) — DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
@@ -169,12 +170,33 @@ source venv/bin/activate && python3 app.py
 
 ```
 ─────────────────────────────────────────────
+Workflow Full BD (Disque → FULL BLURAY)
+─────────────────────────────────────────────
+Onglet 📀 FULL BD
+        │
+        ▼
+Insérer le disque Blu-ray dans le lecteur externe
+⟳ Détecter le lecteur → lecteur détecté avec titre du disque
+        │
+        ▼
+Renseigner / ajuster le nom du dossier de sortie
+        │
+        ▼
+▶ LANCER LE BACKUP
+  └─ [MakeMKV]  makemkvcon backup --decrypt disc:X → remux_tool/FULL/<nom>/
+     Barre de progression + console live + annulation possible
+        │
+        ▼
+Dossier BDMV complet dans remux_tool/FULL/ → prêt pour l'onglet Remux
+
+─────────────────────────────────────────────
 Workflow Remux (ISO/BDMV → MKV)
 ─────────────────────────────────────────────
 Onglet 🔄 REMUX
         │
         ▼
 Placer l'ISO ou le dossier BDMV dans remux_tool/FULL/
+  (ou utiliser directement la sortie de l'onglet Full BD)
 ⟳ Refresh → sélectionner la source
         │
         ▼
@@ -255,6 +277,13 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 
 ## ✨ Fonctionnalités
 
+### 📀 Full BD (BETA)
+- Sauvegarde FULL BLURAY depuis le lecteur optique, sans passer par MakeMKV manuellement
+- Détection automatique des lecteurs avec le titre du disque (`makemkvcon -r info disc:9999`)
+- Backup complet avec déchiffrement : `makemkvcon backup --decrypt disc:X`
+- Sortie directement dans `remux_tool/FULL/` — enchaînement immédiat avec l'onglet Remux
+- Barre de progression, console MakeMKV live, annulation en cours de backup
+
 ### 🔄 Remux (onglet intégré)
 - Interface complète dans REBiRTH AIO — pas besoin de lancer un outil séparé
 - Source : ISO ou dossier BDMV dans `remux_tool/FULL/`
@@ -308,6 +337,7 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 ```
 rebirth-upload-bot/
 ├── app.py                      ← Backend Python principal (PyWebView + toute la logique)
+│                                  inclut : onglets Upload, BD Info, Full BD, Seedbox…
 ├── gui_index.html              ← Frontend HTML/CSS/JS (interface complète)
 ├── gofile.py                   ← Module upload Gofile (failover 7 serveurs)
 ├── V1.env                      ← Configuration (ne pas commiter — gitignored)
@@ -315,18 +345,18 @@ rebirth-upload-bot/
 ├── REBiRTH.bat                 ← Lanceur Windows (double-clic)
 ├── NFO_CUSTOM/                 ← Générateur NFO (TMDB, templates, helpers)
 ├── BDInfo_v0/                  ← BDInfo v0.7.5.6 (BDInfo.exe + DLLs — non commité)
-├── remux_tool/                 ← Outil de remux Blu-ray (intégré dans l'onglet Remux)
+├── remux_tool/                 ← Outil Remux + Full BD (onglets intégrés)
 │   ├── gui.py                  ← Backend remux (API PyWebView)
-│   ├── makemkv_extract.py      ← Extraction MakeMKV
+│   ├── makemkv_extract.py      ← Extraction MakeMKV (utilisé par Remux et Full BD)
 │   ├── mediainfo_parse.py      ← Analyse des pistes MediaInfo/ffprobe
 │   ├── mkvtoolnix_remux.py     ← Remux MKVMerge
-│   ├── config.py               ← Configuration remux (dossiers, options)
-│   ├── FULL/                   ← Sources ISO/BDMV (non commité)
+│   ├── config.py               ← Configuration (dossiers, options)
+│   ├── FULL/                   ← Sources ISO/BDMV + sorties Full BD (non commité)
 │   └── MAKEMKV_KEY.txt         ← Clé beta MakeMKV
 ├── FILMS/                      ← .mkv finaux (remux → ici, puis upload bot)
 ├── PICS/                       ← Screenshots extraits par l'onglet Remux
 │   └── Nom Du Film/            ← 4 captures par film
-├── FINAL/                      ← Sortie upload (MKV + NFO par tracker)
+├── FINAL/                      ← Sortie upload (MKV + NFO sans tag encodage)
 ├── TORRENTS/                   ← Fichiers .torrent par tracker
 └── BDINFO/                     ← Rapports BD Info (.txt + .nfo)
 ```
@@ -397,9 +427,10 @@ rebirth-upload-bot/
 - Pour les fichiers > 10 GB, BuzzHeavier est plus stable que Gofile
 - Le bot empêche automatiquement la mise en veille pendant l'upload
 - `V1.env` n'est jamais publié sur GitHub
-- L'onglet Remux nécessite : **MakeMKV**, **MKVToolNix**, **MediaInfo**, **ffmpeg** (voir INSTALL_WINDOWS.md)
-- BD Info nécessite BDInfo v0.7.5.6 + Whisky (macOS) ou BDInfo_v0\ (Windows)
-- Torrent SB nécessite un accès SSH port 22 et `mktorrent` installé sur la seedbox
+- L'onglet **Full BD** nécessite : **MakeMKV** installé et accessible dans le PATH
+- L'onglet **Remux** nécessite : **MakeMKV**, **MKVToolNix**, **MediaInfo**, **ffmpeg** (voir INSTALL_WINDOWS.md)
+- **BD Info** nécessite BDInfo v0.7.5.6 + Whisky (macOS) ou `BDInfo_v0\` (Windows)
+- **Torrent SB** nécessite un accès SSH port 22 et `mktorrent` installé sur la seedbox
 - Trackers supportés : ABN · TOS · C411 · Torr9 · LaCale · HDT · Nexum
 
 ---
