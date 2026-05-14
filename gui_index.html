@@ -3239,10 +3239,13 @@ async function prezAutoFill() {
     if (r.total_bitrate) prezSet('prez-total-bitrate', r.total_bitrate);
 
     // Screenshots
-    if (r.screenshots && r.screenshots.length) {
-      _prez.screenshots = r.screenshots;
-      _prez.imgboxUrls  = [];
-      prezRenderScreensList();
+    _prez.screenshots = r.screenshots || [];
+    _prez.imgboxUrls  = [];
+    prezRenderScreensList();
+    if (_prez.screenshots.length) {
+      showToast(_prez.screenshots.length + " screenshot(s) trouvé(s)", "success");
+    } else if (r.screenshots_warning) {
+      showToast(r.screenshots_warning, "warn");
     }
 
     prezStatus("✓ Auto-fill terminé — " + (r.title || ""));
@@ -3333,11 +3336,17 @@ async function prezLoadScreenshots() {
   prezStatus("⏳ Recherche screenshots…");
   try {
     const r = await window.pywebview.api.prez_list_screenshots(title);
-    _prez.screenshots  = r.files || [];
-    _prez.imgboxUrls   = [];
+    const files = r.files || [];
+    _prez.screenshots = files;
+    _prez.imgboxUrls  = [];
     prezRenderScreensList();
-    prezStatus(_prez.screenshots.length + " screenshot(s) chargé(s)");
-    showToast(_prez.screenshots.length + " screenshot(s) trouvé(s)", "success");
+    if (files.length === 0) {
+      prezStatus("⚠ Aucun screenshot trouvé dans PICS/ (dossier : " + (r.folder || "?") + ")");
+      showToast("Aucun screenshot trouvé — vérifie que PICS/<titre>/ contient des images", "error");
+    } else {
+      prezStatus("✓ " + files.length + " screenshot(s) chargé(s) depuis " + (r.folder || ""));
+      showToast(files.length + " screenshot(s) trouvé(s)", "success");
+    }
   } catch(e) { prezStatus("✗ " + e); }
 }
 
@@ -3359,13 +3368,18 @@ function prezRenderScreensList() {
 }
 
 async function prezUploadImgbox() {
-  if (!_prez.screenshots.length) { showToast("Charge d'abord les screenshots", "error"); return; }
+  const screens = _prez.screenshots.filter(Boolean);
+  if (!screens.length) {
+    showToast("Aucun screenshot chargé — clique d'abord sur 📂 CHARGER DEPUIS PICS/", "error");
+    prezStatus("⚠ Aucun screenshot — utilise 📂 CHARGER DEPUIS PICS/ d'abord");
+    return;
+  }
   const btn = document.getElementById('prez-imgbox-btn');
   btn.textContent = '⏳ UPLOAD…';
   btn.disabled = true;
-  prezStatus("⏳ Upload imgbox en cours…");
+  prezStatus("⏳ Upload imgbox — " + screens.length + " image(s)…");
   try {
-    const r = await window.pywebview.api.prez_upload_imgbox(_prez.screenshots);
+    const r = await window.pywebview.api.prez_upload_imgbox(screens);
     if (r.error) { prezStatus("✗ " + r.error); showToast(r.error, "error"); }
     else {
       _prez.imgboxUrls = r.urls || [];

@@ -4629,44 +4629,95 @@ class API:
             return {"error": str(e)}
 
     def prez_get_last_session(self):
-        """Retourne toutes les infos disponibles de la dernière session :
-        historique (titre/TMDB/source), MediaInfo du dernier MKV dans FILMS/,
-        et screenshots dans PICS/."""
+        """Récupère tout depuis le dernier MKV dans FILMS/ comme source principale.
+        Plus d'historique — on lit directement le fichier et ses métadonnées."""
+        import re as _re
         result = {}
 
-        # ── 1. Dernière entrée d'historique ───────────────────────────────
-        history = self.load_history()
-        if history:
-            last = history[0]
-            result["title"]     = last.get("title", "")
-            result["year"]      = last.get("year", "")
-            result["poster_url"]= last.get("poster_url", "")
-            result["source"]    = last.get("source", "")
-            # Extraire le TMDB ID depuis tmdb_link (ex: .../movie/12345)
-            tmdb_link = last.get("tmdb_link", "")
-            if tmdb_link:
-                import re as _re
-                m = _re.search(r"/(movie|tv)/(\d+)", tmdb_link)
-                if m:
-                    result["tmdb_id"]    = m.group(2)
-                    result["media_type"] = m.group(1)
-            result["filename"] = last.get("filename", "")
-
-        # ── 2. Dernier MKV dans FILMS/ ────────────────────────────────────
+        # ── 1. Dernier MKV dans FILMS/ ─────────────────────────────────────
         films_dir = BASE_DIR / "FILMS"
         mkv_path  = None
         if films_dir.exists():
             mkvs = sorted(films_dir.glob("**/*.mkv"),
                           key=lambda f: f.stat().st_mtime, reverse=True)
             if mkvs:
-                mkv_path = str(mkvs[0])
+                mkv_file = mkvs[0]
+                mkv_path = str(mkv_file)
                 result["mkv_path"] = mkv_path
-                result["filesize"] = self._fmt_size(mkvs[0].stat().st_size)
+                result["filename"] = mkv_file.name
+                result["filesize"] = self._fmt_size(mkv_file.stat().st_size)
 
-        # ── 3. MediaInfo sur le MKV ───────────────────────────────────────
+                # ── Extraire titre/année/source depuis le nom du fichier ──
+                stem = mkv_file.stem  # sans .mkv
+                # ex: Clown.In.Cornfield.2025.MULTi.VFF.1080p.BluRay.REMUX.DTS-HD.MA.5.1.AVC-REBiRTH
+                _STOP = re.compile(
+                    r"^(\d{4})$|^(MULTi|FRENCH|VOSTFR|VFF|VFQ|VFI|VF2|VO|"
+                    r"1080p|2160p|720p|480p|4K|BluRay|BDRip|WEB-DL|WEBRip|"
+                    r"REMUX|HDR|DV|HEVC|AVC|x264|x265|H264|H265|"
+                    r"DTS|TrueHD|Atmos|DD|EAC3|AAC|FLAC|MA|HD)$",
+                    re.IGNORECASE
+                )
+                parts = stem.replace("-", ".").split(".")
+                title_parts, year = [], ""
+                for p in parts:
+                    if _STOP.match(p):
+                        if re.match(r"^\d{4}$", p):
+                            year = p
+                        break
+                    title_parts.append(p)
+                raw_title = " ".join(title_parts)
+
+                # Source depuis le nom (BluRay REMUX, WEB-DL, etc.)
+                src_map = [
+                    (r"BluRay.*REMUX", "Blu-ray REMUX"),
+                    (r"BluRay|BDRip",  "Blu-ray"),
+                    (r"WEB-DL",        "WEB-DL"),
+                    (r"WEBRip",        "WEBRip"),
+                    (r"HDTV",          "HDTV"),
+                ]
+                source = ""
+                for pat, label in src_map:
+                    if re.search(pat, stem, re.IGNORECASE):
+                        source = label; break
+
+                result["raw_title"] = raw_title
+                result["year"]      = year
+                result["source"]    = source
+
+                # ── Recherche TMDB depuis le titre extrait ─────────────────
+                api_key  = os.getenv("API_KEY", "")
+                language = os.getenv("LANGUAGE", "fr-FR")
+                if api_key and raw_title:
+                    try:
+                        r_tmdb = requests.get(
+                            "https://api.themoviedb.org/3/search/multi",
+                            params={"api_key": api_key, "query": raw_title,
+                                    "language": language,
+                                    "year": year if year else None},
+                            timeout=8
+                        )
+                        hits = r_tmdb.json().get("results", [])
+                        if hits:
+                            hit = hits[0]
+                            mt  = hit.get("media_type", "movie")
+                            tid = hit.get("id")
+                            result["tmdb_id"]    = str(tid)
+                            result["media_type"] = mt
+                            result["title"] = hit.get("title") or hit.get("name") or raw_title
+                            result["poster_url"] = (
+                                f"https://image.tmdb.org/t/p/w500{hit['poster_path']}"
+                                if hit.get("poster_path") else ""
+                            )
+                    except Exception:
+                        result["title"] = raw_title
+                else:
+                    result["title"] = raw_title
+
+        # ── 2. MediaInfo sur le MKV ─────────────────────────────────────────
         if mkv_path:
             try:
-                sys.path.insert(0, str(BASE_DIR / "remux_tool"))
+                if str(BASE_DIR / "remux_tool") not in sys.path:
+                    sys.path.insert(0, str(BASE_DIR / "remux_tool"))
                 from mediainfo_parse import parse_mediainfo
                 video, audio_tracks, sub_tracks = parse_mediainfo(mkv_path)
 
@@ -4679,20 +4730,15 @@ class API:
                         vbr_kbps = f"{int(int(vbr) / 1000):,} kb/s".replace(",", " ")
                     except Exception:
                         vbr_kbps = ""
-                    result["video"] = {
-                        "codec":   codec,
-                        "res":     res,
-                        "bitrate": vbr_kbps,
-                    }
+                    result["video"] = {"codec": codec, "res": res, "bitrate": vbr_kbps}
 
                 audio_out = []
                 for t in audio_tracks:
                     lang    = t.get("Language", "")
                     codec_a = t.get("Format_Commercial_IfAny") or t.get("Format", "")
                     ch_raw  = t.get("ChannelLayout") or t.get("Channels", "")
-                    # Convertir "L R LFE Ls Rs C" ou "6" → "5.1"
-                    ch = self._fmt_channels(ch_raw)
-                    br_raw = t.get("BitRate") or t.get("BitRate_Nominal", "")
+                    ch      = self._fmt_channels(ch_raw)
+                    br_raw  = t.get("BitRate") or t.get("BitRate_Nominal", "")
                     try:
                         br_kbps = f"{int(int(br_raw) / 1000):,} kb/s".replace(",", " ")
                     except Exception:
@@ -4708,7 +4754,7 @@ class API:
                         subs_out.append(lang)
                 result["subs"] = ", ".join(subs_out) if subs_out else "Aucun"
 
-                # Débit global depuis le fichier
+                # Débit global
                 try:
                     import subprocess as _sp
                     mi_bin = None
@@ -4721,15 +4767,24 @@ class API:
                             [mi_bin, "--Inform=General;%OverallBitRate%", mkv_path],
                             timeout=10).decode().strip()
                         if out.isdigit():
-                            result["total_bitrate"] = f"{int(int(out)/1000):,} kb/s".replace(",", " ")
+                            result["total_bitrate"] = (
+                                f"{int(int(out)/1000):,} kb/s".replace(",", " "))
                 except Exception:
                     pass
             except Exception as e:
                 result["mediainfo_error"] = str(e)
 
-        # ── 4. Screenshots dans PICS/ ─────────────────────────────────────
-        pics = self.prez_list_screenshots(result.get("title", ""))
+        # ── 3. Screenshots dans PICS/ ────────────────────────────────────────
+        # Cherche par titre extrait du MKV — plusieurs stratégies
+        title_for_pics = result.get("title") or result.get("raw_title", "")
+        pics = self.prez_list_screenshots(title_for_pics)
         result["screenshots"] = pics.get("files", [])
+        result["screenshots_folder"] = pics.get("folder", "")
+
+        if not result["screenshots"]:
+            result["screenshots_warning"] = (
+                f"Aucun screenshot trouvé dans PICS/ pour « {title_for_pics} »"
+            )
 
         return result
 
