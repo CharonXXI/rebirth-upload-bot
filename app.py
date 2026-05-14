@@ -4486,6 +4486,147 @@ class API:
                 pass
         return {"ok": True}
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # PREZ — Générateur de présentation tracker
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def prez_tmdb_fetch(self, tmdb_id: str, media_type: str = "movie"):
+        """Récupère toutes les infos TMDB nécessaires pour la prez."""
+        api_key  = os.getenv("API_KEY", "")
+        language = os.getenv("LANGUAGE", "fr-FR")
+        if not api_key:
+            return {"error": "API_KEY TMDB non configurée"}
+        try:
+            tid = int(str(tmdb_id).strip())
+            # Détails principaux
+            r = requests.get(
+                f"https://api.themoviedb.org/3/{media_type}/{tid}",
+                params={"api_key": api_key, "language": language,
+                        "append_to_response": "credits"},
+                timeout=10
+            )
+            if r.status_code != 200:
+                return {"error": f"TMDB {r.status_code}"}
+            d = r.json()
+
+            poster_path = d.get("poster_path", "")
+            poster_url  = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
+
+            title   = d.get("title") or d.get("name") or ""
+            year    = (d.get("release_date") or d.get("first_air_date") or "")[:4]
+            runtime = d.get("runtime") or 0
+            duration = f"{runtime // 60}h{runtime % 60:02d}m" if runtime else "—"
+            overview = d.get("overview") or ""
+            vote     = round(d.get("vote_average", 0), 1)
+            genres   = [g["name"] for g in d.get("genres", [])]
+            countries = [c.get("iso_3166_1", "").lower()
+                         for c in d.get("production_countries", [])]
+
+            credits = d.get("credits", {})
+            cast_raw = credits.get("cast", [])[:6]
+            cast = [{
+                "name":  a.get("name", ""),
+                "photo": f"https://image.tmdb.org/t/p/w185{a['profile_path']}"
+                         if a.get("profile_path") else "",
+                "tmdb_id": a.get("id")
+            } for a in cast_raw]
+
+            crew = credits.get("crew", [])
+            directors = [p["name"] for p in crew if p.get("job") == "Director"]
+
+            return {
+                "ok": True,
+                "tmdb_id":   tid,
+                "media_type": media_type,
+                "title":     title,
+                "year":      year,
+                "duration":  duration,
+                "overview":  overview,
+                "vote":      vote,
+                "genres":    genres,
+                "countries": countries,
+                "directors": directors,
+                "poster_url": poster_url,
+                "cast":       cast,
+                "tmdb_url":   f"https://www.themoviedb.org/{media_type}/{tid}",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    def prez_list_screenshots(self, film_title: str = ""):
+        """Liste les screenshots disponibles dans PICS/<film_title>/ ou PICS/."""
+        pics_dir = BASE_DIR / "PICS"
+        if not pics_dir.exists():
+            return {"files": []}
+        if film_title:
+            # Cherche le sous-dossier dont le nom contient film_title
+            matches = [d for d in pics_dir.iterdir()
+                       if d.is_dir() and film_title.lower() in d.name.lower()]
+            if matches:
+                folder = matches[0]
+            else:
+                folder = pics_dir
+        else:
+            # Prend le dossier le plus récent
+            dirs = [d for d in pics_dir.iterdir() if d.is_dir()]
+            folder = max(dirs, key=lambda d: d.stat().st_mtime) if dirs else pics_dir
+
+        exts = {".jpg", ".jpeg", ".png", ".webp"}
+        files = sorted(
+            [str(f) for f in folder.iterdir() if f.suffix.lower() in exts],
+            key=lambda x: x.lower()
+        )
+        return {"files": files, "folder": str(folder)}
+
+    def prez_upload_imgbox(self, filepaths: list):
+        """Upload une liste de fichiers image vers imgbox, retourne les URLs."""
+        import base64 as _b64
+        if not filepaths:
+            return {"error": "Aucun fichier fourni"}
+        try:
+            sess = requests.Session()
+            # 1. Créer un token gallery
+            r = sess.post("https://imgbox.com/api/v1/token/new",
+                          json={"gallery": True, "adult": False},
+                          timeout=15)
+            if r.status_code != 200:
+                return {"error": f"imgbox token: HTTP {r.status_code}"}
+            tok = r.json()
+            token_id     = tok.get("token_id", "")
+            token_secret = tok.get("token_secret", "")
+            gallery_id   = tok.get("gallery_id", "")
+
+            # 2. Upload chaque image
+            urls = []
+            for fp in filepaths:
+                with open(fp, "rb") as f:
+                    files = {"files[]": (Path(fp).name, f,
+                                         "image/jpeg" if fp.lower().endswith(".jpg")
+                                         or fp.lower().endswith(".jpeg") else "image/png")}
+                    data  = {
+                        "token_id":     token_id,
+                        "token_secret": token_secret,
+                        "content_type": "1",   # 1 = family safe
+                        "comments_enabled": "0"
+                    }
+                    ru = sess.post("https://imgbox.com/api/v1/images/create",
+                                   files=files, data=data, timeout=30)
+                    if ru.status_code == 200:
+                        img_data = ru.json()
+                        imgs = img_data.get("images") or img_data.get("data") or []
+                        if imgs:
+                            original = imgs[0].get("original_url") or imgs[0].get("url", "")
+                            urls.append(original)
+                        else:
+                            urls.append("")
+                    else:
+                        urls.append("")
+
+            gallery_url = f"https://imgbox.com/g/{gallery_id}" if gallery_id else ""
+            return {"ok": True, "urls": urls, "gallery_url": gallery_url}
+        except Exception as e:
+            return {"error": str(e)}
+
 
 if __name__ == "__main__":
     api = API()

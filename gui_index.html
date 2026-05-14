@@ -476,6 +476,9 @@ html.light body::before {
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
       </div>
+      <div class="nav-item" data-page="prez" onclick="showPage('prez', this)">
+        <span class="nav-icon">🎨</span> Prez <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
+      </div>
     </nav>
     <div class="sidebar-footer">
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -1155,6 +1158,150 @@ html.light body::before {
       </div>
 
       <!-- ══════════════════════════════════════════════ FICHIERS SB -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <!-- PAGE PREZ                                                          -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <div id="page-prez" class="page" style="flex-direction:row;overflow:hidden;gap:0;padding:0;">
+
+        <!-- ── Panneau gauche : formulaire ─────────────────────────────── -->
+        <div id="prez-form-panel" style="width:360px;min-width:300px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;padding:18px 16px;gap:0;flex-shrink:0;">
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--orange);">🎨 PREZ</span>
+            <span style="font-family:var(--mono);font-size:8px;color:var(--orange);opacity:.6;letter-spacing:1px;">BETA</span>
+          </div>
+
+          <!-- TMDB -->
+          <div class="section-label" style="margin-bottom:8px;">TMDB</div>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <input id="prez-tmdb-id" type="text" placeholder="TMDB ID (ex: 123456)"
+              style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;letter-spacing:.5px;"
+              oninput="this.style.borderColor='var(--border2)'" />
+            <select id="prez-media-type"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;cursor:pointer;">
+              <option value="movie">Film</option>
+              <option value="tv">Série</option>
+            </select>
+          </div>
+          <button onclick="prezFetchTmdb()"
+            style="width:100%;padding:7px;background:var(--orange-dim);border:1px solid rgba(255,107,0,.3);border-radius:4px;color:var(--orange);font-family:var(--mono);font-size:10px;letter-spacing:1.5px;cursor:pointer;font-weight:700;margin-bottom:14px;transition:all .15s;"
+            onmouseover="this.style.background='rgba(255,107,0,.25)'" onmouseout="this.style.background='var(--orange-dim)'">
+            ⬇ CHARGER DEPUIS TMDB
+          </button>
+
+          <!-- Infos film -->
+          <div class="section-label" style="margin-bottom:8px;">FILM</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+            <input id="prez-title" type="text" placeholder="Titre"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            <div style="display:flex;gap:6px;">
+              <input id="prez-year" type="text" placeholder="Année" maxlength="4"
+                style="width:70px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+              <input id="prez-duration" type="text" placeholder="Durée (ex: 1h42m)"
+                style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+              <input id="prez-vote" type="text" placeholder="Note /10"
+                style="width:70px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            </div>
+            <textarea id="prez-overview" rows="3" placeholder="Synopsis…"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;resize:vertical;"></textarea>
+            <input id="prez-genres" type="text" placeholder="Genres (séparés par ,)"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            <input id="prez-directors" type="text" placeholder="Réalisation (séparés par ,)"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            <input id="prez-poster" type="text" placeholder="URL Poster TMDB"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" oninput="prezRefreshPreview()" />
+          </div>
+
+          <!-- Tech specs -->
+          <div class="section-label" style="margin-bottom:8px;">VIDÉO</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+            <input id="prez-vid-source" type="text" placeholder="Source (ex: Blu-ray REMUX)"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            <div style="display:flex;gap:6px;">
+              <input id="prez-vid-codec" type="text" placeholder="Codec (ex: AVC)"
+                style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+              <input id="prez-vid-res" type="text" placeholder="Résolution (ex: 1080p)"
+                style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            </div>
+            <input id="prez-vid-bitrate" type="text" placeholder="Débit vidéo (ex: 38 000 kb/s)"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+          </div>
+
+          <div class="section-label" style="margin-bottom:8px;">AUDIO</div>
+          <div id="prez-audio-tracks" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;"></div>
+          <button onclick="prezAddAudioTrack()"
+            style="width:100%;padding:5px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;margin-bottom:14px;"
+            onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">
+            + AJOUTER PISTE AUDIO
+          </button>
+
+          <div class="section-label" style="margin-bottom:8px;">SOUS-TITRES</div>
+          <input id="prez-subs" type="text" placeholder="ex: Français, Anglais  /  Aucun"
+            style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;width:100%;margin-bottom:14px;" />
+
+          <!-- Upload info -->
+          <div class="section-label" style="margin-bottom:8px;">RELEASE</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+            <input id="prez-release-name" type="text" placeholder="Nom du fichier release"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            <div style="display:flex;gap:6px;">
+              <input id="prez-filesize" type="text" placeholder="Poids (ex: 42.3 GiB)"
+                style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+              <input id="prez-filecount" type="text" placeholder="Nb fichiers"
+                style="width:80px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            </div>
+            <input id="prez-total-bitrate" type="text" placeholder="Débit global (ex: 42 300 kb/s)"
+              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+          </div>
+
+          <!-- Screenshots -->
+          <div class="section-label" style="margin-bottom:8px;">SCREENSHOTS</div>
+          <div id="prez-screens-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;font-family:var(--mono);font-size:10px;color:var(--text-dim);"></div>
+          <div style="display:flex;gap:6px;margin-bottom:14px;">
+            <button onclick="prezLoadScreenshots()"
+              style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;transition:all .15s;"
+              onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">
+              📂 CHARGER DEPUIS PICS/
+            </button>
+            <button id="prez-imgbox-btn" onclick="prezUploadImgbox()"
+              style="flex:1;padding:6px;background:var(--orange-dim);border:1px solid rgba(255,107,0,.3);border-radius:4px;color:var(--orange);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;font-weight:700;transition:all .15s;"
+              onmouseover="this.style.background='rgba(255,107,0,.25)'" onmouseout="this.style.background='var(--orange-dim)'">
+              ☁ UPLOAD IMGBOX
+            </button>
+          </div>
+
+          <!-- Générer -->
+          <button onclick="prezGenerate()"
+            style="width:100%;padding:10px;background:var(--orange);border:none;border-radius:4px;color:#fff;font-family:var(--mono);font-size:11px;letter-spacing:2px;cursor:pointer;font-weight:700;margin-bottom:8px;transition:all .15s;"
+            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            ▶ GÉNÉRER LA PREZ
+          </button>
+          <button onclick="prezCopyHtml()"
+            style="width:100%;padding:7px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:10px;letter-spacing:1.5px;cursor:pointer;transition:all .15s;"
+            onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text-dim)'">
+            📋 COPIER LE HTML
+          </button>
+
+        </div>
+
+        <!-- ── Panneau droit : preview ──────────────────────────────────── -->
+        <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#1a1a2e;">
+          <div style="padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;">APERÇU HTML</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span id="prez-status" style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;"></span>
+              <button onclick="prezRefreshPreview()"
+                style="padding:4px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:9px;cursor:pointer;letter-spacing:1px;"
+                onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">↺ REFRESH</button>
+            </div>
+          </div>
+          <iframe id="prez-preview" style="flex:1;border:none;background:#1a1a2e;"
+            srcdoc="<html><body style='background:#1a1a2e;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:monospace;color:#444;letter-spacing:2px;font-size:12px;'>APERÇU VIDE — GÉNÈRE UNE PREZ</body></html>">
+          </iframe>
+        </div>
+
+      </div>
+
       <div id="page-sbfiles" class="page">
 
         <!-- Barre d'outils -->
@@ -3028,6 +3175,393 @@ async function fbdCancel() {
   if (!_fbdRunning) return;
   fbdSetStatus('⏹ Annulation…', 'warning');
   try { await window.pywebview.api.fullbd_cancel(); } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PREZ — Générateur de présentation tracker
+// ═══════════════════════════════════════════════════════════════════════════
+
+const _prez = {
+  tmdbData:     null,   // données TMDB chargées
+  audioTracks:  [],     // [{lang, codec, channels, bitrate}]
+  screenshots:  [],     // chemins locaux
+  imgboxUrls:   [],     // URLs imgbox après upload
+  generatedHtml: "",    // dernier HTML généré
+};
+
+// ── TMDB ───────────────────────────────────────────────────────────────────
+async function prezFetchTmdb() {
+  const tid   = document.getElementById('prez-tmdb-id').value.trim();
+  const mtype = document.getElementById('prez-media-type').value;
+  if (!tid) { showToast("Saisis un TMDB ID", "error"); return; }
+  prezStatus("⏳ Chargement TMDB…");
+  try {
+    const r = await window.pywebview.api.prez_tmdb_fetch(tid, mtype);
+    if (r.error) { prezStatus("✗ " + r.error); showToast(r.error, "error"); return; }
+    _prez.tmdbData = r;
+    // Remplir les champs
+    prezSet('prez-title',     r.title     || "");
+    prezSet('prez-year',      r.year      || "");
+    prezSet('prez-duration',  r.duration  || "");
+    prezSet('prez-vote',      r.vote !== undefined ? String(r.vote) : "");
+    prezSet('prez-overview',  r.overview  || "");
+    prezSet('prez-genres',    (r.genres   || []).join(", "));
+    prezSet('prez-directors', (r.directors|| []).join(", "));
+    prezSet('prez-poster',    r.poster_url|| "");
+    prezStatus("✓ TMDB chargé — " + r.title);
+    showToast("TMDB chargé : " + r.title, "success");
+  } catch(e) { prezStatus("✗ " + e); }
+}
+
+function prezSet(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+
+// ── Audio tracks ───────────────────────────────────────────────────────────
+function prezAddAudioTrack(lang="", codec="", channels="", bitrate="") {
+  const idx = _prez.audioTracks.length;
+  _prez.audioTracks.push({lang, codec, channels, bitrate});
+  const container = document.getElementById('prez-audio-tracks');
+  const div = document.createElement('div');
+  div.id = 'prez-audio-' + idx;
+  div.style.cssText = 'background:var(--bg);border:1px solid var(--border2);border-radius:4px;padding:8px;display:flex;flex-direction:column;gap:4px;';
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+      <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;">PISTE ${idx+1}</span>
+      <button onclick="prezRemoveAudio(${idx})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:0;" title="Supprimer">✕</button>
+    </div>
+    <div style="display:flex;gap:4px;">
+      <input data-aidx="${idx}" data-akey="lang" type="text" placeholder="Langue (ex: VFF)" value="${lang}"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;" oninput="prezUpdateAudio(this)" />
+      <input data-aidx="${idx}" data-akey="channels" type="text" placeholder="ex: 5.1" value="${channels}"
+        style="width:55px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;" oninput="prezUpdateAudio(this)" />
+    </div>
+    <div style="display:flex;gap:4px;">
+      <input data-aidx="${idx}" data-akey="codec" type="text" placeholder="Codec (ex: DTS-HD MA)" value="${codec}"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;" oninput="prezUpdateAudio(this)" />
+      <input data-aidx="${idx}" data-akey="bitrate" type="text" placeholder="kb/s" value="${bitrate}"
+        style="width:70px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;" oninput="prezUpdateAudio(this)" />
+    </div>`;
+  container.appendChild(div);
+}
+
+function prezUpdateAudio(el) {
+  const idx = parseInt(el.dataset.aidx);
+  const key = el.dataset.akey;
+  if (_prez.audioTracks[idx]) _prez.audioTracks[idx][key] = el.value;
+}
+
+function prezRemoveAudio(idx) {
+  _prez.audioTracks[idx] = null;
+  const el = document.getElementById('prez-audio-' + idx);
+  if (el) el.remove();
+}
+
+// ── Screenshots ────────────────────────────────────────────────────────────
+async function prezLoadScreenshots() {
+  const title = document.getElementById('prez-title').value.trim();
+  prezStatus("⏳ Recherche screenshots…");
+  try {
+    const r = await window.pywebview.api.prez_list_screenshots(title);
+    _prez.screenshots  = r.files || [];
+    _prez.imgboxUrls   = [];
+    prezRenderScreensList();
+    prezStatus(_prez.screenshots.length + " screenshot(s) chargé(s)");
+    showToast(_prez.screenshots.length + " screenshot(s) trouvé(s)", "success");
+  } catch(e) { prezStatus("✗ " + e); }
+}
+
+function prezRenderScreensList() {
+  const el = document.getElementById('prez-screens-list');
+  if (!_prez.screenshots.length) {
+    el.innerHTML = '<span style="opacity:.5;font-size:10px;">Aucun screenshot chargé</span>';
+    return;
+  }
+  el.innerHTML = _prez.screenshots.map((f, i) => {
+    const name = f.split('/').pop().split('\\').pop();
+    const url  = _prez.imgboxUrls[i] || "";
+    const dot  = url ? '🟢' : '⚪';
+    return `<div style="display:flex;align-items:center;gap:6px;overflow:hidden;">
+      <span style="font-size:10px;">${dot}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:10px;">${name}</span>
+    </div>`;
+  }).join('');
+}
+
+async function prezUploadImgbox() {
+  if (!_prez.screenshots.length) { showToast("Charge d'abord les screenshots", "error"); return; }
+  const btn = document.getElementById('prez-imgbox-btn');
+  btn.textContent = '⏳ UPLOAD…';
+  btn.disabled = true;
+  prezStatus("⏳ Upload imgbox en cours…");
+  try {
+    const r = await window.pywebview.api.prez_upload_imgbox(_prez.screenshots);
+    if (r.error) { prezStatus("✗ " + r.error); showToast(r.error, "error"); }
+    else {
+      _prez.imgboxUrls = r.urls || [];
+      prezRenderScreensList();
+      const ok = _prez.imgboxUrls.filter(u => u).length;
+      prezStatus(`✓ ${ok}/${_prez.screenshots.length} images uploadées`);
+      showToast(`${ok} image(s) sur imgbox`, "success");
+    }
+  } catch(e) { prezStatus("✗ " + e); }
+  finally { btn.textContent = '☁ UPLOAD IMGBOX'; btn.disabled = false; }
+}
+
+// ── Génération HTML ────────────────────────────────────────────────────────
+function prezGet(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : "";
+}
+
+function prezGenerate() {
+  const title     = prezGet('prez-title');
+  const year      = prezGet('prez-year');
+  const duration  = prezGet('prez-duration');
+  const vote      = prezGet('prez-vote');
+  const overview  = prezGet('prez-overview');
+  const genres    = prezGet('prez-genres').split(',').map(s=>s.trim()).filter(Boolean);
+  const directors = prezGet('prez-directors').split(',').map(s=>s.trim()).filter(Boolean);
+  const poster    = prezGet('prez-poster');
+  const vidSource = prezGet('prez-vid-source');
+  const vidCodec  = prezGet('prez-vid-codec');
+  const vidRes    = prezGet('prez-vid-res');
+  const vidBitrate= prezGet('prez-vid-bitrate');
+  const subs      = prezGet('prez-subs');
+  const relName   = prezGet('prez-release-name');
+  const filesize  = prezGet('prez-filesize');
+  const filecount = prezGet('prez-filecount');
+  const totalBr   = prezGet('prez-total-bitrate');
+  const tmdb      = _prez.tmdbData;
+  const tmdbUrl   = tmdb ? tmdb.tmdb_url : "";
+  const cast      = tmdb ? (tmdb.cast || []) : [];
+  const audioTracks = _prez.audioTracks.filter(Boolean);
+  const screens   = _prez.imgboxUrls.filter(Boolean);
+
+  // ── CSS intégré
+  const css = `
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0d0d0d;color:#e8e8e8;font-family:'Trebuchet MS',Arial,sans-serif;padding:20px 10px;}
+    .prez-wrap{max-width:900px;margin:0 auto;}
+    /* Header */
+    .prez-header{text-align:center;padding:24px 0 16px;border-bottom:2px solid #ff6b00;margin-bottom:28px;}
+    .prez-logo{font-family:'Courier New',monospace;font-size:28px;font-weight:700;color:#ff6b00;letter-spacing:4px;line-height:1;}
+    .prez-logo-sub{font-family:'Courier New',monospace;font-size:10px;color:#666;letter-spacing:3px;margin-top:4px;}
+    /* Sections */
+    .prez-section{margin-bottom:24px;}
+    .prez-section-title{font-family:'Courier New',monospace;font-size:11px;font-weight:700;color:#ff6b00;letter-spacing:3px;text-transform:uppercase;padding:8px 14px;background:rgba(255,107,0,.08);border-left:3px solid #ff6b00;margin-bottom:14px;}
+    .prez-box{background:#141414;border:1px solid #2a2a2a;border-radius:6px;padding:16px;}
+    /* Media row */
+    .prez-media{display:flex;gap:20px;align-items:flex-start;}
+    .prez-poster{width:160px;min-width:160px;border-radius:6px;overflow:hidden;border:1px solid #2a2a2a;}
+    .prez-poster img{width:100%;display:block;}
+    .prez-poster-trailer{display:block;text-align:center;padding:8px;background:#1a1a1a;font-family:'Courier New',monospace;font-size:9px;color:#ff6b00;letter-spacing:1px;text-decoration:none;border-top:1px solid #2a2a2a;}
+    .prez-info{flex:1;}
+    .prez-title{font-size:22px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.2;}
+    .prez-overview{font-size:12px;color:#aaa;line-height:1.6;margin-bottom:14px;text-align:justify;}
+    /* Meta list */
+    .prez-meta{list-style:none;}
+    .prez-meta li{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid #1f1f1f;font-size:12px;}
+    .prez-meta li:last-child{border-bottom:none;}
+    .prez-meta .lbl{color:#888;font-weight:600;font-family:'Courier New',monospace;font-size:10px;letter-spacing:.5px;}
+    .prez-meta .val{color:#e8e8e8;text-align:right;}
+    .prez-vote{display:inline-flex;align-items:center;gap:6px;}
+    .prez-vote-bar{width:60px;height:5px;background:#222;border-radius:3px;overflow:hidden;}
+    .prez-vote-fill{height:100%;background:#ff6b00;border-radius:3px;}
+    /* Tags */
+    .prez-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+    .prez-tag{display:inline-block;padding:3px 10px;background:rgba(255,107,0,.1);border:1px solid rgba(255,107,0,.25);border-radius:20px;font-size:10px;color:#ff6b00;font-family:'Courier New',monospace;letter-spacing:.5px;}
+    /* Cast */
+    .prez-cast-grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;}
+    .prez-actor{text-align:center;width:100px;}
+    .prez-actor img{width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #2a2a2a;display:block;margin:0 auto 6px;}
+    .prez-actor-name{font-size:10px;color:#aaa;line-height:1.3;}
+    /* Specs 3 col */
+    .prez-specs{display:flex;gap:14px;}
+    .prez-spec-col{flex:1;background:#141414;border:1px solid #2a2a2a;border-radius:6px;overflow:hidden;}
+    .prez-spec-head{background:#1a1a1a;border-bottom:1px solid #2a2a2a;padding:8px 14px;font-family:'Courier New',monospace;font-size:10px;font-weight:700;color:#ff6b00;letter-spacing:2px;text-align:center;}
+    .prez-spec-body{padding:10px 14px;}
+    .prez-spec-item{padding:5px 0;border-bottom:1px solid #1f1f1f;font-size:11px;color:#ccc;text-align:center;}
+    .prez-spec-item:last-child{border-bottom:none;}
+    /* Release info */
+    .prez-release-grid{display:flex;gap:14px;}
+    .prez-release-col{flex:1;}
+    /* Screenshots */
+    .prez-screens{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+    .prez-screens img{width:100%;border-radius:4px;border:1px solid #2a2a2a;display:block;}
+    /* Footer */
+    .prez-footer{text-align:center;padding:20px 0 10px;border-top:1px solid #1f1f1f;margin-top:28px;}
+    .prez-footer-tag{font-family:'Courier New',monospace;font-size:11px;color:#ff6b00;letter-spacing:3px;font-weight:700;}
+    .prez-footer-sub{font-family:'Courier New',monospace;font-size:9px;color:#444;letter-spacing:2px;margin-top:4px;}
+    @media(max-width:600px){.prez-media{flex-direction:column}.prez-poster{width:100%}.prez-specs{flex-direction:column}.prez-release-grid{flex-direction:column}}
+  `;
+
+  // ── Bloc vidéo
+  const vidBlock = [vidRes, vidCodec, vidBitrate ? vidBitrate + " kb/s" : ""].filter(Boolean);
+  // ── Blocs audio
+  const audioBlocks = audioTracks.map(t => {
+    const items = [t.lang, t.codec + (t.channels ? " " + t.channels : ""), t.bitrate ? t.bitrate + " kb/s" : ""].filter(Boolean);
+    return items.map(i => `<div class="prez-spec-item">${h(i)}</div>`).join('');
+  }).join('<hr style="border:none;border-top:1px solid #222;margin:6px 0;">');
+  // ── Sous-titres
+  const subItems = subs ? subs.split(',').map(s=>`<div class="prez-spec-item">${h(s.trim())}</div>`).join('') : '<div class="prez-spec-item">Aucun</div>';
+  // ── Cast
+  const castHtml = cast.length ? cast.map(a => `
+    <div class="prez-actor">
+      <img src="${h(a.photo)}" alt="${h(a.name)}" onerror="this.style.display='none'">
+      <div class="prez-actor-name">${h(a.name)}</div>
+    </div>`).join('') : '';
+  // ── Screenshots
+  const screensHtml = screens.length ? screens.map(u =>
+    `<a href="${h(u)}" target="_blank"><img src="${h(u)}" alt="screenshot"></a>`).join('') : '';
+  // ── Vote bar
+  const votePct = vote ? Math.round((parseFloat(vote) / 10) * 100) : 0;
+  // ── Genres / Directors tags
+  const genresTags = genres.map(g => `<span class="prez-tag">${h(g)}</span>`).join('');
+  const dirTags    = directors.map(d => `<span class="prez-tag">${h(d)}</span>`).join('');
+  // ── Source vidéo label
+  const vidLabel   = [vidSource, vidRes].filter(Boolean).join(' · ');
+
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${h(title)} — REBiRTH</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="prez-wrap">
+
+  <!-- HEADER -->
+  <div class="prez-header">
+    <div class="prez-logo">REBiRTH</div>
+    <div class="prez-logo-sub">NO RULES ! JUST FiLES !</div>
+  </div>
+
+  <!-- MEDIA -->
+  <div class="prez-section">
+    <div class="prez-section-title">🎬 Média</div>
+    <div class="prez-box">
+      <div class="prez-media">
+        ${poster ? `<div class="prez-poster">
+          <img src="${h(poster)}" alt="poster">
+          ${tmdbUrl ? `<a class="prez-poster-trailer" href="${h(tmdbUrl)}" target="_blank">▶ FICHE TMDB</a>` : ''}
+        </div>` : ''}
+        <div class="prez-info">
+          <div class="prez-title">${h(title)}${year ? ` <span style="font-size:14px;color:#888;font-weight:400;">(${h(year)})</span>` : ''}</div>
+          ${overview ? `<div class="prez-overview">${h(overview)}</div>` : ''}
+          <ul class="prez-meta" style="background:#0d0d0d;border-radius:4px;overflow:hidden;border:1px solid #1f1f1f;">
+            ${duration ? `<li><span class="lbl">⏱ DURÉE</span><span class="val">${h(duration)}</span></li>` : ''}
+            ${vote ? `<li><span class="lbl">⭐ NOTE</span><span class="val"><span class="prez-vote"><span class="prez-vote-bar"><span class="prez-vote-fill" style="width:${votePct}%"></span></span>${h(vote)}/10</span></span></li>` : ''}
+            ${tmdbUrl ? `<li><span class="lbl">🔗 TMDB</span><span class="val"><a href="${h(tmdbUrl)}" target="_blank" style="color:#ff6b00;text-decoration:none;font-size:10px;font-family:'Courier New',monospace;">VOIR LA FICHE →</a></span></li>` : ''}
+          </ul>
+          ${genres.length ? `<div style="margin-top:12px;"><div style="font-family:'Courier New',monospace;font-size:9px;color:#666;letter-spacing:2px;margin-bottom:6px;">GENRES</div><div class="prez-tags">${genresTags}</div></div>` : ''}
+          ${directors.length ? `<div style="margin-top:10px;"><div style="font-family:'Courier New',monospace;font-size:9px;color:#666;letter-spacing:2px;margin-bottom:6px;">RÉALISATION</div><div class="prez-tags">${dirTags}</div></div>` : ''}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  ${castHtml ? `<!-- CASTING -->
+  <div class="prez-section">
+    <div class="prez-section-title">🎭 Casting</div>
+    <div class="prez-box">
+      <div class="prez-cast-grid">${castHtml}</div>
+    </div>
+  </div>` : ''}
+
+  <!-- SPECS TECHNIQUES -->
+  <div class="prez-section">
+    <div class="prez-section-title">🎛 Spécifications techniques</div>
+    <div class="prez-specs">
+      <div class="prez-spec-col">
+        <div class="prez-spec-head">VIDÉO</div>
+        <div class="prez-spec-body">
+          ${vidBlock.map(i=>`<div class="prez-spec-item">${h(i)}</div>`).join('')}
+        </div>
+      </div>
+      <div class="prez-spec-col">
+        <div class="prez-spec-head">AUDIO</div>
+        <div class="prez-spec-body">${audioBlocks || '<div class="prez-spec-item">—</div>'}</div>
+      </div>
+      <div class="prez-spec-col">
+        <div class="prez-spec-head">SOUS-TITRES</div>
+        <div class="prez-spec-body">${subItems}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RELEASE INFO -->
+  ${(relName || filesize || filecount || totalBr) ? `<div class="prez-section">
+    <div class="prez-section-title">📦 Release</div>
+    <div class="prez-box">
+      <ul class="prez-meta" style="background:#0d0d0d;border-radius:4px;overflow:hidden;border:1px solid #1f1f1f;">
+        ${relName ? `<li><span class="lbl">📄 NOM</span><span class="val" style="font-family:'Courier New',monospace;font-size:10px;word-break:break-all;">${h(relName)}</span></li>` : ''}
+        ${vidLabel ? `<li><span class="lbl">📺 SOURCE</span><span class="val">${h(vidLabel)}</span></li>` : ''}
+        ${totalBr ? `<li><span class="lbl">📊 DÉBIT GLOBAL</span><span class="val">${h(totalBr)}</span></li>` : ''}
+        ${filecount ? `<li><span class="lbl">📁 FICHIERS</span><span class="val">${h(filecount)}</span></li>` : ''}
+        ${filesize ? `<li><span class="lbl">⚖ TAILLE</span><span class="val">${h(filesize)}</span></li>` : ''}
+      </ul>
+    </div>
+  </div>` : ''}
+
+  ${screensHtml ? `<!-- SCREENSHOTS -->
+  <div class="prez-section">
+    <div class="prez-section-title">📸 Screenshots</div>
+    <div class="prez-screens">${screensHtml}</div>
+  </div>` : ''}
+
+  <!-- FOOTER -->
+  <div class="prez-footer">
+    <div class="prez-footer-tag">NO RULES ! JUST FiLES !</div>
+    <div class="prez-footer-sub">REBiRTH • ${h(title)}${year ? ' ' + h(year) : ''}</div>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+  _prez.generatedHtml = html;
+  prezRefreshPreview();
+  prezStatus("✓ Prez générée — " + title);
+  showToast("Prez générée !", "success");
+}
+
+function h(str) {
+  // Échappe le HTML pour éviter les injections dans la prez
+  return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function prezRefreshPreview() {
+  const iframe = document.getElementById('prez-preview');
+  if (!iframe) return;
+  if (_prez.generatedHtml) {
+    iframe.srcdoc = _prez.generatedHtml;
+  }
+}
+
+async function prezCopyHtml() {
+  if (!_prez.generatedHtml) { showToast("Génère d'abord une prez", "error"); return; }
+  try {
+    await navigator.clipboard.writeText(_prez.generatedHtml);
+    showToast("HTML copié dans le presse-papier !", "success");
+  } catch(e) {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = _prez.generatedHtml;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast("HTML copié !", "success");
+  }
+}
+
+function prezStatus(msg) {
+  const el = document.getElementById('prez-status');
+  if (el) el.textContent = msg;
 }
 
 </script>
