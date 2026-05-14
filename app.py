@@ -4579,8 +4579,8 @@ class API:
         return {"files": files, "folder": str(folder)}
 
     def prez_upload_imgbox(self, filepaths: list):
-        """Upload une liste de fichiers image vers imgbox, retourne les URLs.
-        Options : Family Safe Content, thumbnail 350×350 (resized)."""
+        """Upload vers imgbox via le flow CSRF (API v1 deprecated → /ajax/token/generate).
+        Family Safe Content, thumbnail 350×350 resized."""
         if not filepaths:
             return {"error": "Aucun fichier fourni"}
         try:
@@ -4594,28 +4594,46 @@ class API:
             sess = requests.Session()
             sess.headers.update(HEADERS)
 
-            # 1. Créer un token gallery
-            r = sess.post("https://imgbox.com/api/v1/token/new",
-                          json={"gallery": True, "adult": False},
-                          timeout=15)
+            # 1. Récupérer le CSRF token depuis la page principale
+            r = sess.get("https://imgbox.com", timeout=15)
             if r.status_code != 200:
-                return {"error": f"imgbox token HTTP {r.status_code}: {r.text[:200]}"}
-            tok = r.json()
+                return {"error": f"imgbox inaccessible: HTTP {r.status_code}"}
+            csrf_match = re.search(r'<meta\s+name=["\']csrf-token["\']'
+                                   r'\s+content=["\']([^"\']+)["\']', r.text)
+            if not csrf_match:
+                return {"error": "CSRF token imgbox introuvable (site modifié ?)"}
+            csrf_token = csrf_match.group(1)
+
+            # 2. Générer le token gallery
+            rg = sess.post(
+                "https://imgbox.com/ajax/token/generate",
+                headers={"X-CSRF-Token": csrf_token,
+                         "X-Requested-With": "XMLHttpRequest",
+                         "Accept": "application/json"},
+                json={"gallery": True, "adult": False},
+                timeout=15
+            )
+            if rg.status_code != 200:
+                return {"error": f"imgbox token HTTP {rg.status_code}: {rg.text[:200]}"}
+            tok = rg.json()
             if not tok.get("token_id"):
                 return {"error": f"imgbox token invalide: {tok}"}
             token_id     = tok["token_id"]
             token_secret = tok["token_secret"]
             gallery_id   = tok.get("gallery_id", "")
 
-            # 2. Upload chaque image
-            urls = []
+            # 3. Upload chaque image
+            urls   = []
             errors = []
             for fp in filepaths:
                 mime = ("image/jpeg" if fp.lower().endswith((".jpg", ".jpeg"))
                         else "image/png")
                 with open(fp, "rb") as f:
                     ru = sess.post(
-                        "https://imgbox.com/api/v1/images/create",
+                        "https://imgbox.com/upload",
+                        headers={"X-CSRF-Token": csrf_token,
+                                 "X-Requested-With": "XMLHttpRequest",
+                                 "Accept": "application/json"},
                         files={"files[]": (Path(fp).name, f, mime)},
                         data={
                             "token_id":         token_id,
@@ -4624,16 +4642,23 @@ class API:
                             "thumbnail_size":   "350",  # 350×350 resized
                             "comments_enabled": "0",
                         },
-                        timeout=30
+                        timeout=60
                     )
                 if ru.status_code == 200:
-                    imgs = (ru.json().get("images")
-                            or ru.json().get("data") or [])
-                    original = (imgs[0].get("original_url")
-                                or imgs[0].get("url", "")) if imgs else ""
-                    urls.append(original)
+                    try:
+                        data = ru.json()
+                        # Format: {"images": [{"original_url": "..."}]}
+                        # ou:    [{"original_url": "..."}]
+                        imgs = data if isinstance(data, list) else (
+                               data.get("images") or data.get("data") or [])
+                        original = (imgs[0].get("original_url")
+                                    or imgs[0].get("url", "")) if imgs else ""
+                        urls.append(original)
+                    except Exception:
+                        errors.append(f"{Path(fp).name}: réponse non-JSON")
+                        urls.append("")
                 else:
-                    errors.append(f"{Path(fp).name}: HTTP {ru.status_code} — {ru.text[:100]}")
+                    errors.append(f"{Path(fp).name}: HTTP {ru.status_code} — {ru.text[:120]}")
                     urls.append("")
 
             gallery_url = f"https://imgbox.com/g/{gallery_id}" if gallery_id else ""

@@ -3357,11 +3357,12 @@ function prezAddSubTrack(lang="", type="FULL") {
       <input data-sidx="${idx}" data-skey="lang" type="text" placeholder="Langue (ex: fr, en, VFF)" value="${lang}"
         style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;" oninput="prezUpdateSub(this)" />
       <select data-sidx="${idx}" data-skey="type"
-        style="width:100px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;cursor:pointer;" onchange="prezUpdateSub(this)">
-        <option value="FULL" ${type==='FULL'?'selected':''}>FULL</option>
-        <option value="FORCED" ${type==='FORCED'?'selected':''}>FORCED</option>
-        <option value="SDH" ${type==='SDH'?'selected':''}>SDH</option>
-        <option value="FORCED+SDH" ${type==='FORCED+SDH'?'selected':''}>FORCED+SDH</option>
+        style="width:120px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;cursor:pointer;" onchange="prezUpdateSub(this)">
+        <option value="FULL"        ${type==='FULL'?'selected':''}>FULL</option>
+        <option value="FORCED"      ${type==='FORCED'?'selected':''}>FORCED</option>
+        <option value="SDH"         ${type==='SDH'?'selected':''}>SDH</option>
+        <option value="FORCED+SDH"  ${type==='FORCED+SDH'?'selected':''}>FORCED+SDH</option>
+        <option value="COMMENTARY"  ${type==='COMMENTARY'?'selected':''}>COMMENTARY</option>
       </select>
     </div>`;
   container.appendChild(div);
@@ -3539,7 +3540,7 @@ function prezGenerate() {
   // ── Sous-titres
   const subItems = subTracks.length
     ? subTracks.map(t => {
-        const badge = t.type && t.type !== 'FULL'
+        const badge = t.type
           ? ` <span style="font-size:9px;background:rgba(255,107,0,.15);border:1px solid rgba(255,107,0,.3);border-radius:10px;padding:1px 6px;color:#ff6b00;font-family:'Courier New',monospace;">${h(t.type)}</span>`
           : '';
         return `<div class="prez-spec-item">${h(t.lang)}${badge}</div>`;
