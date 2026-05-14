@@ -1243,8 +1243,12 @@ html.light body::before {
           </button>
 
           <div class="section-label" style="margin-bottom:8px;">SOUS-TITRES</div>
-          <input id="prez-subs" type="text" placeholder="ex: Français, Anglais  /  Aucun"
-            style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;width:100%;margin-bottom:14px;" />
+          <div id="prez-sub-tracks" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;"></div>
+          <button onclick="prezAddSubTrack()"
+            style="width:100%;padding:5px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;margin-bottom:14px;"
+            onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">
+            + AJOUTER SOUS-TITRE
+          </button>
 
           <!-- Upload info -->
           <div class="section-label" style="margin-bottom:8px;">RELEASE</div>
@@ -3191,6 +3195,7 @@ async function fbdCancel() {
 const _prez = {
   tmdbData:     null,   // données TMDB chargées
   audioTracks:  [],     // [{lang, codec, channels, bitrate}]
+  subTracks:    [],     // [{lang, type}]  type: FULL/FORCED/SDH/FORCED+SDH
   screenshots:  [],     // chemins locaux
   imgboxUrls:   [],     // URLs imgbox après upload
   generatedHtml: "",    // dernier HTML généré
@@ -3232,8 +3237,13 @@ async function prezAutoFill() {
       r.audio.forEach(t => prezAddAudioTrack(t.lang, t.codec, t.channels, t.bitrate));
     }
 
-    // Sous-titres
-    if (r.subs) prezSet('prez-subs', r.subs);
+    // Sous-titres — vider et recréer les pistes
+    if (r.subs && r.subs !== 'Aucun') {
+      document.getElementById('prez-sub-tracks').innerHTML = '';
+      _prez.subTracks = [];
+      r.subs.split(',').map(s => s.trim()).filter(Boolean)
+        .forEach(lang => prezAddSubTrack(lang, 'FULL'));
+    }
 
     // Débit global
     if (r.total_bitrate) prezSet('prez-total-bitrate', r.total_bitrate);
@@ -3330,6 +3340,45 @@ function prezRemoveAudio(idx) {
   if (el) el.remove();
 }
 
+// ── Subtitle tracks ────────────────────────────────────────────────────────
+function prezAddSubTrack(lang="", type="FULL") {
+  const idx = _prez.subTracks.length;
+  _prez.subTracks.push({lang, type});
+  const container = document.getElementById('prez-sub-tracks');
+  const div = document.createElement('div');
+  div.id = 'prez-sub-' + idx;
+  div.style.cssText = 'background:var(--bg);border:1px solid var(--border2);border-radius:4px;padding:8px;display:flex;flex-direction:column;gap:4px;';
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+      <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;">PISTE ${idx+1}</span>
+      <button onclick="prezRemoveSub(${idx})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:0;" title="Supprimer">✕</button>
+    </div>
+    <div style="display:flex;gap:4px;">
+      <input data-sidx="${idx}" data-skey="lang" type="text" placeholder="Langue (ex: fr, en, VFF)" value="${lang}"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;" oninput="prezUpdateSub(this)" />
+      <select data-sidx="${idx}" data-skey="type"
+        style="width:100px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;cursor:pointer;" onchange="prezUpdateSub(this)">
+        <option value="FULL" ${type==='FULL'?'selected':''}>FULL</option>
+        <option value="FORCED" ${type==='FORCED'?'selected':''}>FORCED</option>
+        <option value="SDH" ${type==='SDH'?'selected':''}>SDH</option>
+        <option value="FORCED+SDH" ${type==='FORCED+SDH'?'selected':''}>FORCED+SDH</option>
+      </select>
+    </div>`;
+  container.appendChild(div);
+}
+
+function prezUpdateSub(el) {
+  const idx = parseInt(el.dataset.sidx);
+  const key = el.dataset.skey;
+  if (_prez.subTracks[idx]) _prez.subTracks[idx][key] = el.value;
+}
+
+function prezRemoveSub(idx) {
+  _prez.subTracks[idx] = null;
+  const el = document.getElementById('prez-sub-' + idx);
+  if (el) el.remove();
+}
+
 // ── Screenshots ────────────────────────────────────────────────────────────
 async function prezLoadScreenshots() {
   const title = document.getElementById('prez-title').value.trim();
@@ -3411,7 +3460,7 @@ function prezGenerate() {
   const vidCodec  = prezGet('prez-vid-codec');
   const vidRes    = prezGet('prez-vid-res');
   const vidBitrate= prezGet('prez-vid-bitrate');
-  const subs      = prezGet('prez-subs');
+  const subTracks = _prez.subTracks.filter(Boolean);
   const relName   = prezGet('prez-release-name');
   const filesize  = prezGet('prez-filesize');
   const filecount = prezGet('prez-filecount');
@@ -3488,7 +3537,14 @@ function prezGenerate() {
     return items.map(i => `<div class="prez-spec-item">${h(i)}</div>`).join('');
   }).join('<hr style="border:none;border-top:1px solid #222;margin:6px 0;">');
   // ── Sous-titres
-  const subItems = subs ? subs.split(',').map(s=>`<div class="prez-spec-item">${h(s.trim())}</div>`).join('') : '<div class="prez-spec-item">Aucun</div>';
+  const subItems = subTracks.length
+    ? subTracks.map(t => {
+        const badge = t.type && t.type !== 'FULL'
+          ? ` <span style="font-size:9px;background:rgba(255,107,0,.15);border:1px solid rgba(255,107,0,.3);border-radius:10px;padding:1px 6px;color:#ff6b00;font-family:'Courier New',monospace;">${h(t.type)}</span>`
+          : '';
+        return `<div class="prez-spec-item">${h(t.lang)}${badge}</div>`;
+      }).join('')
+    : '<div class="prez-spec-item">Aucun</div>';
   // ── Cast
   const castHtml = cast.length ? cast.map(a => `
     <div class="prez-actor">

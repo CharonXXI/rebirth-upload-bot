@@ -4580,51 +4580,67 @@ class API:
 
     def prez_upload_imgbox(self, filepaths: list):
         """Upload une liste de fichiers image vers imgbox, retourne les URLs.
-        Options : Family Safe Content, thumbnail 350x350 (350c)."""
+        Options : Family Safe Content, thumbnail 350×350 (resized)."""
         if not filepaths:
             return {"error": "Aucun fichier fourni"}
         try:
+            HEADERS = {
+                "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                               "AppleWebKit/537.36 (KHTML, like Gecko) "
+                               "Chrome/124.0.0.0 Safari/537.36"),
+                "Origin":  "https://imgbox.com",
+                "Referer": "https://imgbox.com/",
+            }
             sess = requests.Session()
+            sess.headers.update(HEADERS)
+
             # 1. Créer un token gallery
             r = sess.post("https://imgbox.com/api/v1/token/new",
                           json={"gallery": True, "adult": False},
                           timeout=15)
             if r.status_code != 200:
-                return {"error": f"imgbox token: HTTP {r.status_code}"}
+                return {"error": f"imgbox token HTTP {r.status_code}: {r.text[:200]}"}
             tok = r.json()
-            token_id     = tok.get("token_id", "")
-            token_secret = tok.get("token_secret", "")
+            if not tok.get("token_id"):
+                return {"error": f"imgbox token invalide: {tok}"}
+            token_id     = tok["token_id"]
+            token_secret = tok["token_secret"]
             gallery_id   = tok.get("gallery_id", "")
 
             # 2. Upload chaque image
             urls = []
+            errors = []
             for fp in filepaths:
                 mime = ("image/jpeg" if fp.lower().endswith((".jpg", ".jpeg"))
                         else "image/png")
                 with open(fp, "rb") as f:
-                    files = {"files[]": (Path(fp).name, f, mime)}
-                    data  = {
-                        "token_id":       token_id,
-                        "token_secret":   token_secret,
-                        "content_type":   "1",     # 1 = Family Safe Content
-                        "thumbnail_size": "350",   # 350×350 pixel (resized)
-                        "comments_enabled": "0",
-                    }
-                    ru = sess.post("https://imgbox.com/api/v1/images/create",
-                                   files=files, data=data, timeout=30)
-                    if ru.status_code == 200:
-                        img_data = ru.json()
-                        imgs = img_data.get("images") or img_data.get("data") or []
-                        if imgs:
-                            original = imgs[0].get("original_url") or imgs[0].get("url", "")
-                            urls.append(original)
-                        else:
-                            urls.append("")
-                    else:
-                        urls.append("")
+                    ru = sess.post(
+                        "https://imgbox.com/api/v1/images/create",
+                        files={"files[]": (Path(fp).name, f, mime)},
+                        data={
+                            "token_id":         token_id,
+                            "token_secret":     token_secret,
+                            "content_type":     "1",    # Family Safe
+                            "thumbnail_size":   "350",  # 350×350 resized
+                            "comments_enabled": "0",
+                        },
+                        timeout=30
+                    )
+                if ru.status_code == 200:
+                    imgs = (ru.json().get("images")
+                            or ru.json().get("data") or [])
+                    original = (imgs[0].get("original_url")
+                                or imgs[0].get("url", "")) if imgs else ""
+                    urls.append(original)
+                else:
+                    errors.append(f"{Path(fp).name}: HTTP {ru.status_code} — {ru.text[:100]}")
+                    urls.append("")
 
             gallery_url = f"https://imgbox.com/g/{gallery_id}" if gallery_id else ""
-            return {"ok": True, "urls": urls, "gallery_url": gallery_url}
+            result = {"ok": True, "urls": urls, "gallery_url": gallery_url}
+            if errors:
+                result["warnings"] = errors
+            return result
         except Exception as e:
             return {"error": str(e)}
 
