@@ -4607,7 +4607,7 @@ class API:
                         "token_id":       token_id,
                         "token_secret":   token_secret,
                         "content_type":   "1",     # 1 = Family Safe Content
-                        "thumbnail_size": "350c",  # 350×350 pixel (resized, square crop)
+                        "thumbnail_size": "350",   # 350×350 pixel (resized)
                         "comments_enabled": "0",
                     }
                     ru = sess.post("https://imgbox.com/api/v1/images/create",
