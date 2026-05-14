@@ -4579,8 +4579,8 @@ class API:
         return {"files": files, "folder": str(folder)}
 
     def prez_upload_imgbox(self, filepaths: list):
-        """Upload une liste de fichiers image vers imgbox, retourne les URLs."""
-        import base64 as _b64
+        """Upload une liste de fichiers image vers imgbox, retourne les URLs.
+        Options : Family Safe Content, thumbnail 350x350 (350c)."""
         if not filepaths:
             return {"error": "Aucun fichier fourni"}
         try:
@@ -4599,15 +4599,16 @@ class API:
             # 2. Upload chaque image
             urls = []
             for fp in filepaths:
+                mime = ("image/jpeg" if fp.lower().endswith((".jpg", ".jpeg"))
+                        else "image/png")
                 with open(fp, "rb") as f:
-                    files = {"files[]": (Path(fp).name, f,
-                                         "image/jpeg" if fp.lower().endswith(".jpg")
-                                         or fp.lower().endswith(".jpeg") else "image/png")}
+                    files = {"files[]": (Path(fp).name, f, mime)}
                     data  = {
-                        "token_id":     token_id,
-                        "token_secret": token_secret,
-                        "content_type": "1",   # 1 = family safe
-                        "comments_enabled": "0"
+                        "token_id":       token_id,
+                        "token_secret":   token_secret,
+                        "content_type":   "1",     # 1 = Family Safe Content
+                        "thumbnail_size": "350c",  # 350×350 pixel (resized, square crop)
+                        "comments_enabled": "0",
                     }
                     ru = sess.post("https://imgbox.com/api/v1/images/create",
                                    files=files, data=data, timeout=30)
@@ -4626,6 +4627,138 @@ class API:
             return {"ok": True, "urls": urls, "gallery_url": gallery_url}
         except Exception as e:
             return {"error": str(e)}
+
+    def prez_get_last_session(self):
+        """Retourne toutes les infos disponibles de la dernière session :
+        historique (titre/TMDB/source), MediaInfo du dernier MKV dans FILMS/,
+        et screenshots dans PICS/."""
+        result = {}
+
+        # ── 1. Dernière entrée d'historique ───────────────────────────────
+        history = self.load_history()
+        if history:
+            last = history[0]
+            result["title"]     = last.get("title", "")
+            result["year"]      = last.get("year", "")
+            result["poster_url"]= last.get("poster_url", "")
+            result["source"]    = last.get("source", "")
+            # Extraire le TMDB ID depuis tmdb_link (ex: .../movie/12345)
+            tmdb_link = last.get("tmdb_link", "")
+            if tmdb_link:
+                import re as _re
+                m = _re.search(r"/(movie|tv)/(\d+)", tmdb_link)
+                if m:
+                    result["tmdb_id"]    = m.group(2)
+                    result["media_type"] = m.group(1)
+            result["filename"] = last.get("filename", "")
+
+        # ── 2. Dernier MKV dans FILMS/ ────────────────────────────────────
+        films_dir = BASE_DIR / "FILMS"
+        mkv_path  = None
+        if films_dir.exists():
+            mkvs = sorted(films_dir.glob("**/*.mkv"),
+                          key=lambda f: f.stat().st_mtime, reverse=True)
+            if mkvs:
+                mkv_path = str(mkvs[0])
+                result["mkv_path"] = mkv_path
+                result["filesize"] = self._fmt_size(mkvs[0].stat().st_size)
+
+        # ── 3. MediaInfo sur le MKV ───────────────────────────────────────
+        if mkv_path:
+            try:
+                sys.path.insert(0, str(BASE_DIR / "remux_tool"))
+                from mediainfo_parse import parse_mediainfo
+                video, audio_tracks, sub_tracks = parse_mediainfo(mkv_path)
+
+                if video:
+                    codec  = video.get("Format", "")
+                    height = video.get("Height", "")
+                    res    = f"{height}p" if height else ""
+                    vbr    = video.get("BitRate") or video.get("BitRate_Nominal", "")
+                    try:
+                        vbr_kbps = f"{int(int(vbr) / 1000):,} kb/s".replace(",", " ")
+                    except Exception:
+                        vbr_kbps = ""
+                    result["video"] = {
+                        "codec":   codec,
+                        "res":     res,
+                        "bitrate": vbr_kbps,
+                    }
+
+                audio_out = []
+                for t in audio_tracks:
+                    lang    = t.get("Language", "")
+                    codec_a = t.get("Format_Commercial_IfAny") or t.get("Format", "")
+                    ch_raw  = t.get("ChannelLayout") or t.get("Channels", "")
+                    # Convertir "L R LFE Ls Rs C" ou "6" → "5.1"
+                    ch = self._fmt_channels(ch_raw)
+                    br_raw = t.get("BitRate") or t.get("BitRate_Nominal", "")
+                    try:
+                        br_kbps = f"{int(int(br_raw) / 1000):,} kb/s".replace(",", " ")
+                    except Exception:
+                        br_kbps = ""
+                    audio_out.append({"lang": lang, "codec": codec_a,
+                                      "channels": ch, "bitrate": br_kbps})
+                result["audio"] = audio_out
+
+                subs_out = []
+                for t in sub_tracks:
+                    lang = t.get("Language", "")
+                    if lang and lang not in subs_out:
+                        subs_out.append(lang)
+                result["subs"] = ", ".join(subs_out) if subs_out else "Aucun"
+
+                # Débit global depuis le fichier
+                try:
+                    import subprocess as _sp
+                    mi_bin = None
+                    for p in ("/opt/homebrew/bin/mediainfo",
+                              "/usr/local/bin/mediainfo", "/usr/bin/mediainfo"):
+                        if Path(p).exists():
+                            mi_bin = p; break
+                    if mi_bin:
+                        out = _sp.check_output(
+                            [mi_bin, "--Inform=General;%OverallBitRate%", mkv_path],
+                            timeout=10).decode().strip()
+                        if out.isdigit():
+                            result["total_bitrate"] = f"{int(int(out)/1000):,} kb/s".replace(",", " ")
+                except Exception:
+                    pass
+            except Exception as e:
+                result["mediainfo_error"] = str(e)
+
+        # ── 4. Screenshots dans PICS/ ─────────────────────────────────────
+        pics = self.prez_list_screenshots(result.get("title", ""))
+        result["screenshots"] = pics.get("files", [])
+
+        return result
+
+    @staticmethod
+    def _fmt_size(size_bytes: int) -> str:
+        for unit in ("o", "Kio", "Mio", "Gio", "Tio"):
+            if size_bytes < 1024 or unit == "Tio":
+                return f"{size_bytes:.2f} {unit}" if unit != "o" else f"{size_bytes} o"
+            size_bytes /= 1024
+
+    @staticmethod
+    def _fmt_channels(ch) -> str:
+        """Convertit layout MediaInfo → '5.1', '7.1', '2.0', etc."""
+        if not ch:
+            return ""
+        ch = str(ch).strip()
+        try:
+            n = int(ch)
+            mapping = {1: "1.0", 2: "2.0", 6: "5.1", 8: "7.1"}
+            return mapping.get(n, ch)
+        except ValueError:
+            pass
+        # Layout textuel ex: "L R C LFE Ls Rs"
+        parts  = ch.upper().split()
+        lfe    = 1 if "LFE" in parts else 0
+        mains  = len([p for p in parts if p != "LFE"])
+        if mains > 0:
+            return f"{mains}.{lfe}"
+        return ch
 
 
 if __name__ == "__main__":
