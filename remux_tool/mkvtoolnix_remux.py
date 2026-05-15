@@ -51,9 +51,16 @@ def _lang3(code: str) -> str:
     if not code:
         return "und"
     code = code.lower().strip()
-    if len(code) == 3:
+    if len(code) == 3 and code.isalpha():
         return code
-    mapping = {"en": "eng", "fr": "fra", "es": "spa", "de": "deu"}
+    mapping = {
+        "en": "eng", "fr": "fra", "es": "spa", "de": "deu",
+        "it": "ita", "pt": "por", "ja": "jpn", "ko": "kor",
+        "zh": "zho", "ru": "rus", "nl": "nld", "pl": "pol",
+        "ar": "ara", "hi": "hin", "th": "tha", "sv": "swe",
+        "no": "nor", "da": "dan", "fi": "fin", "cs": "ces",
+        "hu": "hun", "tr": "tur", "uk": "ukr", "he": "heb",
+    }
     return mapping.get(code, "und")
 
 
@@ -61,8 +68,107 @@ def _normalize_lang(lang: str) -> str:
     if not lang:
         return ""
     lang = lang.lower().strip()
-    mapping = {"eng": "en", "english": "en", "fra": "fr", "fre": "fr", "french": "fr"}
+    mapping = {
+        # Anglais
+        "eng": "en", "english": "en",
+        # Français
+        "fra": "fr", "fre": "fr", "french": "fr", "français": "fr",
+        # Japonais
+        "jpn": "ja", "japanese": "ja", "japonais": "ja",
+        # Espagnol
+        "spa": "es", "spanish": "es", "espagnol": "es",
+        # Allemand
+        "deu": "de", "ger": "de", "german": "de", "deutsch": "de", "allemand": "de",
+        # Italien
+        "ita": "it", "italian": "it", "italiano": "it", "italien": "it",
+        # Portugais
+        "por": "pt", "portuguese": "pt", "portugais": "pt",
+        # Coréen
+        "kor": "ko", "korean": "ko", "coréen": "ko", "coreen": "ko",
+        # Chinois
+        "zho": "zh", "chi": "zh", "chinese": "zh", "chinois": "zh",
+        # Russe
+        "rus": "ru", "russian": "ru", "russe": "ru",
+        # Néerlandais
+        "nld": "nl", "dut": "nl", "dutch": "nl", "néerlandais": "nl",
+        # Polonais
+        "pol": "pl", "polish": "pl", "polonais": "pl",
+        # Arabe
+        "ara": "ar", "arabic": "ar", "arabe": "ar",
+        # Hindi
+        "hin": "hi", "hindi": "hi",
+        # Thaï
+        "tha": "th", "thai": "th",
+        # Suédois
+        "swe": "sv", "swedish": "sv", "suédois": "sv",
+        # Norvégien
+        "nor": "no", "norwegian": "no", "norvégien": "no",
+        # Danois
+        "dan": "da", "danish": "da", "danois": "da",
+        # Finnois
+        "fin": "fi", "finnish": "fi", "finnois": "fi",
+        # Tchèque
+        "ces": "cs", "cze": "cs", "czech": "cs", "tchèque": "cs",
+        # Hongrois
+        "hun": "hu", "hungarian": "hu", "hongrois": "hu",
+        # Turc
+        "tur": "tr", "turkish": "tr", "turc": "tr",
+        # Ukrainien
+        "ukr": "uk", "ukrainian": "uk",
+        # Hébreu
+        "heb": "he", "hebrew": "he",
+    }
     return mapping.get(lang, lang[:2] if len(lang) >= 2 else lang)
+
+
+# Noms humains → code 2 lettres (détection depuis le titre de piste)
+_TITLE_LANG_KEYWORDS = [
+    ("ja", ["japonais", "japanese", "japan"]),
+    ("es", ["espagnol", "español", "spanish"]),
+    ("de", ["allemand", "german", "deutsch"]),
+    ("it", ["italien", "italian", "italiano"]),
+    ("pt", ["portugais", "portuguese", "português", "bresilien", "brésilien"]),
+    ("ko", ["coréen", "coreen", "korean"]),
+    ("zh", ["chinois", "chinese", "mandarin", "cantonais", "cantonnais"]),
+    ("ru", ["russe", "russian"]),
+    ("nl", ["néerlandais", "neerlandais", "dutch", "flamand"]),
+    ("pl", ["polonais", "polish"]),
+    ("ar", ["arabe", "arabic"]),
+    ("hi", ["hindi"]),
+    ("th", ["thaï", "thai"]),
+    ("sv", ["suédois", "suedois", "swedish"]),
+    ("no", ["norvégien", "norvegien", "norwegian"]),
+    ("da", ["danois", "danish"]),
+    ("fi", ["finnois", "finnish"]),
+    ("cs", ["tchèque", "tcheque", "czech"]),
+    ("hu", ["hongrois", "hungarian"]),
+    ("tr", ["turc", "turkish"]),
+    ("uk", ["ukrainien", "ukrainian"]),
+    ("he", ["hébreu", "hebreu", "hebrew"]),
+]
+
+# Correspondance langue 2-lettres → nom humain (FR)
+_LANG_HUMAN_FR = {
+    "ja": "Japonais", "es": "Espagnol", "de": "Allemand",
+    "it": "Italien",  "pt": "Portugais", "ko": "Coréen",
+    "zh": "Chinois",  "ru": "Russe",     "nl": "Néerlandais",
+    "pl": "Polonais", "ar": "Arabe",     "hi": "Hindi",
+    "th": "Thaï",     "sv": "Suédois",   "no": "Norvégien",
+    "da": "Danois",   "fi": "Finnois",   "cs": "Tchèque",
+    "hu": "Hongrois", "tr": "Turc",      "uk": "Ukrainien",
+    "he": "Hébreu",
+}
+
+
+def _lang_from_title(title: str) -> str:
+    """Détecte la langue depuis le titre d'une piste (noms FR/EN).
+    Retourne un code 2-lettres ou '' si non trouvé."""
+    t = (title or "").lower()
+    for code, keywords in _TITLE_LANG_KEYWORDS:
+        for kw in keywords:
+            if kw in t:
+                return code
+    return ""
 
 
 def _identify(mkvmerge: str, input_path: str) -> dict:
@@ -238,7 +344,14 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
 
     for mi_track in selected_audio:
         mi_lang = _normalize_lang(mi_track.get("Language", ""))
-        mi_title = (mi_track.get("Title") or "").lower()
+        mi_title = (mi_track.get("Title") or "")
+
+        # ── Fallback langue depuis le titre si Language vide ───────────────────
+        # Ex: piste sans tag Language mais Title="Japonais TrueHD Atmos 7.1"
+        if not mi_lang:
+            mi_lang = _lang_from_title(mi_title)
+
+        mi_title_lower = mi_title.lower()
 
         # ── Matching par StreamOrder (= mkvmerge id) ──────────────────────────
         # StreamOrder de MediaInfo correspond directement à l'id mkvmerge.
@@ -320,12 +433,13 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
             lang_human = (mi_track.get("_lang_human") or "").strip()
             is_ad      = bool(user_vf and user_vf.upper().startswith("AD"))
 
+            mi_title_upper = (mi_track.get("Title") or "").upper()
+
             if user_vf:
                 lang_tag = user_vf  # ex: "VFF", "AD VFQ"
             elif mi_lang == "en":
                 lang_tag = "Anglais"
             elif mi_lang == "fr":
-                mi_title_upper = (mi_track.get("Title") or "").upper()
                 if re.search(r"\bAD\b", mi_title_upper) or "AUDIO DESCRIPTION" in mi_title_upper or "MALVOYANT" in mi_title_upper:
                     lang_tag = "AD VFF"
                     is_ad = True
@@ -340,7 +454,13 @@ def run_mkvmerge(input_file: str, tracks: Dict[str, Any], output_file: str) -> i
                 else:
                     lang_tag = vf_tag or "VF"
             elif lang_human:
-                lang_tag = lang_human  # "Espagnol", "Allemand", "Italien"…
+                lang_tag = lang_human  # "Espagnol", "Allemand", "Italien"… (passé depuis GUI)
+            elif mi_lang and mi_lang in _LANG_HUMAN_FR:
+                # Langue détectée automatiquement (ex: "ja" → "Japonais")
+                lang_tag = _LANG_HUMAN_FR[mi_lang]
+            elif mi_lang:
+                # Langue connue mais sans nom FR → code en majuscule
+                lang_tag = mi_lang.upper()
             else:
                 lang_tag = "VO"
 
