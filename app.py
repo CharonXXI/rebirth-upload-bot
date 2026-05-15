@@ -4579,42 +4579,58 @@ class API:
         return {"files": files, "folder": str(folder)}
 
     def prez_upload_imgbox(self, filepaths: list):
-        """Upload vers imgbox via le flow CSRF (API v1 deprecated → /ajax/token/generate).
-        Family Safe Content, thumbnail 350×350 resized."""
+        """Upload vers imgbox — flow exact extrait du HTML source imgbox.com.
+        Family Safe Content (content_type=1), thumbnail 350×350 resized (350r)."""
         if not filepaths:
             return {"error": "Aucun fichier fourni"}
         try:
-            HEADERS = {
-                "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            sess = requests.Session()
+            sess.headers.update({
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                "AppleWebKit/537.36 (KHTML, like Gecko) "
                                "Chrome/124.0.0.0 Safari/537.36"),
-                "Origin":  "https://imgbox.com",
-                "Referer": "https://imgbox.com/",
-            }
-            sess = requests.Session()
-            sess.headers.update(HEADERS)
+                "Accept-Language": "en-US,en;q=0.9",
+            })
 
-            # 1. Récupérer le CSRF token depuis la page principale
+            # ── 1. GET imgbox.com → extraire authenticity_token (champ caché du form) ──
             r = sess.get("https://imgbox.com", timeout=15)
             if r.status_code != 200:
                 return {"error": f"imgbox inaccessible: HTTP {r.status_code}"}
-            csrf_match = re.search(r'<meta\s+name=["\']csrf-token["\']'
-                                   r'\s+content=["\']([^"\']+)["\']', r.text)
+
+            # Token dans <input name="authenticity_token" type="hidden" value="...">
+            csrf_match = re.search(
+                r'<input[^>]+name=["\']authenticity_token["\'][^>]+value=["\']([^"\']+)["\']',
+                r.text
+            )
             if not csrf_match:
-                return {"error": "CSRF token imgbox introuvable (site modifié ?)"}
+                # Fallback: meta tag classique Rails
+                csrf_match = re.search(
+                    r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']',
+                    r.text
+                )
+            if not csrf_match:
+                return {"error": "authenticity_token imgbox introuvable — site modifié ?"}
             csrf_token = csrf_match.group(1)
 
-            # 2. Générer le token gallery
+            # ── 2. POST /ajax/token/generate — form-encoded (pas JSON) ─────────────
             rg = sess.post(
                 "https://imgbox.com/ajax/token/generate",
-                headers={"X-CSRF-Token": csrf_token,
-                         "X-Requested-With": "XMLHttpRequest",
-                         "Accept": "application/json"},
-                json={"gallery": True, "adult": False},
+                data={
+                    "utf8":               "✓",
+                    "authenticity_token": csrf_token,
+                    "gallery":            "true",
+                    "gallery_title":      "",
+                    "comments_enabled":   "0",
+                },
+                headers={
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Accept":           "application/json, text/javascript, */*; q=0.01",
+                    "Referer":          "https://imgbox.com/",
+                },
                 timeout=15
             )
             if rg.status_code != 200:
-                return {"error": f"imgbox token HTTP {rg.status_code}: {rg.text[:200]}"}
+                return {"error": f"imgbox token generate HTTP {rg.status_code}: {rg.text[:300]}"}
             tok = rg.json()
             if not tok.get("token_id"):
                 return {"error": f"imgbox token invalide: {tok}"}
@@ -4622,43 +4638,51 @@ class API:
             token_secret = tok["token_secret"]
             gallery_id   = tok.get("gallery_id", "")
 
-            # 3. Upload chaque image
+            # ── 3. POST /upload/process — multipart + champs form ─────────────────
             urls   = []
             errors = []
             for fp in filepaths:
-                mime = ("image/jpeg" if fp.lower().endswith((".jpg", ".jpeg"))
-                        else "image/png")
-                with open(fp, "rb") as f:
+                fname = Path(fp).name
+                mime  = ("image/jpeg" if fp.lower().endswith((".jpg", ".jpeg"))
+                         else "image/png")
+                with open(fp, "rb") as fh:
                     ru = sess.post(
-                        "https://imgbox.com/upload",
-                        headers={"X-CSRF-Token": csrf_token,
-                                 "X-Requested-With": "XMLHttpRequest",
-                                 "Accept": "application/json"},
-                        files={"files[]": (Path(fp).name, f, mime)},
+                        "https://imgbox.com/upload/process",
+                        files={"files[]": (fname, fh, mime)},
                         data={
-                            "token_id":         token_id,
-                            "token_secret":     token_secret,
-                            "content_type":     "1",    # Family Safe
-                            "thumbnail_size":   "350",  # 350×350 resized
-                            "comments_enabled": "0",
+                            "utf8":               "✓",
+                            "authenticity_token": csrf_token,
+                            "token_id":           token_id,
+                            "token_secret":       token_secret,
+                            "content_type":       "1",     # Family Safe
+                            "thumbnail_size":     "350r",  # 350×350 resized (pas square crop)
+                            "comments_enabled":   "0",
+                        },
+                        headers={
+                            "X-Requested-With": "XMLHttpRequest",
+                            "Accept":           "application/json, text/javascript, */*; q=0.01",
+                            "Referer":          "https://imgbox.com/",
                         },
                         timeout=60
                     )
                 if ru.status_code == 200:
                     try:
                         data = ru.json()
-                        # Format: {"images": [{"original_url": "..."}]}
-                        # ou:    [{"original_url": "..."}]
+                        # Réponse: {"images": [{"original_url": "...", "thumbnail_url": "..."}]}
                         imgs = data if isinstance(data, list) else (
                                data.get("images") or data.get("data") or [])
-                        original = (imgs[0].get("original_url")
-                                    or imgs[0].get("url", "")) if imgs else ""
-                        urls.append(original)
-                    except Exception:
-                        errors.append(f"{Path(fp).name}: réponse non-JSON")
+                        if imgs:
+                            original = (imgs[0].get("original_url")
+                                        or imgs[0].get("url", ""))
+                            urls.append(original)
+                        else:
+                            errors.append(f"{fname}: réponse vide — {data}")
+                            urls.append("")
+                    except Exception as je:
+                        errors.append(f"{fname}: réponse non-JSON ({je}) — {ru.text[:120]}")
                         urls.append("")
                 else:
-                    errors.append(f"{Path(fp).name}: HTTP {ru.status_code} — {ru.text[:120]}")
+                    errors.append(f"{fname}: HTTP {ru.status_code} — {ru.text[:200]}")
                     urls.append("")
 
             gallery_url = f"https://imgbox.com/g/{gallery_id}" if gallery_id else ""
@@ -4667,7 +4691,8 @@ class API:
                 result["warnings"] = errors
             return result
         except Exception as e:
-            return {"error": str(e)}
+            import traceback
+            return {"error": str(e), "trace": traceback.format_exc()}
 
     def prez_get_last_session(self):
         """Récupère tout depuis le dernier MKV dans FILMS/ comme source principale.
