@@ -3277,12 +3277,28 @@ async function prezAutoFill() {
 async function prezFetchTmdb(silent) {
   const tid   = document.getElementById('prez-tmdb-id').value.trim();
   const mtype = document.getElementById('prez-media-type').value;
-  if (!tid) { showToast("Saisis un TMDB ID", "error"); return; }
+  const title = document.getElementById('prez-title').value.trim();
+  const year  = document.getElementById('prez-year').value.trim();
+
+  if (!tid && !title) {
+    showToast("Saisis un TMDB ID ou un titre pour rechercher", "error"); return;
+  }
   if (!silent) prezStatus("⏳ Chargement TMDB…");
   try {
-    const r = await window.pywebview.api.prez_tmdb_fetch(tid, mtype);
+    let r;
+    if (tid) {
+      // ID connu → fetch direct
+      r = await window.pywebview.api.prez_tmdb_fetch(tid, mtype);
+    } else {
+      // Pas d'ID → recherche par titre
+      prezStatus("⏳ Recherche TMDB par titre…");
+      r = await window.pywebview.api.prez_search_tmdb_by_title(title, mtype, year);
+    }
     if (r.error) { prezStatus("✗ " + r.error); showToast(r.error, "error"); return; }
     _prez.tmdbData = r;
+    // Mise à jour de l'ID si on vient de chercher par titre
+    if (r.tmdb_id) prezSet('prez-tmdb-id', String(r.tmdb_id));
+    if (r.media_type) document.getElementById('prez-media-type').value = r.media_type;
     // En mode silent (auto-fill), on écrase seulement les champs vides
     const fill = (id, val) => {
       if (silent) { const el = document.getElementById(id); if (el && !el.value.trim()) el.value = val || ""; }
@@ -3296,7 +3312,10 @@ async function prezFetchTmdb(silent) {
     fill('prez-genres',    (r.genres   || []).join(", "));
     fill('prez-directors', (r.directors|| []).join(", "));
     fill('prez-poster',    r.poster_url);
-    if (!silent) { prezStatus("✓ TMDB chargé — " + r.title); showToast("TMDB chargé : " + r.title, "success"); }
+    if (!silent) {
+      prezStatus("✓ TMDB chargé — " + r.title);
+      showToast("TMDB chargé : " + r.title, "success");
+    }
   } catch(e) { prezStatus("✗ " + e); }
 }
 
@@ -3440,8 +3459,16 @@ async function prezUploadImgbox() {
       _prez.imgboxUrls = r.urls || [];
       prezRenderScreensList();
       const ok = _prez.imgboxUrls.filter(u => u).length;
-      prezStatus(`✓ ${ok}/${_prez.screenshots.length} images uploadées`);
-      showToast(`${ok} image(s) sur imgbox`, "success");
+      if (ok > 0) {
+        prezStatus(`✓ ${ok}/${screens.length} images uploadées sur imgbox`);
+        showToast(`${ok} image(s) uploadée(s) sur imgbox`, "success");
+      } else {
+        prezStatus(`✗ 0 image uploadée`);
+        showToast("0 image uploadée — voir détails ci-dessous", "error");
+      }
+      if (r.warnings && r.warnings.length) {
+        r.warnings.forEach(w => showToast("⚠ " + w, "warn"));
+      }
     }
   } catch(e) { prezStatus("✗ " + e); }
   finally { btn.textContent = '☁ UPLOAD IMGBOX'; btn.disabled = false; }

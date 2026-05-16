@@ -4553,6 +4553,38 @@ class API:
         except Exception as e:
             return {"error": str(e)}
 
+    def prez_search_tmdb_by_title(self, title: str, media_type: str = "movie",
+                                    year: str = ""):
+        """Recherche TMDB par titre (search/multi) et retourne le premier résultat complet.
+        Utilisé quand on ne connaît pas l'ID TMDB — recherche + fetch en un seul appel."""
+        api_key  = os.getenv("API_KEY", "")
+        language = os.getenv("LANGUAGE", "fr-FR")
+        if not api_key:
+            return {"error": "API_KEY TMDB non configurée"}
+        if not title.strip():
+            return {"error": "Titre vide"}
+        try:
+            params = {"api_key": api_key, "query": title.strip(),
+                      "language": language}
+            if year:
+                params["year"] = year
+            r = requests.get(
+                "https://api.themoviedb.org/3/search/multi",
+                params=params, timeout=10
+            )
+            hits = r.json().get("results", [])
+            if not hits:
+                return {"error": f"Aucun résultat TMDB pour « {title} »"}
+            hit = hits[0]
+            mt  = hit.get("media_type", media_type)
+            if mt not in ("movie", "tv"):
+                mt = media_type
+            tid = hit.get("id")
+            # Fetch complet via la méthode existante
+            return self.prez_tmdb_fetch(str(tid), mt)
+        except Exception as e:
+            return {"error": str(e)}
+
     def prez_list_screenshots(self, film_title: str = ""):
         """Liste les screenshots disponibles dans PICS/<film_title>/ ou le dossier le plus récent."""
         pics_dir = BASE_DIR / "PICS"
@@ -4676,21 +4708,30 @@ class API:
                 if ru.status_code == 200:
                     try:
                         data = ru.json()
-                        # Réponse: {"images": [{"original_url": "...", "thumbnail_url": "..."}]}
-                        imgs = data if isinstance(data, list) else (
-                               data.get("images") or data.get("data") or [])
+                        # imgbox renvoie {"files": [...]} (clé principale)
+                        # Fallback sur "images" / "data" / liste brute
+                        if isinstance(data, list):
+                            imgs = data
+                        else:
+                            imgs = (data.get("files")
+                                    or data.get("images")
+                                    or data.get("data")
+                                    or [])
                         if imgs:
-                            original = (imgs[0].get("original_url")
-                                        or imgs[0].get("url", ""))
+                            img      = imgs[0]
+                            original = (img.get("original_url")
+                                        or img.get("url", ""))
                             urls.append(original)
                         else:
-                            errors.append(f"{fname}: réponse vide — {data}")
+                            errors.append(
+                                f"{fname}: réponse inattendue — clés={list(data.keys()) if isinstance(data, dict) else type(data).__name__} — {str(data)[:200]}"
+                            )
                             urls.append("")
                     except Exception as je:
-                        errors.append(f"{fname}: réponse non-JSON ({je}) — {ru.text[:120]}")
+                        errors.append(f"{fname}: réponse non-JSON ({je}) — {ru.text[:200]}")
                         urls.append("")
                 else:
-                    errors.append(f"{fname}: HTTP {ru.status_code} — {ru.text[:200]}")
+                    errors.append(f"{fname}: HTTP {ru.status_code} — {ru.text[:300]}")
                     urls.append("")
 
             gallery_url = f"https://imgbox.com/g/{gallery_id}" if gallery_id else ""
