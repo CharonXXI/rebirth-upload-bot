@@ -313,19 +313,33 @@ def generate_template(file_path, tmdb_link_override=None):
                 hdr_sub = hdr_sub + '█     ' + '-'.rjust(17) + j.ljust(57) + '█'
         hdr_info        = '█' + " ■ HDR.............: ".ljust(79) + '█' + "\n" + hdr_sub
 
+    # ── Normalisation NFC : PyMediaInfo peut retourner des chaînes NFD ────────
+    # En NFD, "é" = e + combining accent (2 code points, 1 colonne visuelle).
+    # _vlen compterait 2 → trop peu d'espaces de padding → bordure décalée.
+    # On normalise en NFC (forme composée) dès la réception du titre.
+    title = unicodedata.normalize('NFC', title) if title else title
+
     # ── Helpers visuels : gestion des caractères double-largeur (CJK) ────────
     # Les kanji/kana/hanzi occupent 2 colonnes dans un éditeur monospace.
-    # Python compte 1 code-point = 1 char → décalage de bordure sur les NFO
-    # contenant du japonais dans le titre. On corrige ici au niveau visuel.
+    # Les combining marks (accents) occupent 0 colonne (ils se combinent).
 
     def _vlen(s):
-        """Longueur visuelle : caractères Wide/Fullwidth (CJK) → 2, autres → 1."""
-        return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in s)
+        """Longueur visuelle : CJK Wide/Fullwidth → 2, combining marks → 0, autres → 1."""
+        total = 0
+        for c in s:
+            cat = unicodedata.category(c)
+            if cat in ('Mn', 'Mc', 'Me'):   # combining mark → 0 colonne
+                continue
+            total += 2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
+        return total
 
     def _vtrim(s, max_cols):
         """Tronquer s à max_cols colonnes visuelles (sans dépasser)."""
         cols, i = 0, 0
         for i, c in enumerate(s):
+            cat = unicodedata.category(c)
+            if cat in ('Mn', 'Mc', 'Me'):   # combining mark : ne compte pas
+                continue
             w = 2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
             if cols + w > max_cols:
                 return s[:i]
