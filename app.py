@@ -4675,40 +4675,61 @@ class API:
         return {"files": files, "folder": str(folder)}
 
     def prez_upload_imgbox(self, filepaths: list):
-        """Upload vers imgbox — flow exact extrait du HTML source imgbox.com.
-        Family Safe Content (content_type=1), thumbnail 350×350 resized (350r)."""
+        """Upload vers imgbox.
+        - Compresse automatiquement les images > 8 Mo en JPEG (limite imgbox = 10 Mo)
+        - Thumbnail size : essaie "350c" (cropped, valeur sûre) puis "300r" en fallback
+        - Gallery token réutilisé pour toutes les images du même batch
+        """
         if not filepaths:
             return {"error": "Aucun fichier fourni"}
         try:
+            from PIL import Image as _PILImage
+            import io as _io
+            _pil_ok = True
+        except ImportError:
+            _pil_ok = False
+
+        def _prepare_file(fp):
+            """Retourne (nom, bytes, mime). Compresse en JPEG si > 8 Mo."""
+            size_bytes = Path(fp).stat().st_size
+            fname = Path(fp).name
+            if _pil_ok and size_bytes > 8 * 1024 * 1024:
+                img = _PILImage.open(fp).convert("RGB")
+                buf = _io.BytesIO()
+                img.save(buf, format="JPEG", quality=88, optimize=True)
+                buf.seek(0)
+                return Path(fp).stem + ".jpg", buf, "image/jpeg"
+            mime = ("image/jpeg" if fp.lower().endswith((".jpg", ".jpeg"))
+                    else "image/png")
+            return fname, open(fp, "rb"), mime
+
+        try:
             sess = requests.Session()
             sess.headers.update({
-                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                               "AppleWebKit/537.36 (KHTML, like Gecko) "
-                               "Chrome/124.0.0.0 Safari/537.36"),
+                "User-Agent":      ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                    "Chrome/124.0.0.0 Safari/537.36"),
                 "Accept-Language": "en-US,en;q=0.9",
+                "Origin":          "https://imgbox.com",
             })
 
-            # ── 1. GET imgbox.com → extraire authenticity_token (champ caché du form) ──
+            # ── 1. GET imgbox.com → CSRF token ────────────────────────────────
             r = sess.get("https://imgbox.com", timeout=15)
             if r.status_code != 200:
                 return {"error": f"imgbox inaccessible: HTTP {r.status_code}"}
 
-            # Token dans <input name="authenticity_token" type="hidden" value="...">
             csrf_match = re.search(
                 r'<input[^>]+name=["\']authenticity_token["\'][^>]+value=["\']([^"\']+)["\']',
                 r.text
+            ) or re.search(
+                r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']',
+                r.text
             )
-            if not csrf_match:
-                # Fallback: meta tag classique Rails
-                csrf_match = re.search(
-                    r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']',
-                    r.text
-                )
             if not csrf_match:
                 return {"error": "authenticity_token imgbox introuvable — site modifié ?"}
             csrf_token = csrf_match.group(1)
 
-            # ── 2. POST /ajax/token/generate — form-encoded (pas JSON) ─────────────
+            # ── 2. POST /ajax/token/generate ──────────────────────────────────
             rg = sess.post(
                 "https://imgbox.com/ajax/token/generate",
                 data={
@@ -4734,61 +4755,74 @@ class API:
             token_secret = tok["token_secret"]
             gallery_id   = tok.get("gallery_id", "")
 
-            # ── 3. POST /upload/process — multipart + champs form ─────────────────
-            urls   = []
-            errors = []
+            # ── 3. POST /upload/process ───────────────────────────────────────
+            # thumbnail_size : "350c" (crop carré, valeur sûre connue d'imgbox)
+            # Si HTTP 500, on réessaie avec "300r" puis "500r"
+            THUMB_SIZES = ["350c", "300r", "500r"]
+
+            urls, errors = [], []
             for fp in filepaths:
-                fname = Path(fp).name
-                mime  = ("image/jpeg" if fp.lower().endswith((".jpg", ".jpeg"))
-                         else "image/png")
-                with open(fp, "rb") as fh:
-                    ru = sess.post(
-                        "https://imgbox.com/upload/process",
-                        files={"files[]": (fname, fh, mime)},
-                        data={
-                            "utf8":               "✓",
-                            "authenticity_token": csrf_token,
-                            "token_id":           token_id,
-                            "token_secret":       token_secret,
-                            "content_type":       "1",     # Family Safe
-                            "thumbnail_size":     "350r",  # 350×350 resized (pas square crop)
-                            "comments_enabled":   "0",
-                        },
-                        headers={
-                            "X-Requested-With": "XMLHttpRequest",
-                            "Accept":           "application/json, text/javascript, */*; q=0.01",
-                            "Referer":          "https://imgbox.com/",
-                        },
-                        timeout=60
-                    )
-                if ru.status_code == 200:
+                fname, fdata, mime = _prepare_file(fp)
+                uploaded = False
+                last_err = ""
+                for tsize in THUMB_SIZES:
                     try:
+                        if hasattr(fdata, "seek"):
+                            fdata.seek(0)
+                        else:
+                            _, fdata, mime = _prepare_file(fp)
+                        ru = sess.post(
+                            "https://imgbox.com/upload/process",
+                            files={"files[]": (fname, fdata, mime)},
+                            data={
+                                "utf8":               "✓",
+                                "authenticity_token": csrf_token,
+                                "token_id":           token_id,
+                                "token_secret":       token_secret,
+                                "gallery_id":         gallery_id,
+                                "content_type":       "1",
+                                "thumbnail_size":     tsize,
+                                "comments_enabled":   "0",
+                            },
+                            headers={
+                                "X-Requested-With": "XMLHttpRequest",
+                                "Accept":           "application/json, text/javascript, */*; q=0.01",
+                                "Referer":          "https://imgbox.com/",
+                            },
+                            timeout=90
+                        )
+                        if ru.status_code == 500:
+                            last_err = f"HTTP 500 (tsize={tsize}) — {ru.text[:200]}"
+                            continue   # essaie le thumbnail_size suivant
+                        if ru.status_code != 200:
+                            last_err = f"HTTP {ru.status_code} — {ru.text[:300]}"
+                            break
+                        # Succès HTTP → parser la réponse
                         data = ru.json()
-                        # imgbox renvoie {"files": [...]} (clé principale)
-                        # Fallback sur "images" / "data" / liste brute
-                        if isinstance(data, list):
-                            imgs = data
-                        else:
-                            imgs = (data.get("files")
-                                    or data.get("images")
-                                    or data.get("data")
-                                    or [])
+                        imgs = (data if isinstance(data, list) else
+                                data.get("files") or data.get("images")
+                                or data.get("data") or [])
                         if imgs:
-                            img      = imgs[0]
-                            original = (img.get("original_url")
-                                        or img.get("url", ""))
+                            original = (imgs[0].get("original_url")
+                                        or imgs[0].get("url", ""))
                             urls.append(original)
+                            uploaded = True
                         else:
-                            errors.append(
-                                f"{fname}: réponse inattendue — clés={list(data.keys()) if isinstance(data, dict) else type(data).__name__} — {str(data)[:200]}"
-                            )
-                            urls.append("")
-                    except Exception as je:
-                        errors.append(f"{fname}: réponse non-JSON ({je}) — {ru.text[:200]}")
-                        urls.append("")
-                else:
-                    errors.append(f"{fname}: HTTP {ru.status_code} — {ru.text[:300]}")
+                            last_err = (f"réponse vide — clés="
+                                        f"{list(data.keys()) if isinstance(data, dict) else type(data).__name__}"
+                                        f" — {str(data)[:200]}")
+                        break
+                    except Exception as ex:
+                        last_err = str(ex)
+                        break
+
+                if not uploaded:
+                    errors.append(f"{fname}: {last_err}")
                     urls.append("")
+                # Fermer le file handle si c'est un vrai fichier
+                if hasattr(fdata, "close") and not isinstance(fdata, _io.BytesIO):
+                    try: fdata.close()
+                    except Exception: pass
 
             gallery_url = f"https://imgbox.com/g/{gallery_id}" if gallery_id else ""
             result = {"ok": True, "urls": urls, "gallery_url": gallery_url}
