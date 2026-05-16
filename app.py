@@ -2295,8 +2295,8 @@ class API:
             genres     = []
             synopsis   = ""
 
-            sname = self._tmdb_search_name(fp)
-            tdata = self._search_tmdb(sname, api_key, language)
+            sname, file_year = self._tmdb_search_name(fp)
+            tdata = self._search_tmdb(sname, api_key, language, year=file_year)
             tid, ttitle, mtype, year = self._parse_tmdb(tdata)
 
             if tid:
@@ -2309,31 +2309,39 @@ class API:
                     "imdb_link": imdb_link or "", "title": ttitle, "year": year,
                     "score": score, "genres": genres, "synopsis": synopsis,
                 })
-                # Confirmation GUI — attendre que l'utilisateur confirme
-                self._tmdb_confirmed = None
-                self._tmdb_event.clear()
-                self._emit("tmdb_confirm", {"tmdb_link": tmdb_link, "title": ttitle, "year": year})
-                self._tmdb_event.wait(timeout=120)
-                # Si l'utilisateur a changé l'ID
-                if self._tmdb_confirmed and self._tmdb_confirmed != tmdb_link:
-                    tmdb_link = self._tmdb_confirmed
-                    new_tid   = tmdb_link.rstrip("/").split("/")[-1]
-                    poster_url, score, genres, synopsis = self._poster(new_tid, api_key, language)
-                    imdb_link = self._imdb(new_tid, api_key)
-                    # Récupérer le vrai titre du nouveau film
-                    new_data = self._get_movie_title(new_tid, api_key, language)
-                    if new_data:
-                        ttitle = new_data.get("title") or new_data.get("name") or ttitle
-                        date   = new_data.get("release_date") or new_data.get("first_air_date") or ""
-                        year   = date[:4] or year
-                    self._emit("tmdb_result", {
-                        "tmdb_link": tmdb_link, "poster_url": poster_url,
-                        "imdb_link": imdb_link or "", "title": ttitle, "year": year,
-                        "score": score, "genres": genres, "synopsis": synopsis,
-                    })
-                    self._log("TMDB mis a jour !", "success")
             else:
-                self._log("Aucun résultat TMDB.", "warn")
+                self._log("Aucun résultat TMDB automatique — confirmation manuelle requise.", "warn")
+
+            # ── Confirmation GUI — TOUJOURS affichée (même si pas trouvé) ────
+            # L'utilisateur peut corriger/coller l'URL TMDB manuellement.
+            self._tmdb_confirmed = None
+            self._tmdb_event.clear()
+            self._emit("tmdb_confirm", {
+                "tmdb_link": tmdb_link,
+                "title":     ttitle or sname,
+                "year":      year or file_year or "",
+            })
+            self._tmdb_event.wait(timeout=120)
+
+            # Appliquer la correction de l'utilisateur si différente
+            if self._tmdb_confirmed and self._tmdb_confirmed != tmdb_link:
+                tmdb_link = self._tmdb_confirmed
+                new_tid   = tmdb_link.rstrip("/").split("/")[-1]
+                mtype_new = "movie" if "/movie/" in tmdb_link else "tv"
+                poster_url, score, genres, synopsis = self._poster(new_tid, api_key, language)
+                imdb_link = self._imdb(new_tid, api_key)
+                new_data  = self._get_movie_title(new_tid, api_key, language)
+                if new_data:
+                    ttitle = new_data.get("title") or new_data.get("name") or ttitle or sname
+                    date   = new_data.get("release_date") or new_data.get("first_air_date") or ""
+                    year   = date[:4] or year
+                    mtype  = mtype_new
+                self._emit("tmdb_result", {
+                    "tmdb_link": tmdb_link, "poster_url": poster_url,
+                    "imdb_link": imdb_link or "", "title": ttitle, "year": year,
+                    "score": score, "genres": genres, "synopsis": synopsis,
+                })
+                self._log("TMDB mis à jour !", "success")
 
             # ── 2. NFO APRÈS TMDB ─────────────────────────────────────────────
             self._log("Génération NFO mediainfo…")
@@ -2496,19 +2504,67 @@ class API:
                 ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
 
     def _tmdb_search_name(self, fp):
+        """Extrait le titre et l'année depuis le nom de fichier.
+        Retourne (titre, année) — année peut être "" si non trouvée."""
         breaking = ['complete','integral','integrale','french','truefrench','multi',
                     'english','vostf','vostfr','vff','vfq','vf2','web','web-dl','bluray','remux']
-        parts = []
+        parts, year_found = [], ""
         for p in Path(fp).name.split("."):
-            if re.search(r'^S\d+|^\d{4}$|\d{3,4}p$', p) or any(k in p.lower() for k in breaking):
+            if re.match(r'^\d{4}$', p):
+                year_found = p; break
+            if re.search(r'^S\d+|\d{3,4}p$', p) or any(k in p.lower() for k in breaking):
                 break
             parts.append(p)
-        return " ".join(parts).strip()
+        return " ".join(parts).strip(), year_found
 
-    def _search_tmdb(self, q, key, lang):
-        r = requests.get("https://api.themoviedb.org/3/search/multi",
-                         params={"api_key": key, "query": q, "language": lang})
-        return r.json()
+    def _search_tmdb(self, q, key, lang, year=""):
+        """Recherche TMDB multi-stratégies.
+        1. search/multi avec titre complet (+ année si dispo)
+        2. search/movie avec titre complet + année  (plus précis)
+        3. search/movie sans année
+        4. search/movie avec premier mot seulement (titre court comme 'Scarlet')
+        """
+        def _multi(query, yr=""):
+            params = {"api_key": key, "query": query, "language": lang}
+            if yr:
+                params["primary_release_year"] = yr
+            r = requests.get("https://api.themoviedb.org/3/search/multi", params=params, timeout=8)
+            return r.json()
+
+        def _movie(query, yr=""):
+            params = {"api_key": key, "query": query, "language": lang}
+            if yr:
+                params["year"] = yr
+            r = requests.get("https://api.themoviedb.org/3/search/movie", params=params, timeout=8)
+            hits = r.json().get("results", [])
+            # Envelopper dans le format search/multi
+            for h in hits:
+                h.setdefault("media_type", "movie")
+            return {"results": hits}
+
+        # 1. search/multi titre complet
+        data = _multi(q)
+        if data.get("results"): return data
+
+        # 2. search/movie + année (le plus discriminant)
+        if year:
+            data = _movie(q, year)
+            if data.get("results"): return data
+
+        # 3. search/movie sans année
+        data = _movie(q)
+        if data.get("results"): return data
+
+        # 4. Premier mot seul + année (ex: "Scarlet 2025")
+        first_word = q.split()[0] if q else q
+        if first_word and first_word != q:
+            if year:
+                data = _movie(first_word, year)
+                if data.get("results"): return data
+            data = _movie(first_word)
+            if data.get("results"): return data
+
+        return {"results": []}
 
     def _parse_tmdb(self, data):
         if data.get("results"):
