@@ -4682,9 +4682,9 @@ class API:
         """
         if not filepaths:
             return {"error": "Aucun fichier fourni"}
+        import io as _io
         try:
             from PIL import Image as _PILImage
-            import io as _io
             _pil_ok = True
         except ImportError:
             _pil_ok = False
