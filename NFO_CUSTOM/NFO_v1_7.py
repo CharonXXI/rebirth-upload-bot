@@ -258,7 +258,7 @@ def generate_template(file_path, tmdb_link_override=None):
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 █                                                                               █
 █ ■ LANGUAGE........: {subtitle_language.ljust(20)}■ TYPE............: {subtitle_type.ljust(18)}█
-█ {subtitle_format.ljust(78)}█
+█{subtitle_format.center(79)}█
 █                                                                               █
 """
             subtitle_blocks.append(subtitle_block)
@@ -417,6 +417,8 @@ def generate_template(file_path, tmdb_link_override=None):
     else:
         note_block = ''
 
+    note_section = f"\n{note_block}" if note_block else ""
+
     newline = "\n"
     template = f"""
 ▄█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█▄
@@ -452,8 +454,7 @@ def generate_template(file_path, tmdb_link_override=None):
 █ ████▓▓▓▒▒▒░░░                       LiNKS                       ░░░▒▒▒▓▓▓████ █
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 █                                                                               █
-{_nfo_field('■ TMDB............: ', tmdb_link.strip(), 58)}
-{note_block}
+{_nfo_field('■ TMDB............: ', tmdb_link.strip(), 58)}{note_section}
 █▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
 █ ████▓▓▓▒▒▒░░░                        THX                        ░░░▒▒▒▓▓▓████ █
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
