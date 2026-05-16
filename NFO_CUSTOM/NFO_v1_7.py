@@ -417,7 +417,7 @@ def generate_template(file_path, tmdb_link_override=None):
     else:
         note_block = ''
 
-    note_section = f"\n{note_block}" if note_block else ""
+    note_section = f"\n{note_block}" if note_block else f"\n{_EMPTY}"
 
     newline = "\n"
     template = f"""
