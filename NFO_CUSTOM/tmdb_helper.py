@@ -33,20 +33,27 @@ def search_tmdb(title, media_type="movie", language="fr"):
         return data["results"][0]  # Premier résultat trouvé
     return None
 
-def get_tmdb_link(title, media_type="movie"):
+def get_tmdb_link(title, media_type="movie", fallback_titles=None):
     """
     Obtenir un lien TMDb basé sur le titre.
-    
+    Essaie title en premier, puis chaque titre dans fallback_titles.
+
     Args:
-        title (str): Le titre du film ou de la série.
+        title (str): Le titre principal (ex: depuis la piste vidéo MKV).
         media_type (str): "movie" ou "tv".
-    
+        fallback_titles (list|None): Titres alternatifs à essayer si le premier échoue
+                                     (ex: titre General du conteneur, titre PTN du fichier).
+
     Returns:
         str: URL vers la page TMDb du contenu.
     """
-    result = search_tmdb(title, media_type)
-    if result:
-        media_id = result.get("id")
-        base_url = "https://www.themoviedb.org/"
-        return f"{base_url}{media_type}/{media_id}"
+    _SKIP = {"", "No title in video track", None}
+    titles_to_try = [title] + (fallback_titles or [])
+    for t in titles_to_try:
+        if t in _SKIP:
+            continue
+        result = search_tmdb(t, media_type)
+        if result:
+            media_id = result.get("id")
+            return f"https://www.themoviedb.org/{media_type}/{media_id}"
     return "https://www.themoviedb.org/"

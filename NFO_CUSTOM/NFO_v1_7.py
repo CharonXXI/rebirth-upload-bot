@@ -1,6 +1,7 @@
 import os
 import requests
 import PTN
+import unicodedata
 from fractions import Fraction
 from pymediainfo import MediaInfo
 from. tmdb_helper import get_tmdb_link
@@ -38,6 +39,8 @@ LANGUAGE_MAP = {
     "id": "INDONESIAN",
     "it": "ITALIAN",
     "ja": "JAPANESE",
+    "jpx": "JAPANESE",
+    "jpn": "JAPANESE",
     "jw": "JAVANESE",
     "ka": "GEORGIAN",
     "km": "KHMER",
@@ -264,20 +267,21 @@ def generate_template(file_path, tmdb_link_override=None):
         subtitle_language = LANGUAGE_MAP.get(subtitle_language, subtitle_language).upper()
 
     # Obtenir le lien TMDb à partir du titre
+    # Ordre de recherche : titre piste vidéo → titre General MKV → titre PTN (filename)
     if tmdb_link_override:
         tmdb_link = tmdb_link_override
     else:
-        tmdb_link = get_tmdb_link(title)
+        _tmdb_fallbacks = []
+        _general_title  = getattr(general_info, "title", None) or ""
+        if _general_title and _general_title != title:
+            _tmdb_fallbacks.append(_general_title)
+        _ptn_title = PTN.parse(release_name).get("title", "")
+        if _ptn_title and _ptn_title not in (title, _general_title):
+            _tmdb_fallbacks.append(_ptn_title)
+        tmdb_link = get_tmdb_link(title, fallback_titles=_tmdb_fallbacks)
 
     # Notes
-    custom_note     = input("Input for custom notes: ")
-    custom_note_nfo = f"""█                                                                               █
-█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
-█ ████▓▓▓▒▒▒░░░                       NOTE                        ░░░▒▒▒▓▓▓████ █
-█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
-█                                                                               █
-█{custom_note.center(79)}█
-█                                                                               █"""
+    custom_note = input("Input for custom notes: ")
 
     # Template complet
     ptn_parse        = PTN.parse(release_name)
@@ -309,25 +313,95 @@ def generate_template(file_path, tmdb_link_override=None):
                 hdr_sub = hdr_sub + '█     ' + '-'.rjust(17) + j.ljust(57) + '█'
         hdr_info        = '█' + " ■ HDR.............: ".ljust(79) + '█' + "\n" + hdr_sub
 
+    # ── Helpers visuels : gestion des caractères double-largeur (CJK) ────────
+    # Les kanji/kana/hanzi occupent 2 colonnes dans un éditeur monospace.
+    # Python compte 1 code-point = 1 char → décalage de bordure sur les NFO
+    # contenant du japonais dans le titre. On corrige ici au niveau visuel.
+
+    def _vlen(s):
+        """Longueur visuelle : caractères Wide/Fullwidth (CJK) → 2, autres → 1."""
+        return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in s)
+
+    def _vtrim(s, max_cols):
+        """Tronquer s à max_cols colonnes visuelles (sans dépasser)."""
+        cols, i = 0, 0
+        for i, c in enumerate(s):
+            w = 2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
+            if cols + w > max_cols:
+                return s[:i]
+            cols += w
+        return s
+
+    def _vljust(s, width):
+        """ljust visuel : complète avec des espaces jusqu'à `width` colonnes."""
+        pad = width - _vlen(s)
+        return s + (' ' * pad if pad > 0 else '')
+
+    def _vcenter(s, width):
+        """center visuel."""
+        pad = width - _vlen(s)
+        if pad <= 0:
+            return s
+        left = pad // 2
+        return ' ' * left + s + ' ' * (pad - left)
+
+    # ── Helpers NFO : garantissent que le bord droit █ ne bouge jamais ──────
+    NFO_INNER = 79   # colonnes visuelles entre les deux █ (total ligne = 81)
+
+    def _nfo_field(prefix, value, value_width=58):
+        """Ligne(s) NFO pour un champ mono-colonne.
+        prefix  = '■ TiTLE...........: '  (sans le '█ ' de gauche)
+        value   = valeur brute
+        value_width = colonnes allouées sur la première ligne
+        Si value dépasse value_width → lignes de continuation centrées."""
+        val_trimmed = _vtrim(value, value_width)
+        first_line  = f'█ {prefix}{_vljust(val_trimmed, value_width)}█'
+        remaining   = value[len(val_trimmed):]
+        if not remaining:
+            return first_line
+        lines = [first_line]
+        while remaining:
+            chunk     = _vtrim(remaining, NFO_INNER)
+            remaining = remaining[len(chunk):]
+            lines.append(f'█{_vcenter(chunk, NFO_INNER)}█')
+        return '\n'.join(lines)
+
+    def _nfo_center_wrap(text, inner=NFO_INNER):
+        """Ligne(s) NFO pour un texte centré (ex: NOTE, custom_note).
+        Coupe aux espaces si possible. Retourne les lignes avec █ de chaque côté."""
+        lines_out = []
+        while text:
+            if _vlen(text) <= inner:
+                lines_out.append(f'█{_vcenter(text, inner)}█')
+                break
+            # Couper au dernier espace avant inner colonnes
+            chunk = _vtrim(text, inner)
+            cut   = chunk.rfind(' ')
+            cut   = cut if cut > len(chunk) // 2 else len(chunk)
+            lines_out.append(f'█{_vcenter(text[:cut], inner)}█')
+            text  = text[cut:].lstrip()
+        return '\n'.join(lines_out)
+
     def justify_and_split(text, width, char):
-        # Justifie le texte à gauche pour la première ligne
-        justified_text = text.ljust(width)
-        
-        # Si le texte justifié dépasse la largeur, le diviser en lignes
-        if len(justified_text) > width:
-            # Diviser le texte en lignes de la largeur spécifiée
-            lines = []
-            for i in range(0, len(justified_text), width):
-                line = justified_text[i:i + width]
-                if i == 0:
-                    # Justification à gauche pour la première ligne
-                    lines.append(char + line + "       " + char)
-                else:
-                    # Justification à droite pour les lignes suivantes
-                    lines.append(char +  "  " + line.center(width) + "     " + char)
-            return "\n".join(lines)
-        else:
-            return char + justified_text + char
+        """Compat legacy — redirige vers _nfo_center_wrap."""
+        return _nfo_center_wrap(text, width)
+
+    # ── Bloc NOTE (construit avant le template pour rester propre) ────────────
+    _SEP_TOP  = '█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█'
+    _SEP_BOT  = '█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█'
+    _EMPTY    = '█                                                                               █'
+    if custom_note:
+        note_block = '\n'.join([
+            _EMPTY,
+            _SEP_TOP,
+            '█ ████▓▓▓▒▒▒░░░                       NOTE                        ░░░▒▒▒▓▓▓████ █',
+            _SEP_BOT,
+            _EMPTY,
+            _nfo_center_wrap(custom_note),
+            _EMPTY,
+        ])
+    else:
+        note_block = ''
 
     newline = "\n"
     template = f"""
@@ -348,9 +422,9 @@ def generate_template(file_path, tmdb_link_override=None):
 █ ████▓▓▓▒▒▒░░░                   RELEASE iNFOS                   ░░░▒▒▒▓▓▓████ █
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 █                                                                               █
-█ ■ TiTLE...........: {title.ljust(58)}█{ season_episode if season_episode else ''}
+{_nfo_field('■ TiTLE...........: ', title, 58)}{ season_episode if season_episode else ''}
 █ ■ RELEASE SiZE....: {release_size}■ RELEASE DATE....: {release_date}█
-█ ■ SOURCE..........: {source}█
+{_nfo_field('■ SOURCE..........: ', source.strip(), 58)}
 █                                                                               █
 █▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
 █ ████▓▓▓▒▒▒░░░                       ViDEO                       ░░░▒▒▒▓▓▓████ █
@@ -364,8 +438,8 @@ def generate_template(file_path, tmdb_link_override=None):
 █ ████▓▓▓▒▒▒░░░                       LiNKS                       ░░░▒▒▒▓▓▓████ █
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 █                                                                               █
-█ ■ TMDB............: {tmdb_link.ljust(58)}█
-{custom_note_nfo if custom_note else '█' + ''.ljust(79) + '█'}
+{_nfo_field('■ TMDB............: ', tmdb_link.strip(), 58)}
+{note_block}
 █▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
 █ ████▓▓▓▒▒▒░░░                        THX                        ░░░▒▒▒▓▓▓████ █
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
