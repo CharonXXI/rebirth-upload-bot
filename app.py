@@ -4486,6 +4486,501 @@ class API:
                 pass
         return {"ok": True}
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # PREZ — Générateur de présentation tracker
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def prez_tmdb_fetch(self, tmdb_id: str, media_type: str = "movie"):
+        """Récupère toutes les infos TMDB nécessaires pour la prez."""
+        api_key  = os.getenv("API_KEY", "")
+        language = os.getenv("LANGUAGE", "fr-FR")
+        if not api_key:
+            return {"error": "API_KEY TMDB non configurée"}
+        try:
+            tid = int(str(tmdb_id).strip())
+            # Détails principaux
+            r = requests.get(
+                f"https://api.themoviedb.org/3/{media_type}/{tid}",
+                params={"api_key": api_key, "language": language,
+                        "append_to_response": "credits"},
+                timeout=10
+            )
+            if r.status_code != 200:
+                return {"error": f"TMDB {r.status_code}"}
+            d = r.json()
+
+            poster_path = d.get("poster_path", "")
+            poster_url  = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ""
+
+            title   = d.get("title") or d.get("name") or ""
+            year    = (d.get("release_date") or d.get("first_air_date") or "")[:4]
+            runtime = d.get("runtime") or 0
+            duration = f"{runtime // 60}h{runtime % 60:02d}m" if runtime else "—"
+            overview = d.get("overview") or ""
+            vote     = round(d.get("vote_average", 0), 1)
+            genres   = [g["name"] for g in d.get("genres", [])]
+            countries = [c.get("iso_3166_1", "").lower()
+                         for c in d.get("production_countries", [])]
+
+            credits = d.get("credits", {})
+            cast_raw = credits.get("cast", [])[:6]
+            cast = [{
+                "name":  a.get("name", ""),
+                "photo": f"https://image.tmdb.org/t/p/w185{a['profile_path']}"
+                         if a.get("profile_path") else "",
+                "tmdb_id": a.get("id")
+            } for a in cast_raw]
+
+            crew = credits.get("crew", [])
+            directors = [p["name"] for p in crew if p.get("job") == "Director"]
+
+            return {
+                "ok": True,
+                "tmdb_id":   tid,
+                "media_type": media_type,
+                "title":     title,
+                "year":      year,
+                "duration":  duration,
+                "overview":  overview,
+                "vote":      vote,
+                "genres":    genres,
+                "countries": countries,
+                "directors": directors,
+                "poster_url": poster_url,
+                "cast":       cast,
+                "tmdb_url":   f"https://www.themoviedb.org/{media_type}/{tid}",
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    def prez_list_screenshots(self, film_title: str = ""):
+        """Liste les screenshots disponibles dans PICS/<film_title>/ ou le dossier le plus récent."""
+        pics_dir = BASE_DIR / "PICS"
+        if not pics_dir.exists():
+            return {"files": []}
+        exts = {".jpg", ".jpeg", ".png", ".webp"}
+
+        if film_title:
+            # Cherche le sous-dossier dont le nom contient film_title
+            matches = [d for d in pics_dir.iterdir()
+                       if d.is_dir() and film_title.lower() in d.name.lower()]
+            if matches:
+                folder = matches[0]
+            else:
+                # Fallback : dossier le plus récemment modifié (pas la racine)
+                dirs = [d for d in pics_dir.iterdir() if d.is_dir()]
+                if dirs:
+                    folder = max(dirs, key=lambda d: d.stat().st_mtime)
+                else:
+                    folder = pics_dir
+        else:
+            # Prend le dossier le plus récent
+            dirs = [d for d in pics_dir.iterdir() if d.is_dir()]
+            folder = max(dirs, key=lambda d: d.stat().st_mtime) if dirs else pics_dir
+
+        # Recherche récursive dans le dossier sélectionné
+        files = sorted(
+            [str(f) for f in folder.rglob("*")
+             if f.is_file() and f.suffix.lower() in exts],
+            key=lambda x: x.lower()
+        )
+        return {"files": files, "folder": str(folder)}
+
+    def prez_upload_imgbox(self, filepaths: list):
+        """Upload vers imgbox — flow exact extrait du HTML source imgbox.com.
+        Family Safe Content (content_type=1), thumbnail 350×350 resized (350r)."""
+        if not filepaths:
+            return {"error": "Aucun fichier fourni"}
+        try:
+            sess = requests.Session()
+            sess.headers.update({
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                               "AppleWebKit/537.36 (KHTML, like Gecko) "
+                               "Chrome/124.0.0.0 Safari/537.36"),
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+
+            # ── 1. GET imgbox.com → extraire authenticity_token (champ caché du form) ──
+            r = sess.get("https://imgbox.com", timeout=15)
+            if r.status_code != 200:
+                return {"error": f"imgbox inaccessible: HTTP {r.status_code}"}
+
+            # Token dans <input name="authenticity_token" type="hidden" value="...">
+            csrf_match = re.search(
+                r'<input[^>]+name=["\']authenticity_token["\'][^>]+value=["\']([^"\']+)["\']',
+                r.text
+            )
+            if not csrf_match:
+                # Fallback: meta tag classique Rails
+                csrf_match = re.search(
+                    r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']',
+                    r.text
+                )
+            if not csrf_match:
+                return {"error": "authenticity_token imgbox introuvable — site modifié ?"}
+            csrf_token = csrf_match.group(1)
+
+            # ── 2. POST /ajax/token/generate — form-encoded (pas JSON) ─────────────
+            rg = sess.post(
+                "https://imgbox.com/ajax/token/generate",
+                data={
+                    "utf8":               "✓",
+                    "authenticity_token": csrf_token,
+                    "gallery":            "true",
+                    "gallery_title":      "",
+                    "comments_enabled":   "0",
+                },
+                headers={
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Accept":           "application/json, text/javascript, */*; q=0.01",
+                    "Referer":          "https://imgbox.com/",
+                },
+                timeout=15
+            )
+            if rg.status_code != 200:
+                return {"error": f"imgbox token generate HTTP {rg.status_code}: {rg.text[:300]}"}
+            tok = rg.json()
+            if not tok.get("token_id"):
+                return {"error": f"imgbox token invalide: {tok}"}
+            token_id     = tok["token_id"]
+            token_secret = tok["token_secret"]
+            gallery_id   = tok.get("gallery_id", "")
+
+            # ── 3. POST /upload/process — multipart + champs form ─────────────────
+            urls   = []
+            errors = []
+            for fp in filepaths:
+                fname = Path(fp).name
+                mime  = ("image/jpeg" if fp.lower().endswith((".jpg", ".jpeg"))
+                         else "image/png")
+                with open(fp, "rb") as fh:
+                    ru = sess.post(
+                        "https://imgbox.com/upload/process",
+                        files={"files[]": (fname, fh, mime)},
+                        data={
+                            "utf8":               "✓",
+                            "authenticity_token": csrf_token,
+                            "token_id":           token_id,
+                            "token_secret":       token_secret,
+                            "content_type":       "1",     # Family Safe
+                            "thumbnail_size":     "350r",  # 350×350 resized (pas square crop)
+                            "comments_enabled":   "0",
+                        },
+                        headers={
+                            "X-Requested-With": "XMLHttpRequest",
+                            "Accept":           "application/json, text/javascript, */*; q=0.01",
+                            "Referer":          "https://imgbox.com/",
+                        },
+                        timeout=60
+                    )
+                if ru.status_code == 200:
+                    try:
+                        data = ru.json()
+                        # Réponse: {"images": [{"original_url": "...", "thumbnail_url": "..."}]}
+                        imgs = data if isinstance(data, list) else (
+                               data.get("images") or data.get("data") or [])
+                        if imgs:
+                            original = (imgs[0].get("original_url")
+                                        or imgs[0].get("url", ""))
+                            urls.append(original)
+                        else:
+                            errors.append(f"{fname}: réponse vide — {data}")
+                            urls.append("")
+                    except Exception as je:
+                        errors.append(f"{fname}: réponse non-JSON ({je}) — {ru.text[:120]}")
+                        urls.append("")
+                else:
+                    errors.append(f"{fname}: HTTP {ru.status_code} — {ru.text[:200]}")
+                    urls.append("")
+
+            gallery_url = f"https://imgbox.com/g/{gallery_id}" if gallery_id else ""
+            result = {"ok": True, "urls": urls, "gallery_url": gallery_url}
+            if errors:
+                result["warnings"] = errors
+            return result
+        except Exception as e:
+            import traceback
+            return {"error": str(e), "trace": traceback.format_exc()}
+
+    def prez_get_last_session(self):
+        """Récupère tout depuis le dernier MKV dans FILMS/ comme source principale.
+        Plus d'historique — on lit directement le fichier et ses métadonnées."""
+        import re as _re
+        result = {}
+
+        # ── 1. Dernier MKV dans FILMS/ ─────────────────────────────────────
+        films_dir = BASE_DIR / "FILMS"
+        mkv_path  = None
+        if films_dir.exists():
+            mkvs = sorted(films_dir.glob("**/*.mkv"),
+                          key=lambda f: f.stat().st_mtime, reverse=True)
+            if mkvs:
+                mkv_file = mkvs[0]
+                mkv_path = str(mkv_file)
+                result["mkv_path"] = mkv_path
+                result["filename"] = mkv_file.name
+                result["filesize"] = self._fmt_size(mkv_file.stat().st_size)
+
+                # ── Extraire titre/année/source depuis le nom du fichier ──
+                stem = mkv_file.stem  # sans .mkv
+                # ex: Clown.In.Cornfield.2025.MULTi.VFF.1080p.BluRay.REMUX.DTS-HD.MA.5.1.AVC-REBiRTH
+                _STOP = re.compile(
+                    r"^(\d{4})$|^(MULTi|FRENCH|VOSTFR|VFF|VFQ|VFI|VF2|VO|"
+                    r"1080p|2160p|720p|480p|4K|BluRay|BDRip|WEB-DL|WEBRip|"
+                    r"REMUX|HDR|DV|HEVC|AVC|x264|x265|H264|H265|"
+                    r"DTS|TrueHD|Atmos|DD|EAC3|AAC|FLAC|MA|HD)$",
+                    re.IGNORECASE
+                )
+                parts = stem.replace("-", ".").split(".")
+                title_parts, year = [], ""
+                for p in parts:
+                    if _STOP.match(p):
+                        if re.match(r"^\d{4}$", p):
+                            year = p
+                        break
+                    title_parts.append(p)
+                raw_title = " ".join(title_parts)
+
+                # Source depuis le nom (BluRay REMUX, WEB-DL, etc.)
+                src_map = [
+                    (r"BluRay.*REMUX", "Blu-ray REMUX"),
+                    (r"BluRay|BDRip",  "Blu-ray"),
+                    (r"WEB-DL",        "WEB-DL"),
+                    (r"WEBRip",        "WEBRip"),
+                    (r"HDTV",          "HDTV"),
+                ]
+                source = ""
+                for pat, label in src_map:
+                    if re.search(pat, stem, re.IGNORECASE):
+                        source = label; break
+
+                result["raw_title"] = raw_title
+                result["year"]      = year
+                result["source"]    = source
+
+                # ── Recherche TMDB depuis le titre extrait ─────────────────
+                api_key  = os.getenv("API_KEY", "")
+                language = os.getenv("LANGUAGE", "fr-FR")
+                if api_key and raw_title:
+                    try:
+                        r_tmdb = requests.get(
+                            "https://api.themoviedb.org/3/search/multi",
+                            params={"api_key": api_key, "query": raw_title,
+                                    "language": language,
+                                    "year": year if year else None},
+                            timeout=8
+                        )
+                        hits = r_tmdb.json().get("results", [])
+
+                        # ── Fallback : titre embarqué dans le conteneur MKV ─
+                        if not hits and mkv_path:
+                            try:
+                                import subprocess as _sp_mi
+                                mi_bin = None
+                                for _p in ("/opt/homebrew/bin/mediainfo",
+                                           "/usr/local/bin/mediainfo",
+                                           "/usr/bin/mediainfo"):
+                                    if Path(_p).exists():
+                                        mi_bin = _p; break
+                                if mi_bin:
+                                    mkv_embed_title = _sp_mi.check_output(
+                                        [mi_bin, "--Inform=General;%Title%", mkv_path],
+                                        timeout=10
+                                    ).decode().strip()
+                                    if mkv_embed_title:
+                                        r_tmdb2 = requests.get(
+                                            "https://api.themoviedb.org/3/search/multi",
+                                            params={"api_key": api_key,
+                                                    "query": mkv_embed_title,
+                                                    "language": language},
+                                            timeout=8
+                                        )
+                                        hits = r_tmdb2.json().get("results", [])
+                            except Exception:
+                                pass
+
+                        if hits:
+                            hit = hits[0]
+                            mt  = hit.get("media_type", "movie")
+                            tid = hit.get("id")
+                            result["tmdb_id"]    = str(tid)
+                            result["media_type"] = mt
+                            result["title"] = hit.get("title") or hit.get("name") or raw_title
+                            result["poster_url"] = (
+                                f"https://image.tmdb.org/t/p/w500{hit['poster_path']}"
+                                if hit.get("poster_path") else ""
+                            )
+                    except Exception:
+                        result["title"] = raw_title
+                else:
+                    result["title"] = raw_title
+
+        # ── 2. MediaInfo sur le MKV ─────────────────────────────────────────
+        if mkv_path:
+            try:
+                if str(BASE_DIR / "remux_tool") not in sys.path:
+                    sys.path.insert(0, str(BASE_DIR / "remux_tool"))
+                from mediainfo_parse import parse_mediainfo
+                video, audio_tracks, sub_tracks = parse_mediainfo(mkv_path)
+
+                if video:
+                    codec  = video.get("Format", "")
+                    height = video.get("Height", "")
+                    res    = f"{height}p" if height else ""
+                    vbr    = video.get("BitRate") or video.get("BitRate_Nominal", "")
+                    try:
+                        vbr_kbps = f"{int(int(vbr) / 1000):,} kb/s".replace(",", " ")
+                    except Exception:
+                        vbr_kbps = ""
+                    result["video"] = {"codec": codec, "res": res, "bitrate": vbr_kbps}
+
+                # ── Mapping code langue → nom français ───────────────────
+                _LANG_FR_PREZ = {
+                    "fr": "Français", "fra": "Français", "fre": "Français",
+                    "en": "Anglais",  "eng": "Anglais",
+                    "ja": "Japonais", "jpn": "Japonais",
+                    "es": "Espagnol", "spa": "Espagnol",
+                    "de": "Allemand", "ger": "Allemand", "deu": "Allemand",
+                    "it": "Italien",  "ita": "Italien",
+                    "pt": "Portugais","por": "Portugais",
+                    "zh": "Chinois",  "chi": "Chinois",  "zho": "Chinois",
+                    "ko": "Coréen",   "kor": "Coréen",
+                    "ar": "Arabe",    "ara": "Arabe",
+                    "ru": "Russe",    "rus": "Russe",
+                    "nl": "Néerlandais", "nld": "Néerlandais",
+                    "pl": "Polonais", "pol": "Polonais",
+                    "da": "Danois",   "dan": "Danois",
+                    "sv": "Suédois",  "swe": "Suédois",
+                    "no": "Norvégien","nor": "Norvégien",
+                    "fi": "Finnois",  "fin": "Finnois",
+                    "tr": "Turc",     "tur": "Turc",
+                }
+                _TITLE_LANG_KW = {
+                    "japonais": "Japonais", "japanese": "Japonais",
+                    "anglais":  "Anglais",  "english":  "Anglais",
+                    "français": "Français", "francais": "Français", "french": "Français",
+                    "espagnol": "Espagnol", "spanish":  "Espagnol",
+                    "allemand": "Allemand", "german":   "Allemand",
+                    "italien":  "Italien",  "italian":  "Italien",
+                    "chinois":  "Chinois",  "chinese":  "Chinois",
+                    "coreen":   "Coréen",   "korean":   "Coréen",
+                    "russe":    "Russe",    "russian":  "Russe",
+                    "arabe":    "Arabe",    "arabic":   "Arabe",
+                    "turc":     "Turc",     "turkish":  "Turc",
+                }
+
+                audio_out = []
+                for t in audio_tracks:
+                    lang    = t.get("Language", "")
+                    title_t = (t.get("Title") or "").lower()
+                    # Convertir le code langue en nom français
+                    lang_display = _LANG_FR_PREZ.get(lang, "")
+                    if not lang_display:
+                        # Fallback : détecter depuis le titre de la piste
+                        for kw, name in _TITLE_LANG_KW.items():
+                            if kw in title_t:
+                                lang_display = name
+                                break
+                    if not lang_display:
+                        lang_display = lang or ""
+                    codec_a = t.get("Format_Commercial_IfAny") or t.get("Format", "")
+                    ch_raw  = t.get("ChannelLayout") or t.get("Channels", "")
+                    ch      = self._fmt_channels(ch_raw)
+                    br_raw  = t.get("BitRate") or t.get("BitRate_Nominal", "")
+                    try:
+                        br_kbps = f"{int(int(br_raw) / 1000):,} kb/s".replace(",", " ")
+                    except Exception:
+                        br_kbps = ""
+                    audio_out.append({"lang": lang_display, "codec": codec_a,
+                                      "channels": ch, "bitrate": br_kbps})
+                result["audio"] = audio_out
+
+                subs_out = []
+                seen_subs = set()
+                for t in sub_tracks:
+                    lang_code = t.get("Language", "")
+                    sub_type  = t.get("SubType", "FULL")
+                    if sub_type == "_AUTO_":
+                        sub_type = "FULL"
+                    title_t = (t.get("Title") or "").strip()
+                    # Extraire la partie langue depuis le titre (ex: "FR FORCED" → "FR")
+                    if title_t:
+                        display = title_t.upper()
+                        for kw in ["FORCED+SDH", "FORCED", "FULL", "SDH",
+                                   "COMMENTARY", "COMMENT", "COMPLET"]:
+                            display = display.replace(kw, "").strip()
+                        lang_display = display or _LANG_FR_PREZ.get(
+                            lang_code, lang_code.upper() if lang_code else "")
+                    else:
+                        lang_display = _LANG_FR_PREZ.get(
+                            lang_code, lang_code.upper() if lang_code else "")
+                    key = f"{lang_display}_{sub_type}"
+                    if key not in seen_subs:
+                        seen_subs.add(key)
+                        subs_out.append({"lang": lang_display, "type": sub_type})
+                result["subs"] = subs_out
+
+                # Débit global
+                try:
+                    import subprocess as _sp
+                    mi_bin = None
+                    for p in ("/opt/homebrew/bin/mediainfo",
+                              "/usr/local/bin/mediainfo", "/usr/bin/mediainfo"):
+                        if Path(p).exists():
+                            mi_bin = p; break
+                    if mi_bin:
+                        out = _sp.check_output(
+                            [mi_bin, "--Inform=General;%OverallBitRate%", mkv_path],
+                            timeout=10).decode().strip()
+                        if out.isdigit():
+                            result["total_bitrate"] = (
+                                f"{int(int(out)/1000):,} kb/s".replace(",", " "))
+                except Exception:
+                    pass
+            except Exception as e:
+                result["mediainfo_error"] = str(e)
+
+        # ── 3. Screenshots dans PICS/ ────────────────────────────────────────
+        # Cherche par titre extrait du MKV — plusieurs stratégies
+        title_for_pics = result.get("title") or result.get("raw_title", "")
+        pics = self.prez_list_screenshots(title_for_pics)
+        result["screenshots"] = pics.get("files", [])
+        result["screenshots_folder"] = pics.get("folder", "")
+
+        if not result["screenshots"]:
+            result["screenshots_warning"] = (
+                f"Aucun screenshot trouvé dans PICS/ pour « {title_for_pics} »"
+            )
+
+        return result
+
+    @staticmethod
+    def _fmt_size(size_bytes: int) -> str:
+        for unit in ("o", "Kio", "Mio", "Gio", "Tio"):
+            if size_bytes < 1024 or unit == "Tio":
+                return f"{size_bytes:.2f} {unit}" if unit != "o" else f"{size_bytes} o"
+            size_bytes /= 1024
+
+    @staticmethod
+    def _fmt_channels(ch) -> str:
+        """Convertit layout MediaInfo → '5.1', '7.1', '2.0', etc."""
+        if not ch:
+            return ""
+        ch = str(ch).strip()
+        try:
+            n = int(ch)
+            mapping = {1: "1.0", 2: "2.0", 6: "5.1", 8: "7.1"}
+            return mapping.get(n, ch)
+        except ValueError:
+            pass
+        # Layout textuel ex: "L R C LFE Ls Rs"
+        parts  = ch.upper().split()
+        lfe    = 1 if "LFE" in parts else 0
+        mains  = len([p for p in parts if p != "LFE"])
+        if mains > 0:
+            return f"{mains}.{lfe}"
+        return ch
+
 
 if __name__ == "__main__":
     api = API()
