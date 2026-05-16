@@ -258,7 +258,7 @@ def generate_template(file_path, tmdb_link_override=None):
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 █                                                                               █
 █ ■ LANGUAGE........: {subtitle_language.ljust(20)}■ TYPE............: {subtitle_type.ljust(18)}█
-█{subtitle_format.center(79)}█
+█ {subtitle_format.ljust(78)}█
 █                                                                               █
 """
             subtitle_blocks.append(subtitle_block)
