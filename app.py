@@ -4762,15 +4762,14 @@ class API:
 
             urls, errors = [], []
             for fp in filepaths:
-                fname, fdata, mime = _prepare_file(fp)
                 uploaded = False
                 last_err = ""
                 for tsize in THUMB_SIZES:
                     try:
+                        # Re-préparer le fichier à chaque tentative (évite le handle épuisé)
+                        fname, fdata, mime = _prepare_file(fp)
                         if hasattr(fdata, "seek"):
                             fdata.seek(0)
-                        else:
-                            _, fdata, mime = _prepare_file(fp)
                         ru = sess.post(
                             "https://imgbox.com/upload/process",
                             files={"files[]": (fname, fdata, mime)},
@@ -4788,6 +4787,7 @@ class API:
                                 "X-Requested-With": "XMLHttpRequest",
                                 "Accept":           "application/json, text/javascript, */*; q=0.01",
                                 "Referer":          "https://imgbox.com/",
+                                "X-CSRF-Token":     csrf_token,
                             },
                             timeout=90
                         )
