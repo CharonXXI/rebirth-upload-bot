@@ -4831,15 +4831,19 @@ class API:
             gallery_id   = tok.get("gallery_id", "")
 
             # ── 3. POST /upload/process ───────────────────────────────────────
-            # thumbnail_size : "350c" (crop carré, valeur sûre connue d'imgbox)
-            # Si HTTP 500, on réessaie avec "300r" puis "500r"
-            THUMB_SIZES = ["350c", "300r", "500r"]
+            # Combinaisons testées : (thumbnail_size, content_type)
+            # content_type: "1" (ancien) ou "safe" (nouveau) selon version imgbox
+            COMBOS = [
+                ("350c", "1"), ("350c", "safe"),
+                ("300r", "1"), ("300r", "safe"),
+                ("500r", "1"), ("500r", "safe"),
+            ]
 
             urls, errors = [], []
             for fp in filepaths:
                 uploaded = False
                 last_err = ""
-                for tsize in THUMB_SIZES:
+                for tsize, ctype in COMBOS:
                     try:
                         # Re-préparer le fichier à chaque tentative (évite le handle épuisé)
                         fname, fdata, mime = _prepare_file(fp)
@@ -4854,7 +4858,7 @@ class API:
                                 "token_id":           token_id,
                                 "token_secret":       token_secret,
                                 "gallery_id":         gallery_id,
-                                "content_type":       "1",
+                                "content_type":       ctype,
                                 "thumbnail_size":     tsize,
                                 "comments_enabled":   "0",
                             },
@@ -4867,8 +4871,8 @@ class API:
                             timeout=90
                         )
                         if ru.status_code == 500:
-                            last_err = f"HTTP 500 (tsize={tsize}) — {ru.text[:200]}"
-                            continue   # essaie le thumbnail_size suivant
+                            last_err = f"HTTP 500 (tsize={tsize}, ctype={ctype}) — {ru.text[:200]}"
+                            continue   # essaie la combinaison suivante
                         if ru.status_code != 200:
                             last_err = f"HTTP {ru.status_code} — {ru.text[:300]}"
                             break
