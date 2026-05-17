@@ -3631,10 +3631,11 @@ function prezGenerate() {
   `;
 
   // ── Bloc vidéo
-  const vidBlock = [vidRes, vidCodec, vidBitrate ? vidBitrate + " kb/s" : ""].filter(Boolean);
+  const _stripKbs = v => v ? v.toString().replace(/\s*kb\/s\s*/gi, '').trim() : '';
+  const vidBlock = [vidRes, vidCodec, vidBitrate ? _stripKbs(vidBitrate) + " kb/s" : ""].filter(Boolean);
   // ── Blocs audio
   const audioBlocks = audioTracks.map(t => {
-    const items = [t.lang, t.codec + (t.channels ? " " + t.channels : ""), t.bitrate ? t.bitrate + " kb/s" : ""].filter(Boolean);
+    const items = [t.lang, t.codec + (t.channels ? " " + t.channels : ""), t.bitrate ? _stripKbs(t.bitrate) + " kb/s" : ""].filter(Boolean);
     return items.map(i => `<div class="prez-spec-item">${h(i)}</div>`).join('');
   }).join('<hr style="border:none;border-top:1px solid #222;margin:6px 0;">');
   // ── Sous-titres
