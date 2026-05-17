@@ -1280,6 +1280,36 @@ html.light body::before {
               ☁ UPLOAD IMGBOX
             </button>
           </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <span id="imgbox-session-indicator" style="font-family:var(--mono);font-size:9px;color:var(--text-dim);">⬤ imgbox : non connecté</span>
+            <button onclick="openImgboxLogin()"
+              style="padding:3px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text-dim);font-family:var(--mono);font-size:8px;letter-spacing:1px;cursor:pointer;transition:all .15s;"
+              onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text-dim)'">
+              🔑 CONNEXION
+            </button>
+          </div>
+
+          <!-- Modal login imgbox -->
+          <div id="imgbox-login-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;">
+            <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:20px;width:280px;font-family:var(--mono);">
+              <div style="color:var(--orange);font-size:11px;letter-spacing:2px;font-weight:700;margin-bottom:14px;">🔑 CONNEXION IMGBOX</div>
+              <input id="imgbox-login-user" type="text" placeholder="Nom d'utilisateur"
+                style="width:100%;box-sizing:border-box;padding:7px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:10px;margin-bottom:8px;"/>
+              <input id="imgbox-login-pass" type="password" placeholder="Mot de passe"
+                style="width:100%;box-sizing:border-box;padding:7px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:10px;margin-bottom:12px;"/>
+              <div style="display:flex;gap:8px;">
+                <button onclick="submitImgboxLogin()"
+                  style="flex:1;padding:7px;background:var(--orange);border:none;border-radius:4px;color:#fff;font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;font-weight:700;">
+                  CONNEXION
+                </button>
+                <button onclick="closeImgboxLogin()"
+                  style="flex:1;padding:7px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;">
+                  ANNULER
+                </button>
+              </div>
+              <div id="imgbox-login-msg" style="margin-top:10px;font-size:9px;color:var(--text-dim);text-align:center;min-height:14px;"></div>
+            </div>
+          </div>
 
           <!-- Générer -->
           <button onclick="prezGenerate()"
@@ -3440,6 +3470,44 @@ function prezRenderScreensList() {
     </div>`;
   }).join('');
 }
+
+// ── imgbox login ─────────────────────────────────────────────────────────────
+function openImgboxLogin() {
+  document.getElementById('imgbox-login-modal').style.display = 'flex';
+  document.getElementById('imgbox-login-msg').textContent = '';
+  document.getElementById('imgbox-login-user').focus();
+}
+function closeImgboxLogin() {
+  document.getElementById('imgbox-login-modal').style.display = 'none';
+  document.getElementById('imgbox-login-pass').value = '';
+}
+async function submitImgboxLogin() {
+  const user = document.getElementById('imgbox-login-user').value.trim();
+  const pass = document.getElementById('imgbox-login-pass').value;
+  const msg  = document.getElementById('imgbox-login-msg');
+  if (!user || !pass) { msg.textContent = '⚠ Identifiants manquants'; msg.style.color = 'var(--orange)'; return; }
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = '⏳ Connexion en cours…';
+  try {
+    const r = await window.pywebview.api.prez_imgbox_login(user, pass);
+    if (r.error) {
+      msg.textContent = '✗ ' + r.error;
+      msg.style.color = '#f55';
+    } else {
+      msg.textContent = '✓ ' + r.message;
+      msg.style.color = '#4f4';
+      document.getElementById('imgbox-session-indicator').textContent = '⬤ imgbox : connecté (' + user + ')';
+      document.getElementById('imgbox-session-indicator').style.color = '#4f4';
+      document.getElementById('imgbox-login-pass').value = '';
+      setTimeout(closeImgboxLogin, 1200);
+    }
+  } catch(e) { msg.textContent = '✗ ' + e; msg.style.color = '#f55'; }
+}
+// Fermer modal sur Entrée
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeImgboxLogin();
+  if (e.key === 'Enter' && document.getElementById('imgbox-login-modal').style.display === 'flex') submitImgboxLogin();
+});
 
 async function prezUploadImgbox() {
   const screens = _prez.screenshots.filter(Boolean);

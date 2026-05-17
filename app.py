@@ -4674,11 +4674,82 @@ class API:
         )
         return {"files": files, "folder": str(folder)}
 
+    def prez_imgbox_login(self, username: str, password: str):
+        """Connecte à imgbox, récupère le cookie _imgbox_session et le sauvegarde dans V1.env.
+        Le mot de passe n'est JAMAIS stocké.
+        """
+        if not username or not password:
+            return {"error": "Identifiants manquants"}
+        try:
+            sess = requests.Session()
+            sess.headers.update({
+                "User-Agent":      ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                    "Chrome/124.0.0.0 Safari/537.36"),
+                "Accept-Language": "en-US,en;q=0.9",
+                "Origin":          "https://imgbox.com",
+            })
+
+            # ── 1. GET imgbox.com → CSRF token ────────────────────────────────
+            r = sess.get("https://imgbox.com", timeout=15)
+            if r.status_code != 200:
+                return {"error": f"imgbox inaccessible: HTTP {r.status_code}"}
+
+            csrf_match = re.search(
+                r'<input[^>]+name=["\']authenticity_token["\'][^>]+value=["\']([^"\']+)["\']',
+                r.text
+            ) or re.search(
+                r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']',
+                r.text
+            )
+            if not csrf_match:
+                return {"error": "CSRF token imgbox introuvable — site modifié ?"}
+            csrf_token = csrf_match.group(1)
+
+            # ── 2. POST /sessions (login) ──────────────────────────────────────
+            rl = sess.post(
+                "https://imgbox.com/sessions",
+                data={
+                    "utf8":               "✓",
+                    "authenticity_token": csrf_token,
+                    "user[login]":        username,
+                    "user[password]":     password,
+                    "user[remember_me]":  "1",
+                },
+                headers={
+                    "Referer":       "https://imgbox.com/",
+                    "Accept":        "text/html,application/xhtml+xml,*/*",
+                    "X-CSRF-Token":  csrf_token,
+                },
+                allow_redirects=True,
+                timeout=15
+            )
+
+            # Vérifier qu'on est connecté (cookie présent + pas de message d'erreur)
+            session_cookie = sess.cookies.get("_imgbox_session")
+            if not session_cookie:
+                return {"error": "Login échoué — cookie _imgbox_session absent. Vérifie tes identifiants."}
+
+            # Vérifier qu'on n'est pas redirigé vers une page d'erreur
+            if "Invalid login" in rl.text or "incorrect" in rl.text.lower():
+                return {"error": "Login échoué — identifiants incorrects"}
+
+            # ── 3. Sauvegarder le cookie dans V1.env (jamais le mot de passe) ──
+            set_key(ENV_FILE, "IMGBOX_SESSION", session_cookie)
+            os.environ["IMGBOX_SESSION"] = session_cookie
+
+            return {"ok": True, "message": f"Connecté à imgbox en tant que {username}"}
+
+        except Exception as e:
+            import traceback
+            return {"error": str(e), "trace": traceback.format_exc()}
+
     def prez_upload_imgbox(self, filepaths: list):
         """Upload vers imgbox.
         - Compresse automatiquement les images > 8 Mo en JPEG (limite imgbox = 10 Mo)
         - Thumbnail size : essaie "350c" (cropped, valeur sûre) puis "300r" en fallback
         - Gallery token réutilisé pour toutes les images du même batch
+        - Utilise le cookie _imgbox_session depuis V1.env si disponible
         """
         if not filepaths:
             return {"error": "Aucun fichier fourni"}
@@ -4712,6 +4783,10 @@ class API:
                 "Accept-Language": "en-US,en;q=0.9",
                 "Origin":          "https://imgbox.com",
             })
+            # Injecter le cookie de session si disponible
+            imgbox_session = os.environ.get("IMGBOX_SESSION", "").strip()
+            if imgbox_session:
+                sess.cookies.set("_imgbox_session", imgbox_session, domain="imgbox.com")
 
             # ── 1. GET imgbox.com → CSRF token ────────────────────────────────
             r = sess.get("https://imgbox.com", timeout=15)
