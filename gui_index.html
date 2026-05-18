@@ -1336,6 +1336,7 @@ html.light body::before {
                 onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">↺ REFRESH</button>
             </div>
           </div>
+          <div id="prez-imgbox-errors" style="display:none;flex-direction:column;gap:6px;padding:10px 14px;background:#1a1a2e;overflow-y:auto;max-height:260px;flex-shrink:0;border-bottom:1px solid var(--border);"></div>
           <iframe id="prez-preview" style="flex:1;border:none;background:#1a1a2e;"
             srcdoc="<html><body style='background:#1a1a2e;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:monospace;color:#444;letter-spacing:2px;font-size:12px;'>APERÇU VIDE — GÉNÈRE UNE PREZ</body></html>">
           </iframe>
@@ -3534,10 +3535,18 @@ async function prezUploadImgbox() {
   btn.textContent = '⏳ UPLOAD…';
   btn.disabled = true;
   prezStatus("⏳ Upload imgbox — " + screens.length + " image(s)…");
+  const errBox = document.getElementById('prez-imgbox-errors');
+  errBox.style.display = 'none';
+  errBox.innerHTML = '';
   try {
     const r = await window.pywebview.api.prez_upload_imgbox(screens);
-    if (r.error) { prezStatus("✗ " + r.error); showToast(r.error, "error"); }
-    else {
+    if (r.error) {
+      prezStatus("✗ " + r.error);
+      showToast(r.error, "error");
+      errBox.innerHTML = `<div style="font-family:var(--mono);font-size:9px;color:#f55;letter-spacing:1px;">ERREUR IMGBOX</div>
+        <div style="font-family:var(--mono);font-size:9px;color:#f88;white-space:pre-wrap;word-break:break-all;">${r.error}</div>`;
+      errBox.style.display = 'flex';
+    } else {
       _prez.imgboxUrls = r.urls || [];
       prezRenderScreensList();
       const ok = _prez.imgboxUrls.filter(u => u).length;
@@ -3546,10 +3555,14 @@ async function prezUploadImgbox() {
         showToast(`${ok} image(s) uploadée(s) sur imgbox`, "success");
       } else {
         prezStatus(`✗ 0 image uploadée`);
-        showToast("0 image uploadée — voir détails ci-dessous", "error");
       }
       if (r.warnings && r.warnings.length) {
-        r.warnings.forEach(w => showToast("⚠ " + w, "warn"));
+        const rows = r.warnings.map(w =>
+          `<div style="font-family:var(--mono);font-size:9px;color:#fa0;background:rgba(255,160,0,.07);border:1px solid rgba(255,160,0,.2);border-radius:4px;padding:6px 8px;white-space:pre-wrap;word-break:break-all;">⚠ ${w}</div>`
+        ).join('');
+        errBox.innerHTML = `<div style="font-family:var(--mono);font-size:9px;color:#fa0;letter-spacing:1px;margin-bottom:2px;">DÉTAILS IMGBOX — ${r.warnings.length} erreur(s)</div>${rows}`;
+        errBox.style.display = 'flex';
+        if (ok === 0) showToast("0 image uploadée — voir détails", "error");
       }
     }
   } catch(e) { prezStatus("✗ " + e); }
