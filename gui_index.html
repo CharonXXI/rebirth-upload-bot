@@ -476,7 +476,7 @@ html.light body::before {
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
       </div>
-      <div class="nav-item" data-page="prez" onclick="showPage('prez', this)">
+      <div class="nav-item" data-page="prez" onclick="showPage('prez', this); prezCheckImgboxSession()">
         <span class="nav-icon">🎨</span> Prez <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
       </div>
     </nav>
@@ -3472,6 +3472,20 @@ function prezRenderScreensList() {
 }
 
 // ── imgbox login ─────────────────────────────────────────────────────────────
+async function prezCheckImgboxSession() {
+  try {
+    const r = await window.pywebview.api.prez_imgbox_status();
+    const ind = document.getElementById('imgbox-session-indicator');
+    if (r && r.connected) {
+      ind.textContent = '⬤ imgbox : connecté' + (r.user ? ' (' + r.user + ')' : '');
+      ind.style.color = '#4f4';
+    } else {
+      ind.textContent = '⬤ imgbox : non connecté';
+      ind.style.color = '';
+    }
+  } catch(e) { /* silencieux si API pas dispo */ }
+}
+
 function openImgboxLogin() {
   document.getElementById('imgbox-login-modal').style.display = 'flex';
   document.getElementById('imgbox-login-msg').textContent = '';

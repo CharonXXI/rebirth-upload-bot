@@ -4734,15 +4734,23 @@ class API:
             if "Invalid login" in rl.text or "incorrect" in rl.text.lower():
                 return {"error": "Login échoué — identifiants incorrects"}
 
-            # ── 3. Sauvegarder le cookie dans V1.env (jamais le mot de passe) ──
+            # ── 3. Sauvegarder le cookie + username dans V1.env (jamais le mdp) ──
             set_key(ENV_FILE, "IMGBOX_SESSION", session_cookie)
+            set_key(ENV_FILE, "IMGBOX_USER", username)
             os.environ["IMGBOX_SESSION"] = session_cookie
+            os.environ["IMGBOX_USER"]    = username
 
             return {"ok": True, "message": f"Connecté à imgbox en tant que {username}"}
 
         except Exception as e:
             import traceback
             return {"error": str(e), "trace": traceback.format_exc()}
+
+    def prez_imgbox_status(self):
+        """Retourne le statut de connexion imgbox (cookie présent dans env)."""
+        session = os.environ.get("IMGBOX_SESSION", "").strip()
+        user    = os.environ.get("IMGBOX_USER", "").strip()
+        return {"connected": bool(session), "user": user}
 
     def prez_upload_imgbox(self, filepaths: list):
         """Upload vers imgbox.
