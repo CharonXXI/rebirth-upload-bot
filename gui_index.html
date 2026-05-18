@@ -476,7 +476,7 @@ html.light body::before {
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
       </div>
-      <div class="nav-item" data-page="prez" onclick="showPage('prez', this); prezCheckImgboxSession()">
+      <div class="nav-item" data-page="prez" onclick="showPage('prez', this); prezCheckImgbbKey(); prezCheckImgboxSession()">
         <span class="nav-icon">🎨</span> Prez <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
       </div>
     </nav>
@@ -1274,40 +1274,39 @@ html.light body::before {
               onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)'">
               📂 CHARGER DEPUIS PICS/
             </button>
-            <button id="prez-imgbox-btn" onclick="prezUploadImgbox()"
+            <button id="prez-imgbb-btn" onclick="prezUploadImgbb()"
               style="flex:1;padding:6px;background:var(--orange-dim);border:1px solid rgba(255,107,0,.3);border-radius:4px;color:var(--orange);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;font-weight:700;transition:all .15s;"
               onmouseover="this.style.background='rgba(255,107,0,.25)'" onmouseout="this.style.background='var(--orange-dim)'">
-              ☁ UPLOAD IMGBOX
+              ☁ UPLOAD IMGBB
             </button>
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-            <span id="imgbox-session-indicator" style="font-family:var(--mono);font-size:9px;color:var(--text-dim);">⬤ imgbox : non connecté</span>
-            <button onclick="openImgboxLogin()"
+            <span id="imgbb-key-indicator" style="font-family:var(--mono);font-size:9px;color:var(--text-dim);">⬤ ImgBB : clé non configurée</span>
+            <button onclick="openImgbbKeyModal()"
               style="padding:3px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text-dim);font-family:var(--mono);font-size:8px;letter-spacing:1px;cursor:pointer;transition:all .15s;"
               onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text-dim)'">
-              🔑 CONNEXION
+              🔑 CLÉ API
             </button>
           </div>
 
-          <!-- Modal login imgbox -->
-          <div id="imgbox-login-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;">
-            <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:20px;width:280px;font-family:var(--mono);">
-              <div style="color:var(--orange);font-size:11px;letter-spacing:2px;font-weight:700;margin-bottom:14px;">🔑 CONNEXION IMGBOX</div>
-              <input id="imgbox-login-user" type="text" placeholder="Nom d'utilisateur"
-                style="width:100%;box-sizing:border-box;padding:7px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:10px;margin-bottom:8px;"/>
-              <input id="imgbox-login-pass" type="password" placeholder="Mot de passe"
+          <!-- Modal clé API ImgBB -->
+          <div id="imgbb-key-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;">
+            <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:20px;width:320px;font-family:var(--mono);">
+              <div style="color:var(--orange);font-size:11px;letter-spacing:2px;font-weight:700;margin-bottom:6px;">🔑 CLÉ API IMGBB</div>
+              <div style="font-size:9px;color:var(--text-dim);margin-bottom:12px;">Créer un compte sur <b style="color:var(--text)">imgbb.com</b> → <b style="color:var(--text)">api.imgbb.com</b> pour obtenir ta clé gratuite.</div>
+              <input id="imgbb-api-key-input" type="text" placeholder="Colle ta clé API ici"
                 style="width:100%;box-sizing:border-box;padding:7px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:10px;margin-bottom:12px;"/>
               <div style="display:flex;gap:8px;">
-                <button onclick="submitImgboxLogin()"
+                <button onclick="submitImgbbKey()"
                   style="flex:1;padding:7px;background:var(--orange);border:none;border-radius:4px;color:#fff;font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;font-weight:700;">
-                  CONNEXION
+                  SAUVEGARDER
                 </button>
-                <button onclick="closeImgboxLogin()"
+                <button onclick="closeImgbbKeyModal()"
                   style="flex:1;padding:7px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;">
                   ANNULER
                 </button>
               </div>
-              <div id="imgbox-login-msg" style="margin-top:10px;font-size:9px;color:var(--text-dim);text-align:center;min-height:14px;"></div>
+              <div id="imgbb-key-msg" style="margin-top:10px;font-size:9px;color:var(--text-dim);text-align:center;min-height:14px;"></div>
             </div>
           </div>
 
@@ -3472,7 +3471,89 @@ function prezRenderScreensList() {
   }).join('');
 }
 
-// ── imgbox login ─────────────────────────────────────────────────────────────
+// ── ImgBB ─────────────────────────────────────────────────────────────────────
+function openImgbbKeyModal() {
+  document.getElementById('imgbb-key-modal').style.display = 'flex';
+  document.getElementById('imgbb-key-msg').textContent = '';
+  document.getElementById('imgbb-api-key-input').focus();
+}
+function closeImgbbKeyModal() {
+  document.getElementById('imgbb-key-modal').style.display = 'none';
+}
+async function submitImgbbKey() {
+  const key = document.getElementById('imgbb-api-key-input').value.trim();
+  const msg = document.getElementById('imgbb-key-msg');
+  if (!key) { msg.textContent = '⚠ Clé vide'; msg.style.color = 'var(--orange)'; return; }
+  msg.textContent = '⏳ Sauvegarde…'; msg.style.color = 'var(--text-dim)';
+  try {
+    const r = await window.pywebview.api.prez_set_imgbb_key(key);
+    if (r.error) { msg.textContent = '✗ ' + r.error; msg.style.color = '#f55'; }
+    else {
+      msg.textContent = '✓ Clé sauvegardée'; msg.style.color = '#4f4';
+      document.getElementById('imgbb-key-indicator').textContent = '⬤ ImgBB : clé configurée ✓';
+      document.getElementById('imgbb-key-indicator').style.color = '#4f4';
+      setTimeout(closeImgbbKeyModal, 1000);
+    }
+  } catch(e) { msg.textContent = '✗ ' + e; msg.style.color = '#f55'; }
+}
+async function prezCheckImgbbKey() {
+  try {
+    const r = await window.pywebview.api.prez_imgbb_status();
+    const ind = document.getElementById('imgbb-key-indicator');
+    if (r && r.configured) {
+      ind.textContent = '⬤ ImgBB : clé configurée ✓';
+      ind.style.color = '#4f4';
+    } else {
+      ind.textContent = '⬤ ImgBB : clé non configurée';
+      ind.style.color = '';
+    }
+  } catch(e) {}
+}
+async function prezUploadImgbb() {
+  const screens = _prez.screenshots.filter(Boolean);
+  if (!screens.length) {
+    showToast("Aucun screenshot chargé", "error");
+    prezStatus("⚠ Aucun screenshot — utilise 📂 CHARGER DEPUIS PICS/ d'abord");
+    return;
+  }
+  const btn = document.getElementById('prez-imgbb-btn');
+  btn.textContent = '⏳ UPLOAD…'; btn.disabled = true;
+  prezStatus("⏳ Upload ImgBB — " + screens.length + " image(s)…");
+  try {
+    const errBox = document.getElementById('prez-imgbox-errors');
+    if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
+
+    const showErrors = (lines, color) => {
+      if (!errBox) return;
+      const rows = lines.map(w =>
+        `<div style="font-family:var(--mono);font-size:9px;color:${color};background:rgba(255,100,0,.07);border:1px solid rgba(255,100,0,.2);border-radius:4px;padding:6px 8px;white-space:pre-wrap;word-break:break-all;">${w}</div>`
+      ).join('');
+      errBox.innerHTML = `<div style="font-family:var(--mono);font-size:9px;color:${color};letter-spacing:1px;margin-bottom:4px;">DÉTAILS IMGBB — ${lines.length} erreur(s)</div>${rows}`;
+      errBox.style.display = 'flex';
+    };
+
+    const r = await window.pywebview.api.prez_upload_imgbb(screens);
+    if (r.error) {
+      prezStatus("✗ " + r.error); showToast(r.error, "error");
+      showErrors(["✗ " + r.error], "#f55");
+    } else {
+      _prez.imgboxUrls = r.urls || [];
+      prezRenderScreensList();
+      const ok = _prez.imgboxUrls.filter(u => u).length;
+      if (ok > 0) {
+        prezStatus(`✓ ${ok}/${screens.length} images uploadées sur ImgBB`);
+        showToast(`${ok} image(s) uploadée(s) sur ImgBB`, "success");
+      } else {
+        prezStatus(`✗ 0 image uploadée`);
+        showToast("0 image uploadée — voir détails", "error");
+      }
+      if (r.warnings && r.warnings.length) showErrors(r.warnings.map(w => "⚠ " + w), "#fa0");
+    }
+  } catch(e) { prezStatus("✗ " + e); showToast("Erreur : " + e, "error"); }
+  finally { btn.textContent = '☁ UPLOAD IMGBB'; btn.disabled = false; }
+}
+
+// ── imgbox login (conservé) ───────────────────────────────────────────────────
 async function prezCheckImgboxSession() {
   try {
     const r = await window.pywebview.api.prez_imgbox_status();

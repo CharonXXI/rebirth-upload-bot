@@ -4920,6 +4920,88 @@ class API:
             import traceback
             return {"error": str(e), "trace": traceback.format_exc()}
 
+    def prez_upload_imgbb(self, filepaths: list):
+        """Upload vers ImgBB (api.imgbb.com).
+        - Clé API lue depuis V1.env : IMGBB_API_KEY
+        - Resize automatique à 1920px max (paramètre width)
+        - Retourne les URLs directes des images
+        """
+        if not filepaths:
+            return {"error": "Aucun fichier fourni"}
+
+        api_key = os.environ.get("IMGBB_API_KEY", "").strip()
+        if not api_key:
+            return {"error": "IMGBB_API_KEY manquant — configure ta clé dans V1.env ou via CONFIG"}
+
+        import io as _io, base64
+        try:
+            from PIL import Image as _PILImage
+            _pil_ok = True
+        except ImportError:
+            _pil_ok = False
+
+        def _prepare_b64(fp):
+            """Retourne (nom, base64_str). Resize à 1920px si PIL dispo."""
+            fname = Path(fp).name
+            if _pil_ok:
+                img = _PILImage.open(fp).convert("RGB")
+                # Resize si plus large que 1920px
+                if img.width > 1920:
+                    ratio = 1920 / img.width
+                    img = img.resize((1920, int(img.height * ratio)), _PILImage.LANCZOS)
+                buf = _io.BytesIO()
+                img.save(buf, format="JPEG", quality=90, optimize=True)
+                buf.seek(0)
+                return Path(fp).stem + ".jpg", base64.b64encode(buf.read()).decode()
+            else:
+                with open(fp, "rb") as f:
+                    return fname, base64.b64encode(f.read()).decode()
+
+        urls, errors = [], []
+        for fp in filepaths:
+            try:
+                fname, b64data = _prepare_b64(fp)
+                r = requests.post(
+                    "https://api.imgbb.com/1/upload",
+                    params={"key": api_key},
+                    data={"image": b64data, "name": fname},
+                    timeout=60
+                )
+                if r.status_code != 200:
+                    errors.append(f"{fname}: HTTP {r.status_code} — {r.text[:200]}")
+                    urls.append("")
+                    continue
+                data = r.json()
+                if data.get("success"):
+                    url = (data.get("data", {}).get("url")
+                           or data.get("data", {}).get("display_url", ""))
+                    urls.append(url)
+                else:
+                    errors.append(f"{fname}: {data.get('error', {}).get('message', str(data)[:200])}")
+                    urls.append("")
+            except Exception as ex:
+                errors.append(f"{Path(fp).name}: {ex}")
+                urls.append("")
+
+        result = {"ok": True, "urls": urls}
+        if errors:
+            result["warnings"] = errors
+        return result
+
+    def prez_set_imgbb_key(self, api_key: str):
+        """Sauvegarde la clé API ImgBB dans V1.env."""
+        if not api_key or not api_key.strip():
+            return {"error": "Clé vide"}
+        api_key = api_key.strip()
+        set_key(ENV_FILE, "IMGBB_API_KEY", api_key)
+        os.environ["IMGBB_API_KEY"] = api_key
+        return {"ok": True}
+
+    def prez_imgbb_status(self):
+        """Retourne si IMGBB_API_KEY est configurée."""
+        key = os.environ.get("IMGBB_API_KEY", "").strip()
+        return {"configured": bool(key)}
+
     def prez_get_last_session(self):
         """Récupère tout depuis le dernier MKV dans FILMS/ comme source principale.
         Plus d'historique — on lit directement le fichier et ses métadonnées."""
