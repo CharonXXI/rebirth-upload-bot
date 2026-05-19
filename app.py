@@ -4941,14 +4941,11 @@ class API:
             _pil_ok = False
 
         def _prepare_b64(fp):
-            """Retourne (nom, base64_str). Resize à 1920px si PIL dispo."""
+            """Retourne (nom, base64_str). Resize à 350x197 (thumbnail 16:9)."""
             fname = Path(fp).name
             if _pil_ok:
                 img = _PILImage.open(fp).convert("RGB")
-                # Resize si plus large que 1920px
-                if img.width > 1920:
-                    ratio = 1920 / img.width
-                    img = img.resize((1920, int(img.height * ratio)), _PILImage.LANCZOS)
+                img = img.resize((350, 197), _PILImage.LANCZOS)
                 buf = _io.BytesIO()
                 img.save(buf, format="JPEG", quality=90, optimize=True)
                 buf.seek(0)
