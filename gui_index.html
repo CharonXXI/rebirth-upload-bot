@@ -3820,7 +3820,7 @@ function prezGenerate() {
   const genresTags = genres.map(g => `<span class="prez-tag">${h(g)}</span>`).join('');
   const dirTags    = directors.map(d => `<span class="prez-tag">${h(d)}</span>`).join('');
   // ── Source vidéo label
-  const vidLabel   = [vidSource, vidRes].filter(Boolean).join(' · ');
+  const vidLabel   = vidSource || "";
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
