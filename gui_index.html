@@ -1268,6 +1268,13 @@ html.light body::before {
           <!-- Screenshots -->
           <div class="section-label" style="margin-bottom:8px;">SCREENSHOTS</div>
           <div id="prez-screens-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;font-family:var(--mono);font-size:10px;color:var(--text-dim);"></div>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <button id="prez-extract-btn" onclick="prezExtractScreenshots()"
+              style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;transition:all .15s;"
+              onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text-dim)'">
+              📸 4 SCREENS (FILMS/)
+            </button>
+          </div>
           <div style="display:flex;gap:6px;margin-bottom:14px;">
             <button onclick="prezLoadScreenshots()"
               style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;transition:all .15s;"
@@ -3095,7 +3102,7 @@ window._emit = function(event, data) {
   if (event === 'rmx_done')             rmxHandleDone(data);
   if (event === 'rmx_analyzed')         rmxHandleAnalyzed(data);
   if (event === 'rmx_analyze_status')   rmxHandleAnalyzeStatus(data);
-  if (event === 'rmx_screenshots_done') rmxHandleScreenshotsDone(data);
+  if (event === 'rmx_screenshots_done') { rmxHandleScreenshotsDone(data); prezHandleScreenshotsDone(data); }
   if (event === 'rmx_error')            toast((data&&data.msg)||'Erreur Remux', 'error');
   if (event === 'fullbd_status')   fbdOnStatus(data);
   if (event === 'fullbd_progress') fbdOnProgress(data);
@@ -3469,6 +3476,43 @@ function prezRenderScreensList() {
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:10px;">${name}</span>
     </div>`;
   }).join('');
+}
+
+// ── Extraction screenshots depuis FILMS/ pour PREZ ───────────────────────────
+let _prezExtractPending = false;
+async function prezExtractScreenshots() {
+  const btn = document.getElementById('prez-extract-btn');
+  btn.textContent = '⏳ EXTRACTION…'; btn.disabled = true;
+  prezStatus("⏳ Extraction de 4 screenshots depuis FILMS/…");
+  _prezExtractPending = true;
+  try {
+    const r = await window.pywebview.api.rmx_extract_screenshots('', 4);
+    if (!r || !r.ok) {
+      prezStatus("✗ " + (r && r.error || 'Erreur extraction'));
+      showToast(r && r.error || 'Erreur extraction', "error");
+      btn.textContent = '📸 4 SCREENS (FILMS/)'; btn.disabled = false;
+      _prezExtractPending = false;
+    }
+    // sinon on attend l'événement rmx_screenshots_done
+  } catch(e) {
+    prezStatus("✗ " + e);
+    showToast("Erreur : " + e, "error");
+    btn.textContent = '📸 4 SCREENS (FILMS/)'; btn.disabled = false;
+    _prezExtractPending = false;
+  }
+}
+function prezHandleScreenshotsDone(d) {
+  if (!_prezExtractPending) return;
+  _prezExtractPending = false;
+  const btn = document.getElementById('prez-extract-btn');
+  if (btn) { btn.textContent = '📸 4 SCREENS (FILMS/)'; btn.disabled = false; }
+  if (!d || !d.ok) {
+    prezStatus("✗ Extraction échouée : " + (d && d.error || 'Erreur'));
+    return;
+  }
+  prezStatus(`✓ ${d.count} screenshot(s) extraits — chargement…`);
+  // Auto-charger les screenshots dans PREZ
+  setTimeout(() => prezLoadScreenshots(), 500);
 }
 
 // ── ImgBB ─────────────────────────────────────────────────────────────────────
