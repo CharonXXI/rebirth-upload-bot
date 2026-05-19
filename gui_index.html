@@ -3848,6 +3848,12 @@ function prezGenerate() {
     </div>
   </div>
 
+  ${screensHtml ? `<!-- SCREENSHOTS -->
+  <div class="prez-section">
+    <div class="prez-section-title">📸 Screenshots</div>
+    <div class="prez-screens">${screensHtml}</div>
+  </div>` : ''}
+
   <!-- RELEASE INFO -->
   ${(relName || filesize || filecount || totalBr) ? `<div class="prez-section">
     <div class="prez-section-title">📦 Release</div>
@@ -3860,12 +3866,6 @@ function prezGenerate() {
         ${filesize ? `<li><span class="lbl">⚖ TAILLE</span><span class="val">${h(filesize)}</span></li>` : ''}
       </ul>
     </div>
-  </div>` : ''}
-
-  ${screensHtml ? `<!-- SCREENSHOTS -->
-  <div class="prez-section">
-    <div class="prez-section-title">📸 Screenshots</div>
-    <div class="prez-screens">${screensHtml}</div>
   </div>` : ''}
 
   <!-- FOOTER -->
