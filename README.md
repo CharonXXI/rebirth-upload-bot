@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.9.1-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.3-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -41,7 +41,7 @@
 
 | Fonctionnalité | Description |
 |---|---|
-| 📀 **Full BD** | Sauvegarde FULL BLURAY depuis le lecteur optique via MakeMKV (`backup --decrypt`), sortie dans `remux_tool/FULL/` |
+| 📀 **Full BD** | Sauvegarde FULL BLURAY depuis le lecteur optique via MakeMKV (`backup --decrypt`), sortie dans `remux_tool/FULL/` — recherche TMDB intégrée pour auto-remplir le nom du dossier (format 1080p / 2160p) |
 | 🔄 **Remux** | Extraction ISO/BDMV → MKV via MakeMKV + MKVToolNix, sélection des pistes (vidéo/audio/subs), tag VF automatique, nommage REBiRTH |
 | 📄 **NFO** | Génération automatique UTF-8 + CP437 |
 | 🎬 **TMDB** | Recherche avec confirmation et changement d'ID |
@@ -147,6 +147,9 @@ SFTP_PATH_HDT=/home/rtorrent/rtorrent/download/FULL BD
 # ── BD Info ───────────────────────────
 BDINFO_WIN_EXE=/chemin/vers/BDInfo.exe   # requis pour l'onglet BD Info
 # BDINFO_WINE_TIMEOUT=1800               # timeout max en secondes (défaut 30 min)
+
+# ── PREZ ──────────────────────────────
+IMGBB_API_KEY=ta_cle_imgbb               # upload screenshots → imgbb.com/api
 ```
 
 > ⚠️ Ne jamais commiter le fichier `V1.env` — il contient tous tes tokens et mots de passe.
@@ -179,12 +182,14 @@ Insérer le disque Blu-ray dans le lecteur externe
 ⟳ Détecter le lecteur → lecteur détecté avec titre du disque
         │
         ▼
-Renseigner / ajuster le nom du dossier de sortie
+🔍 Rechercher le film (TMDB) → sélectionner dans le dropdown
+  └─ Choisir 1080p ou 2160p → nom du dossier auto-formaté
+  (ou renseigner / ajuster le nom manuellement)
         │
         ▼
 ▶ LANCER LE BACKUP
   └─ [MakeMKV]  makemkvcon backup --decrypt disc:X → remux_tool/FULL/<nom>/
-     Barre de progression + console live + annulation possible
+     Barre de progression globale + console live + annulation possible
         │
         ▼
 Dossier BDMV complet dans remux_tool/FULL/ → prêt pour l'onglet Remux
@@ -277,12 +282,16 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 
 ## ✨ Fonctionnalités
 
-### 📀 Full BD (BETA)
+### 📀 Full BD
 - Sauvegarde FULL BLURAY depuis le lecteur optique, sans passer par MakeMKV manuellement
 - Détection automatique des lecteurs avec le titre du disque (`makemkvcon -r info disc:9999`)
 - Backup complet avec déchiffrement : `makemkvcon backup --decrypt disc:X`
 - Sortie directement dans `remux_tool/FULL/` — enchaînement immédiat avec l'onglet Remux
-- Barre de progression, console MakeMKV live, annulation en cours de backup
+- Barre de progression globale (basée sur `tot`), console MakeMKV live, annulation en cours de backup
+- 🔍 **Recherche TMDB intégrée** : tape le nom du film, sélectionne dans le dropdown (poster + année) → nom du dossier auto-formaté
+- 🔘 **Toggle 1080p / 2160p** :
+  - `1080p` → `Nom.Année.FRA.COMPLETE.BLURAY-REBiRTH`
+  - `2160p` → `Nom.Année.FRA.COMPLETE.UHD.BLURAY-REBiRTH`
 
 ### 🔄 Remux (onglet intégré)
 - Interface complète dans REBiRTH AIO — pas besoin de lancer un outil séparé
@@ -302,6 +311,14 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 - Workflow : Scan Bitrates → View Report → sauvegarder dans `BDINFO/`
 - Bouton **📂 CHARGER RAPPORT BDINFO** : traite le fichier le plus récent
 - **Upload ZIP** : compresse le dossier COMPLETE BLURAY + NFO
+
+### 🎨 PREZ (Présentation release)
+- Génération d'une fiche de présentation HTML complète (aperçu en temps réel)
+- Remplissage automatique : titre TMDB, synopsis, specs vidéo/audio/sous-titres
+- Source affichée sans résolution (nom seul)
+- 📸 **Screenshots** : bouton "4 SCREENS (FILMS/)" → extraction automatique depuis `FILMS/` → `PICS/`
+- ☁️ **Upload ImgBB** : upload des screenshots redimensionnés 350×197 px, clé API persistante
+- Sections ordonnées : TMDB · Spécifications techniques · Screenshots · Release
 
 ### 📄 Type NFO
 - **UTF-8** → `(UTF8).nom.nfo` pour LaCale, C411, Torr9, Nexum
@@ -364,6 +381,28 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.9.3
+- Feat (Full BD) : **recherche TMDB intégrée** dans l'onglet Full BD — barre de recherche avec debounce, dropdown résultats (poster + titre + année), sélection → nom du dossier auto-formaté
+- Feat (Full BD) : **boutons 1080p / 2160p** pour choisir le format du nom de dossier
+  - `1080p` → `Nom.Année.FRA.COMPLETE.BLURAY-REBiRTH`
+  - `2160p` → `Nom.Année.FRA.COMPLETE.UHD.BLURAY-REBiRTH`
+- Fix (Remux) : mapping langues ISO 639-1/639-2 étendu à 20 langues (it, pt, ja, ko, zh, ru, nl, pl, ar, hi, th, sv, no, da, fi, cs, hu, tr, uk, he)
+
+### v2.9.2
+- Fix (NFO) : ligne FORMAT recentrée (`center(79)`) — était passée en `ljust` par erreur
+- Fix (NFO) : ligne vide bordée `█...█` conservée après TMDB quand il n'y a pas de note (plus de saut de ligne non bordé)
+- Fix (PREZ) : suppression du doublon `kb/s` dans l'aperçu HTML (le backend l'incluait déjà)
+- Fix (PREZ) : erreurs upload affichées en persistant dans un div dédié (plus seulement en toast)
+- Fix (PREZ) : crash silencieux `errBox` avant le bloc try corrigé (null-check déplacé à l'intérieur)
+- Fix (PREZ) : SOURCE affiche uniquement le nom de la source, sans la résolution
+- Fix (Full BD) : barre de progression globale — utilise `tot` (global) au lieu de `cur` (par fichier, se remettait à 0)
+- Feat (PREZ) : remplacement de imgbox par **ImgBB** — API fiable, upload base64, clé API persistante dans `V1.env`
+- Feat (PREZ) : upload ImgBB avec **resize automatique 350×197 px** (Pillow LANCZOS) avant envoi
+- Feat (PREZ) : clé API ImgBB configurable depuis l'interface (modal dédié, indicateur de statut)
+- Feat (PREZ) : auto-login imgbox au chargement si session déjà sauvegardée (maintenu en parallèle)
+- Feat (PREZ) : bouton **📸 4 SCREENS (FILMS/)** — extraction automatique depuis `FILMS/` → `PICS/` → chargement auto dans le panneau
+- Feat (PREZ) : section Screenshots déplacée après Spécifications techniques dans la fiche
 
 ### v2.9.1
 - Fix (Seedbox) : `list_seedbox_files` et `list_seedbox_files_hdt` utilisaient `paramiko.Transport` sans timeout → pouvait accrocher indéfiniment. Remplacé par `SSHClient.connect(timeout=8)` — cohérent avec `get_seedbox_space`
@@ -442,7 +481,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH AIO v2.9.1** — macOS & Windows
+**REBiRTH AIO v2.9.3** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

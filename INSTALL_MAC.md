@@ -1,4 +1,4 @@
-# 🍎 Installation macOS — REBiRTH Upload Bot v2.8.3
+# 🍎 Installation macOS — REBiRTH AIO v2.9.3
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 
