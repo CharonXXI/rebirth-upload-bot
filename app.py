@@ -4481,7 +4481,7 @@ class API:
                     if m:
                         cur, tot, mx = map(int, m.groups())
                         if mx > 0:
-                            pct = int(cur * 100 / mx)
+                            pct = int(tot * 100 / mx)   # tot = progression totale (pas cur qui remet à 0)
                             elapsed = max(0.001, _time.time() - start)
                             eta_str = ""
                             if pct > 0:
