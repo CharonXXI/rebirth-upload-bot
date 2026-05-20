@@ -30,6 +30,10 @@
 - [Lancement](#-lancement)
 - [Workflow](#-workflow-complet)
 - [Fonctionnalités](#-fonctionnalités)
+  - [📀 Full BD](#-full-bd)
+  - [🔄 Remux](#-remux-onglet-intégré)
+  - [🎨 PREZ](#-prez-présentation-release)
+  - [💿 BD Info](#-bd-info)
 - [Structure](#-structure)
 - [Changelog](#-changelog)
 
@@ -50,6 +54,7 @@
 | 📁 **FINAL/** | Création automatique avec le bon NFO par tracker (nom de fichier sans tag encodage) |
 | 🌱 **Seedbox** | Upload complet via FTP TLS |
 | 🧲 **Torrent SB** | Création torrent via SSH+mktorrent côté seedbox, chargement automatique dans ruTorrent |
+| 🎨 **PREZ** | Génération de fiche de présentation HTML pour tracker — specs vidéo/audio/subs auto-remplies, screenshots uploadés sur ImgBB (350×197 px), aperçu en temps réel |
 | 💿 **BD Info** | Rapport exact via **BDInfo v0.7.5.6** (Wine/Whisky) — DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
 | 🗂️ **Fichiers SB** | Explorateur de fichiers seedbox — navigation dans les sous-dossiers, suppression via SSH sudo |
 | 🎛️ **Trackers** | Page dédiée pour gérer les announces URL (ABN · TOS · C411 · Torr9 · LaCale · HDT · Nexum) |
@@ -260,6 +265,24 @@ Cocher les trackers → CRÉER TORRENTS SB
         │              → hash unique par tracker (TOS=TheOldSchool, etc.)
         ├─ [SFTP]     Rapatriement du .torrent → sauvegardé dans TORRENTS/
         └─ [ruTorrent] Chargement via addtorrent.php → seeding immédiat
+
+─────────────────────────────────────────────
+Workflow PREZ (Fiche de présentation tracker)
+─────────────────────────────────────────────
+Onglet 🎨 PREZ
+        │
+        ▼
+Charger le .mkv depuis FILMS/ → specs vidéo/audio/subs auto-remplies
+        │
+        ▼
+📸 4 SCREENS (FILMS/) → extraction automatique → aperçu des captures
+        │
+        ▼
+☁ UPLOAD IMGBB → resize 350×197 px + upload → liens insérés dans la fiche
+        │
+        ▼
+Aperçu HTML en temps réel de la présentation complète
+  └─ Sections : TMDB · Spécifications techniques · Screenshots · Release
 
 ─────────────────────────────────────────────
 Workflow BD Info (COMPLETE BLURAY)
