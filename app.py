@@ -4207,6 +4207,26 @@ class API:
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True}
 
+    def fbd_search_tmdb(self, query: str):
+        """Recherche un film TMDB pour FULL BD — retourne les 8 premiers résultats."""
+        try:
+            api_key = os.getenv("API_KEY", "")
+            lang    = os.getenv("LANGUAGE", "fr-FR")
+            q = query.strip()
+            if not q or not api_key:
+                return {"ok": False, "results": []}
+            url = (f"https://api.themoviedb.org/3/search/movie"
+                   f"?api_key={api_key}&language={lang}"
+                   f"&query={requests.utils.quote(q)}&include_adult=false")
+            r = requests.get(url, timeout=10)
+            results = r.json().get("results", [])[:8]
+            out = [{"id": m.get("id"), "title": m.get("title", ""),
+                    "year": (m.get("release_date") or "")[:4],
+                    "poster": m.get("poster_path")} for m in results]
+            return {"ok": True, "results": out}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "results": []}
+
     def discord_send_notification(self, data: dict):
         """Envoie un embed Discord de notification d'upload."""
         def _run():

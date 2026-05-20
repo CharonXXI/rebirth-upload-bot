@@ -1019,6 +1019,38 @@ html.light body::before {
             </button>
           </div>
 
+          <!-- Recherche TMDB pour nom du dossier -->
+          <div style="background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:12px; display:flex; flex-direction:column; gap:10px;">
+            <div style="font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase;">🔍 &nbsp;Recherche film</div>
+
+            <!-- Barre de recherche -->
+            <div style="position:relative;">
+              <input id="fbd-search-input" type="text" placeholder="ex: Dead or Alive, Inception…"
+                style="width:100%; box-sizing:border-box; padding:9px 36px 9px 10px; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; outline:none; transition:border .15s;"
+                onfocus="this.style.borderColor='var(--orange)'"
+                onblur="this.style.borderColor='var(--border)'"
+                oninput="fbdSearchDebounce(this.value)"
+                onkeydown="if(event.key==='Escape'){document.getElementById('fbd-search-results').style.display='none';}"/>
+              <span style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--text-dim); font-size:13px; pointer-events:none;">🔍</span>
+              <!-- Dropdown résultats -->
+              <div id="fbd-search-results" style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:999; background:var(--bg2); border:1px solid var(--orange); border-radius:4px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,.5);"></div>
+            </div>
+
+            <!-- Toggle 1080p / 2160p -->
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span style="font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:1px;">QUALITÉ :</span>
+              <button id="fbd-res-1080" onclick="fbdSetRes('1080p')"
+                style="padding:5px 14px; font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:1px; border-radius:4px; cursor:pointer; border:1px solid var(--orange); background:var(--orange); color:#000; transition:all .15s;">
+                1080p
+              </button>
+              <button id="fbd-res-2160" onclick="fbdSetRes('2160p')"
+                style="padding:5px 14px; font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:1px; border-radius:4px; cursor:pointer; border:1px solid var(--border2); background:transparent; color:var(--text-dim); transition:all .15s;">
+                2160p
+              </button>
+              <span id="fbd-selected-title" style="font-family:var(--mono); font-size:10px; color:var(--orange); flex:1; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+            </div>
+          </div>
+
           <!-- Nom du dossier de sortie -->
           <div>
             <div style="font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;">Nom du dossier de sortie <span style="color:var(--orange);">FULL/</span></div>
@@ -2782,6 +2814,15 @@ function sbfOnDeleteDone(data) {
   }
 }
 
+// Ferme le dropdown FULL BD si clic en dehors
+document.addEventListener('click', function(e) {
+  const input = document.getElementById('fbd-search-input');
+  const results = document.getElementById('fbd-search-results');
+  if (results && input && !input.contains(e.target) && !results.contains(e.target)) {
+    results.style.display = 'none';
+  }
+});
+
 window.addEventListener('pywebviewready', function() {
   loadConfig();
   loadTrackers();
@@ -3161,6 +3202,100 @@ function fbdOnDone(data) {
     fbdSetStatus('✖ ' + (data.error || 'Erreur inconnue'), 'error');
     toast('Backup échoué : ' + (data.error || ''), 'error', 5000);
   }
+}
+
+/* ── FULL BD : recherche TMDB + format nom dossier ── */
+let _fbdRes = '1080p';
+let _fbdSearchTimer = null;
+
+function fbdSetRes(res) {
+  _fbdRes = res;
+  const btn1080 = document.getElementById('fbd-res-1080');
+  const btn2160 = document.getElementById('fbd-res-2160');
+  if (res === '1080p') {
+    btn1080.style.background = 'var(--orange)'; btn1080.style.borderColor = 'var(--orange)'; btn1080.style.color = '#000';
+    btn2160.style.background = 'transparent';   btn2160.style.borderColor = 'var(--border2)'; btn2160.style.color = 'var(--text-dim)';
+  } else {
+    btn2160.style.background = 'var(--orange)'; btn2160.style.borderColor = 'var(--orange)'; btn2160.style.color = '#000';
+    btn1080.style.background = 'transparent';   btn1080.style.borderColor = 'var(--border2)'; btn1080.style.color = 'var(--text-dim)';
+  }
+  // Si un film est déjà sélectionné, re-formate
+  const lbl = document.getElementById('fbd-selected-title');
+  if (lbl && lbl.dataset.title && lbl.dataset.year) {
+    fbdApplyFilm(lbl.dataset.title, lbl.dataset.year);
+  }
+}
+
+function fbdFormatName(title, year) {
+  // Nettoyer le titre : remplacer les caractères spéciaux par des points
+  let t = title
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // accents
+    .replace(/[''`]/g, '')
+    .replace(/[:\/\\|?!]/g, '')
+    .replace(/\s+/g, '.')
+    .replace(/\.{2,}/g, '.')
+    .trim();
+  // Capitaliser chaque mot (PascalCase-like)
+  t = t.split('.').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('.');
+  const y = year || '';
+  if (_fbdRes === '2160p') {
+    return `${t}.${y}.FRA.COMPLETE.UHD.BLURAY-REBiRTH`;
+  } else {
+    return `${t}.${y}.FRA.COMPLETE.BLURAY-REBiRTH`;
+  }
+}
+
+function fbdApplyFilm(title, year) {
+  const name = fbdFormatName(title, year);
+  const inp = document.getElementById('fbd-output-name');
+  if (inp) inp.value = name;
+  const lbl = document.getElementById('fbd-selected-title');
+  if (lbl) { lbl.textContent = `${title} (${year})`; lbl.dataset.title = title; lbl.dataset.year = year; }
+}
+
+function fbdSearchDebounce(val) {
+  clearTimeout(_fbdSearchTimer);
+  const res = document.getElementById('fbd-search-results');
+  if (!val.trim()) { res.style.display = 'none'; return; }
+  _fbdSearchTimer = setTimeout(() => fbdDoSearch(val), 400);
+}
+
+async function fbdDoSearch(q) {
+  const res = document.getElementById('fbd-search-results');
+  res.innerHTML = '<div style="padding:10px 12px; font-family:var(--mono); font-size:10px; color:var(--text-dim);">Recherche…</div>';
+  res.style.display = 'block';
+  try {
+    const data = await pywebview.api.fbd_search_tmdb(q);
+    if (!data.ok || !data.results || data.results.length === 0) {
+      res.innerHTML = '<div style="padding:10px 12px; font-family:var(--mono); font-size:10px; color:var(--text-dim);">Aucun résultat</div>';
+      return;
+    }
+    res.innerHTML = data.results.map(m => {
+      const yr = m.year || '????';
+      const title = m.title || '';
+      const poster = m.poster ? `https://image.tmdb.org/t/p/w45${m.poster}` : '';
+      const imgHtml = poster
+        ? `<img src="${poster}" style="width:28px; height:40px; object-fit:cover; border-radius:2px; flex-shrink:0;" onerror="this.style.display='none'">`
+        : `<div style="width:28px; height:40px; background:var(--border); border-radius:2px; flex-shrink:0;"></div>`;
+      return `<div onclick="fbdSelectResult('${title.replace(/'/g,"\\'")}','${yr}')"
+        style="display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .1s;"
+        onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+        ${imgHtml}
+        <div>
+          <div style="font-family:var(--mono); font-size:11px; color:var(--text);">${title}</div>
+          <div style="font-family:var(--mono); font-size:10px; color:var(--text-dim);">${yr}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    res.innerHTML = '<div style="padding:10px 12px; font-family:var(--mono); font-size:10px; color:var(--red);">Erreur : ' + e + '</div>';
+  }
+}
+
+function fbdSelectResult(title, year) {
+  document.getElementById('fbd-search-results').style.display = 'none';
+  document.getElementById('fbd-search-input').value = title + ' (' + year + ')';
+  fbdApplyFilm(title, year);
 }
 
 async function fbdScanDrives() {
