@@ -882,8 +882,13 @@ class API:
 
         original_stdout = sys.stdout
         original_stderr = sys.stderr
+        _last_prog_ts = [0.0]
 
         def on_progress(pct, eta):
+            now = time.time()
+            if pct != 100 and now - _last_prog_ts[0] < 0.5:
+                return   # throttle : max 2 émissions/s
+            _last_prog_ts[0] = now
             self._emit("progress", {"step": "analyze", "pct": pct, "eta": eta})
 
         def on_line(line, level):
@@ -1109,8 +1114,13 @@ class API:
         original_stdout = sys.stdout
         original_stderr = sys.stderr
         cur_step = {"name": ""}
+        _last_prog_ts2 = [0.0]
 
         def on_progress(pct, eta):
+            now = time.time()
+            if pct != 100 and now - _last_prog_ts2[0] < 0.5:
+                return   # throttle : max 2 émissions/s
+            _last_prog_ts2[0] = now
             self._emit("progress", {"step": cur_step["name"], "pct": pct, "eta": eta})
 
         def on_line(line, level):

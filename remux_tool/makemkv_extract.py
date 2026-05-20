@@ -164,9 +164,29 @@ def analyze_source(source: str) -> Dict[str, Any]:
     # ID 30 = Bitrate
     # ID 33 = Stream flags
     
+    _analyze_start = time.time()
+
     for line in proc.stdout:
         line = line.strip()
-        
+
+        # PRGV — progression analyse (robot mode)
+        if "PRGV:" in line:
+            m = re.search(r'PRGV:(\d+),(\d+),(\d+)', line)
+            if m:
+                cur, tot, mx = map(int, m.groups())
+                if mx > 0:
+                    pct = int(cur * 100 / mx)
+                    elapsed = max(0.001, time.time() - _analyze_start)
+                    if pct > 0:
+                        remain = (100 - pct) / (pct / elapsed)
+                        eta_m, eta_s = int(remain // 60), int(remain % 60)
+                    else:
+                        eta_m, eta_s = 0, 0
+                    bar = '#' * (pct // 3) + '-' * (33 - pct // 3)
+                    sys.stdout.write(f"\r  [{bar}] {pct}% ETA {eta_m:02d}:{eta_s:02d}")
+                    sys.stdout.flush()
+            continue
+
         # TINFO - info sur les titres
         tinfo = _parse_tinfo_line(line)
         if tinfo:
