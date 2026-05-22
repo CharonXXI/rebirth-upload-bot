@@ -64,7 +64,9 @@ LANGUAGE_MAP = {
     "sk": "SLOVAK",
     "sl": "SLOVENIAN",
     "es": "SPANISH",
-    "es-419": "SPANISH LATIN AMERICA",
+    "es-419": "SPANISH LAT.",
+    "spanish (latin america)": "SPANISH LAT.",
+    "spanish latin america": "SPANISH LAT.",
     "su": "SUNDANESE",
     "sw": "SWAHILI",
     "sv": "SWEDISH",
@@ -182,7 +184,7 @@ def generate_template(file_path, tmdb_link_override=None):
 
         # Format audio language
         try:
-            audio_language = LANGUAGE_MAP[audio_language]
+            audio_language = LANGUAGE_MAP.get(audio_language, LANGUAGE_MAP.get(audio_language.lower(), audio_language))
         except:
             # Not in LANGUAGE_MAP
             pass
@@ -236,7 +238,7 @@ def generate_template(file_path, tmdb_link_override=None):
         for index, subtitle_info in enumerate(subtitle_tracks, 1):
             if subtitle_info:  # Vérifie si subtitle_info existe
                 subtitle_language = subtitle_info.language or "Unknown"  # Utilise "Unknown" si la langue est absente
-                subtitle_language = LANGUAGE_MAP.get(subtitle_language, subtitle_language).upper()
+                subtitle_language = LANGUAGE_MAP.get(subtitle_language, LANGUAGE_MAP.get(subtitle_language.lower(), subtitle_language)).upper()
                 subtitle_type = get_subtitle_type(subtitle_info.title) if hasattr(subtitle_info, 'title') else "Unknown"
                 subtitle_format = subtitle_info.other_format[0] if subtitle_info.other_format else "Unknown"
             else:
@@ -246,7 +248,7 @@ def generate_template(file_path, tmdb_link_override=None):
 
             # Format subtitle language
             try:
-                subtitle_language = LANGUAGE_MAP[subtitle_language]
+                subtitle_language = LANGUAGE_MAP.get(subtitle_language, LANGUAGE_MAP.get(subtitle_language.lower(), subtitle_language))
             except:
                 # Not in LANGUAGE_MAP
                 pass
