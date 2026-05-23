@@ -433,7 +433,7 @@ rebirth-upload-bot/
 - Fix (Remux/MakeMKV) : recherche récursive du MKV extrait (glob `**/*.mkv`) en cas de sous-dossier inattendu ; sélection du fichier le plus volumineux en cas de multiples résultats
 
 ### v2.9.0
-- Feat : **onglet Full BD (BETA)** — générateur de FULL BLURAY via MakeMKV
+- Feat : **onglet Full BD** — générateur de FULL BLURAY via MakeMKV
   - Détection automatique du lecteur optique (`makemkvcon -r info disc:9999`)
   - Backup complet avec déchiffrement (`makemkvcon backup --decrypt`)
   - Sortie directement dans `remux_tool/FULL/` prête pour l'onglet Remux
