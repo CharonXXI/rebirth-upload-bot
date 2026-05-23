@@ -27,3 +27,6 @@ remux_tool/__pycache__/
 remux_tool/.venv/
 remux_tool/*.log
 PICS/
+# Bot Discord GUI (local uniquement)
+discord_bot_gui.py
+discord_bot.command
