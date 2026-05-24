@@ -72,6 +72,7 @@ html.light body::before {
 .history-badge.tk-c411   { color:#c77dff; border-color:rgba(199,125,255,0.3);  background:rgba(199,125,255,0.07); }
 .history-badge.tk-torr9  { color:#ff9f43; border-color:rgba(255,159,67,0.3);   background:rgba(255,159,67,0.07); }
 .history-badge.tk-nexum  { color:#00e5cc; border-color:rgba(0,229,204,0.3);     background:rgba(0,229,204,0.07); }
+.history-badge.tk-hdf    { color:#4fc3f7; border-color:rgba(79,195,247,0.3);   background:rgba(79,195,247,0.07); }
 /* Toast notifications */
 #toast-container { position:fixed; bottom:24px; right:24px; z-index:9998; display:flex; flex-direction:column-reverse; gap:8px; pointer-events:none; }
 .toast { font-family:var(--mono); font-size:11px; padding:10px 16px; border-radius:4px; border:1px solid; letter-spacing:1px; opacity:0; transform:translateX(24px); transition:opacity .25s ease, transform .25s ease; max-width:340px; line-height:1.4; }
@@ -439,7 +440,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH AIO</div>
-      <div class="logo-sub">v 2.9.3</div>
+      <div class="logo-sub">v 2.9.4</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -521,6 +522,7 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tck-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
               <div></div>
               <label class="tck-row"><input type="checkbox" id="tck-nexum"  checked/><span class="tck-lbl">Nexum</span></label>
+              <label class="tck-row"><input type="checkbox" id="tck-hdf"    checked/><span class="tck-lbl">HDF</span></label>
             </div>
           </div>
           <div class="field-group">
@@ -529,7 +531,7 @@ html.light body::before {
           </div>
           <div class="section-label">Type NFO</div>
           <div class="nfo-toggle">
-            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>C411 · Torr9 · Nexum</small></button>
+            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>C411 · Torr9 · Nexum · HDF</small></button>
             <button class="nfo-btn"        id="nfo-cp437" onclick="setNFO('cp437')">📄 CP437<br><small>TOS · ABN</small></button>
           </div>
           <div class="section-label">Plateforme</div>
@@ -616,6 +618,10 @@ html.light body::before {
           <span class="tracker-name">NEXUM</span>
           <input id="tk-nexum" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
         </div>
+        <div class="tracker-row">
+          <span class="tracker-name">HDF</span>
+          <input id="tk-hdf" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+        </div>
         <button id="btn-save-trackers" onclick="saveTrackers()" style="margin-top:16px;padding:11px 28px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">
           💾 &nbsp;SAUVEGARDER
         </button>
@@ -684,6 +690,7 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tsb-c411"   checked/><span class="tck-lbl">C411</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-nexum" checked/><span class="tck-lbl">Nexum</span></label>
+              <label class="tck-row"><input type="checkbox" id="tsb-hdf"   checked/><span class="tck-lbl">HDF</span></label>
             </div>
           </div>
 
@@ -832,6 +839,21 @@ html.light body::before {
                 Upload le dossier sur la seedbox → <span style="color:var(--orange);">FULL BD/</span> puis crée le torrent HDT
               </div>
               <div id="bdi-hdt-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;min-height:14px;word-break:break-all;"></div>
+            </div>
+
+            <!-- HDF Seedbox torrent -->
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
+              <div style="font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text-dim);margin-bottom:8px;">HD-FRANCE (HDF)</div>
+              <button id="bdi-hdf-btn" onclick="bdiTorrentHDF()"
+                style="width:100%;padding:10px;background:transparent;border:1px solid #4fc3f7;border-radius:4px;color:#4fc3f7;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
+                onmouseover="if(!this.disabled)this.style.background='rgba(79,195,247,0.1)'"
+                onmouseout="if(!this.disabled)this.style.background='transparent'">
+                ↑ &nbsp;SB + 🧲 TORRENT HDF
+              </button>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
+                Upload le dossier sur la seedbox → <span style="color:#4fc3f7;">FULL BD/</span> puis crée le torrent HDF
+              </div>
+              <div id="bdi-hdf-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;min-height:14px;word-break:break-all;"></div>
             </div>
           </div>
 
@@ -1456,6 +1478,8 @@ window._emit = function(event, data) {
   if (event === 'bdinfo_hide_input')    bdiHideInput();
   if (event === 'bdinfo_hdt_status')    bdiHdtStatus(data.msg);
   if (event === 'bdinfo_hdt_done')      bdiHdtDone(data);
+  if (event === 'bdinfo_hdf_status')    bdiHdfStatus(data.msg);
+  if (event === 'bdinfo_hdf_done')      bdiHdfDone(data);
   if (event === 'discord_search_done')  discordOnSearchDone(data);
   if (event === 'discord_send_done')    discordOnSendDone(data);
   if (event === 'sbf_delete_done')      sbfOnDeleteDone(data);
@@ -1724,6 +1748,41 @@ async function bdiTorrentHDT() {
   }
 }
 
+function bdiHdfStatus(msg) {
+  var el = document.getElementById('bdi-hdf-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = 'var(--text-dim)';
+}
+
+function bdiHdfDone(data) {
+  var btn = document.getElementById('bdi-hdf-btn');
+  if (btn) { btn.disabled = false; btn.innerHTML = '↑ &nbsp;SB + 🧲 TORRENT HDF'; }
+  var el = document.getElementById('bdi-hdf-status');
+  if (!el) return;
+  if (data.ok) {
+    el.textContent = '✅ Torrent HDF créé — seeding depuis ' + data.path;
+    el.style.color = 'var(--green)';
+    showToast('✓ Torrent HDF créé !', 'success', 5000);
+  } else {
+    el.textContent = '✖ ' + (data.error || 'Erreur');
+    el.style.color = 'var(--red)';
+    showToast('✗ HDF : ' + (data.error || 'Erreur'), 'error', 7000);
+  }
+}
+
+async function bdiTorrentHDF() {
+  var btn = document.getElementById('bdi-hdf-btn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ &nbsp;UPLOAD + TORRENT EN COURS…';
+  bdiHdfStatus('Upload seedbox + création torrent HDF…');
+  try {
+    await window.pywebview.api.torrent_bdinfo_hdf();
+  } catch(e) {
+    bdiHdfDone({ ok: false, error: 'Erreur JS : ' + e });
+  }
+}
+
 function updateUploadProgress(d) {
   var el = document.getElementById('upload-progress-line');
   if (!el) {
@@ -1800,7 +1859,7 @@ function setPlatform(p) {
 }
 
 function _getTrackers() {
-  var map = { 'tck-abn':'ABN', 'tck-tos':'TOS', 'tck-c411':'C411', 'tck-torr9':'Torr9', 'tck-nexum':'Nexum' };
+  var map = { 'tck-abn':'ABN', 'tck-tos':'TOS', 'tck-c411':'C411', 'tck-torr9':'Torr9', 'tck-nexum':'Nexum', 'tck-hdf':'HDF' };
   return Object.entries(map).filter(function(kv) {
     var el = document.getElementById(kv[0]);
     return el && el.checked;
@@ -1905,7 +1964,7 @@ var _tsbRunning = false;
 // Synchronise les cases trackers depuis la page Upload vers Torrent SB
 function tsbSyncTrackers() {
   var map = { 'tck-abn':'tsb-abn', 'tck-tos':'tsb-tos', 'tck-c411':'tsb-c411',
-              'tck-torr9':'tsb-torr9', 'tck-nexum':'tsb-nexum' };
+              'tck-torr9':'tsb-torr9', 'tck-nexum':'tsb-nexum', 'tck-hdf':'tsb-hdf' };
   Object.entries(map).forEach(function(kv) {
     var src = document.getElementById(kv[0]);
     var dst = document.getElementById(kv[1]);
@@ -1981,7 +2040,7 @@ function _tsbLog(msg, cls) {
 }
 
 function _tsbGetTrackers() {
-  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-nexum':'Nexum' };
+  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-nexum':'Nexum', 'tsb-hdf':'HDF' };
   return Object.entries(map).filter(function(kv){
     var el = document.getElementById(kv[0]); return el && el.checked;
   }).map(function(kv){ return kv[1]; }).join(' ');
@@ -2118,7 +2177,8 @@ function onError(d) {
 var CONFIG_FIELDS = [
   { key:'GOFILE_TOKEN',       label:'Gofile Token',           secret:true  },
   { key:'WEBHOOK_URL',        label:'Discord Webhook (REBiRTH)', secret:true  },
-  { key:'WEBHOOK_HDT_URL',   label:'Discord Webhook (FULL BD)', secret:true  },
+  { key:'WEBHOOK_HDT_URL',   label:'Discord Webhook (FULL BD HDT)', secret:true  },
+  { key:'WEBHOOK_HDF_URL',   label:'Discord Webhook (FULL BD HDF)', secret:true  },
   { key:'API_KEY',            label:'TMDB API Key',           secret:true  },
   { key:'LANGUAGE',           label:'Langue TMDB',            secret:false },
   { key:'BUZZHEAVIER_ACC_ID', label:'BuzzHeavier Account ID', secret:true  },
@@ -2165,7 +2225,7 @@ async function saveConfig() {
   setTimeout(function() { btn.textContent = '💾  SAUVEGARDER'; }, 2000);
 }
 
-var TRACKER_KEYS = ['abn','tos','c411','torr9','hdt','nexum'];
+var TRACKER_KEYS = ['abn','tos','c411','torr9','hdt','nexum','hdf'];
 
 async function saveTrackers() {
   var cfg = {};
@@ -2287,8 +2347,8 @@ async function clearHistory() {
   renderHistory();
 }
 
-var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TORR9', 'NEXUM'];
-var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TORR9:'Torr9', NEXUM:'Nexum' };
+var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TORR9', 'NEXUM', 'HDF'];
+var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TORR9:'Torr9', NEXUM:'Nexum', HDF:'HDF' };
 
 async function renderStatsPage() {
   var entries = await window.pywebview.api.load_history() || [];
@@ -2306,7 +2366,7 @@ async function renderStatsPage() {
   }).length;
 
   // Trackers — détection parmi les 5 connus uniquement
-  var tkCounts = { ABN:0, TOS:0, C411:0, TORR9:0, NEXUM:0 };
+  var tkCounts = { ABN:0, TOS:0, C411:0, TORR9:0, NEXUM:0, HDF:0 };
   entries.forEach(function(e) {
     if (!e.trackers) return;
     var up = e.trackers.toUpperCase();
@@ -2423,7 +2483,7 @@ function loadSbDisk() {
 var _discCurrentMovie  = null;
 var _discSelectedFile  = null;
 var _discMode          = 'rebirth';
-var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'Nexum'];
+var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'Nexum', 'HDF'];
 
 // Extrait un titre TMDB depuis un nom de release (retire tags techniques)
 function discExtractTitle(name) {
@@ -2445,7 +2505,7 @@ async function discordLoadFiles() {
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   list.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);padding:10px 0;letter-spacing:1px;">Connexion…</div>';
   try {
-    var result = _discMode === 'hdt'
+    var result = (_discMode === 'hdt' || _discMode === 'hdf')
       ? await window.pywebview.api.list_seedbox_files_hdt()
       : await window.pywebview.api.list_seedbox_files();
     if (btn) { btn.textContent = '↺ REFRESH'; btn.disabled = false; }
@@ -2573,34 +2633,32 @@ function discordSetMode(mode) {
   _discCurrentMovie = null;
 
   // Tracker list
-  if (mode === 'hdt') {
-    _discTrackers = ['HDT'];
-  } else {
-    _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'Nexum'];
-  }
+  if (mode === 'hdt') _discTrackers = ['HDT', 'HDF'];
+  else                _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'Nexum', 'HDF'];
 
   // Button styles
-  var btnR = document.getElementById('disc-mode-rebirth');
-  var btnH = document.getElementById('disc-mode-hdt');
-  var lbl  = document.getElementById('disc-mode-label');
+  var btnR  = document.getElementById('disc-mode-rebirth');
+  var btnH  = document.getElementById('disc-mode-hdt');
+  var lbl   = document.getElementById('disc-mode-label');
   var sbLbl = document.getElementById('disc-sb-label');
+  [btnR, btnH].forEach(function(b) {
+    if (!b) return;
+    b.style.background  = 'transparent';
+    b.style.color       = 'var(--text-dim)';
+    b.style.borderColor = 'var(--border2)';
+  });
+
   if (mode === 'hdt') {
-    btnR.style.background = 'transparent';
-    btnR.style.color      = 'var(--text-dim)';
-    btnR.style.borderColor = 'var(--border2)';
-    btnH.style.background = 'var(--orange)';
-    btnH.style.color      = '#000';
+    btnH.style.background  = 'var(--orange)';
+    btnH.style.color       = '#000';
     btnH.style.borderColor = 'var(--orange)';
-    lbl.textContent = '→ Canal FULL BD · HDT uniquement';
+    lbl.textContent = '→ Canal FULL BD · HDT + HDF';
     if (sbLbl) sbLbl.textContent = 'Fichiers FULL BD';
   } else {
-    btnH.style.background = 'transparent';
-    btnH.style.color      = 'var(--text-dim)';
-    btnH.style.borderColor = 'var(--border2)';
-    btnR.style.background = 'var(--orange)';
-    btnR.style.color      = '#000';
+    btnR.style.background  = 'var(--orange)';
+    btnR.style.color       = '#000';
     btnR.style.borderColor = 'var(--orange)';
-    lbl.textContent = '→ Canal REBiRTH · 5 trackers';
+    lbl.textContent = '→ Canal REBiRTH · 6 trackers';
     if (sbLbl) sbLbl.textContent = 'Fichiers Seedbox';
   }
 

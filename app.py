@@ -132,9 +132,12 @@ class API:
             "TRACKER_C411":       os.getenv("TRACKER_C411", ""),
             "TRACKER_TORR9":      os.getenv("TRACKER_TORR9", ""),
             "TRACKER_NEXUM":      os.getenv("TRACKER_NEXUM", ""),
+            "TRACKER_HDF":        os.getenv("TRACKER_HDF", ""),
             "TRACKER_HDT":        os.getenv("TRACKER_HDT", ""),
             "SFTP_PATH_HDT":      os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD"),
             "WEBHOOK_HDT_URL":    os.getenv("WEBHOOK_HDT_URL", ""),
+            "SFTP_PATH_HDF":      os.getenv("SFTP_PATH_HDF", "/home/rtorrent/rtorrent/download/FULL BD"),
+            "WEBHOOK_HDF_URL":    os.getenv("WEBHOOK_HDF_URL", ""),
             "BDINFO_CLI_PATH":    os.getenv("BDINFO_CLI_PATH", ""),
         }
 
@@ -420,6 +423,7 @@ class API:
                 "C411":   os.getenv("TRACKER_C411", ""),
                 "TORR9":  os.getenv("TRACKER_TORR9", ""),
                 "NEXUM":  os.getenv("TRACKER_NEXUM", ""),
+                "HDF":    os.getenv("TRACKER_HDF", ""),
             }
             checked = [t.strip().upper() for t in trackers.split() if t.strip()]
             active  = {k: v for k, v in announces.items() if v and k.upper() in checked}
@@ -2249,6 +2253,89 @@ class API:
         threading.Thread(target=_worker, daemon=True).start()
         return {"ok": True}
 
+    def torrent_bdinfo_hdf(self):
+        """Upload le dossier FULL BD sur la seedbox puis crée le torrent HDF.
+        Même workflow que HDT — dossier identique, announce URL différente.
+        """
+        def _worker():
+            try:
+                bdi_folder = getattr(self, "_bdi_last_folder", "")
+                if not bdi_folder:
+                    self._emit("bdinfo_hdf_done", {
+                        "ok": False, "error": "Aucune source — sélectionne et scanne d'abord un dossier BDMV"
+                    })
+                    return
+
+                folder_name = Path(bdi_folder).name
+                films_candidate = BASE_DIR / "FILMS" / folder_name
+                if films_candidate.exists() and films_candidate.is_dir():
+                    folder = str(films_candidate)
+                    self._log(f"  [HDF] Source FILMS/ : {folder}")
+                elif Path(bdi_folder).exists():
+                    folder = bdi_folder
+                    self._log(f"  [HDF] Source (scan) : {folder}")
+                else:
+                    self._emit("bdinfo_hdf_done", {
+                        "ok": False,
+                        "error": f"Dossier introuvable : {folder_name}"
+                    })
+                    return
+
+                hdf_announce = os.getenv("TRACKER_HDF", "")
+                if not hdf_announce:
+                    self._emit("bdinfo_hdf_done", {
+                        "ok": False, "error": "TRACKER_HDF non configuré dans le .env"
+                    })
+                    return
+
+                base            = Path(folder).name
+                hdf_sftp_base   = os.getenv("SFTP_PATH_HDF", "/home/rtorrent/rtorrent/download/FULL BD")
+                hdf_remote_path = hdf_sftp_base.rstrip("/") + "/" + base
+
+                self._log(f"▶ BD Info HDF : {base}")
+                self._log(f"  dossier local  : {folder}")
+                self._log(f"  seedbox target : {hdf_remote_path}")
+
+                try:
+                    import paramiko
+                except ImportError:
+                    import subprocess as _sp
+                    _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
+                             "--break-system-packages", "--quiet"], capture_output=True)
+                    import paramiko  # noqa: F811
+
+                host     = os.getenv("SFTP_HOST_FTP", "")
+                port     = int(os.getenv("SFTP_PORT", "22"))
+                user     = os.getenv("SFTP_USER", "")
+                password = os.getenv("SFTP_PASS", "")
+
+                self._emit("bdinfo_hdf_status", {"msg": f"Connexion SFTP vers {host}…"})
+                transport = paramiko.Transport((host, port))
+                transport.window_size              = 67108864
+                transport.packetizer.REKEY_BYTES   = pow(2, 40)
+                transport.packetizer.REKEY_PACKETS = pow(2, 40)
+                transport.connect(username=user, password=password)
+                sftp = paramiko.SFTPClient.from_transport(transport)
+                sftp.MAX_REQUEST_SIZE = 1048576
+
+                self._sftp_upload_folder(sftp, folder, hdf_remote_path)
+                sftp.close()
+                transport.close()
+                self._log("  [SFTP] ✅ Dossier uploadé", "success")
+
+                self._emit("bdinfo_hdf_status", {"msg": "Création torrent HDF…"})
+                self._create_torrent_rutorrent(base, hdf_remote_path, {"HDF": hdf_announce}, private=True, auto_start=False)
+
+                self._emit("bdinfo_hdf_done", {"ok": True, "base": base, "path": hdf_remote_path})
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._emit("bdinfo_hdf_done", {"ok": False, "error": str(e)})
+
+        threading.Thread(target=_worker, daemon=True).start()
+        return {"ok": True}
+
     def _emit(self, event: str, data):
         payload = json.dumps(data).replace("'", "\\'")
         self.window.evaluate_js(f"window._emit('{event}', {payload})")
@@ -3651,6 +3738,7 @@ class API:
             "TORR9":  "Torr9",
             "HDT":    "HD-Torrents",
             "NEXUM":  "Nexum",
+            "HDF":    "HDF",
         }
         source_tag = SOURCE_TAGS.get(tk_name.upper(), tk_name)
         priv_flag = "-p " if private else ""
@@ -4230,12 +4318,16 @@ class API:
             try:
                 mode = data.get("mode", "rebirth")
                 if mode == "hdt":
-                    webhook_url = os.getenv("WEBHOOK_HDT_URL", "")
-                    if not webhook_url:
+                    # FULL BD : HDT + HDF → même canal, même webhook
+                    webhook_urls = [os.getenv("WEBHOOK_HDT_URL", "")]
+                    webhook_urls = [u for u in webhook_urls if u]
+                    if not webhook_urls:
                         self._emit("discord_send_done",
                                    {"ok": False, "error": "WEBHOOK_HDT_URL non configuré dans le .env"})
                         return
+                    webhook_url = webhook_urls[0]
                 else:
+                    webhook_urls = []
                     webhook_url = os.getenv("WEBHOOK_URL", "")
                     if not webhook_url:
                         self._emit("discord_send_done",
@@ -4283,16 +4375,23 @@ class API:
                 if img_url:
                     embed["thumbnail"] = {"url": img_url}
 
-                resp = requests.post(
-                    webhook_url,
-                    json={"content": "@everyone", "embeds": [embed]},
-                    timeout=10
-                )
-                if resp.status_code in (200, 204):
-                    self._emit("discord_send_done", {"ok": True})
-                else:
+                # Tous les webhooks à notifier (FULL BD = HDT + HDF, sinon juste REBiRTH)
+                targets = webhook_urls if webhook_urls else [webhook_url]
+                errors  = []
+                for wh in targets:
+                    resp = requests.post(
+                        wh,
+                        json={"content": "@everyone", "embeds": [embed]},
+                        timeout=10
+                    )
+                    if resp.status_code not in (200, 204):
+                        errors.append(f"HTTP {resp.status_code}")
+
+                if errors:
                     self._emit("discord_send_done",
-                               {"ok": False, "error": f"HTTP {resp.status_code}"})
+                               {"ok": False, "error": " | ".join(errors)})
+                else:
+                    self._emit("discord_send_done", {"ok": True})
             except Exception as e:
                 self._emit("discord_send_done", {"ok": False, "error": str(e)})
         threading.Thread(target=_run, daemon=True).start()

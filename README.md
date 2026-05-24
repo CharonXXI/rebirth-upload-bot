@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.9.3-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.4-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -57,7 +57,7 @@
 | 🎨 **PREZ** | Génération de fiche de présentation HTML pour tracker — specs vidéo/audio/subs auto-remplies, screenshots uploadés sur ImgBB (350×197 px), aperçu en temps réel |
 | 💿 **BD Info** | Rapport exact via **BDInfo v0.7.5.6** (Wine/Whisky) — DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
 | 🗂️ **Fichiers SB** | Explorateur de fichiers seedbox — navigation dans les sous-dossiers, suppression via SSH sudo |
-| 🎛️ **Trackers** | Page dédiée pour gérer les announces URL (ABN · TOS · C411 · Torr9 · HDT · Nexum) |
+| 🎛️ **Trackers** | Page dédiée pour gérer les announces URL (ABN · TOS · C411 · Torr9 · HDT · Nexum · HDF) |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
 | 🌙 **Interface** | PyWebView moderne avec mode jour/nuit, animations, toasts |
 
@@ -147,6 +147,7 @@ TRACKER_TORR9=https://torr9.com/announce/PASSKEY
 
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
 TRACKER_NEXUM=https://nexum-core.com/announce/PASSKEY
+TRACKER_HDF=https://tracker.hdf.world:2443/PASSKEY/announce
 SFTP_PATH_HDT=/home/rtorrent/rtorrent/download/FULL BD
 
 # ── BD Info ───────────────────────────
@@ -232,10 +233,10 @@ Sélectionner le .mkv (onglet Upload)
         │
         ▼
 Remplir Source / Note / Autre info
-Cocher les trackers : ABN / TOS / C411 / Torr9 / Nexum
+Cocher les trackers : ABN / TOS / C411 / Torr9 / Nexum / HDF
         │
         ▼
-Choisir type NFO : UTF-8 (C411 · Torr9 · Nexum)
+Choisir type NFO : UTF-8 (C411 · Torr9 · Nexum · HDF)
                    CP437 (TOS · ABN)
 Choisir plateforme : BuzzHeavier / Gofile / Ignorer
         │
@@ -358,7 +359,7 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 - Upload automatique du dossier FINAL via FTP TLS
 
 ### 💬 Discord
-- **REBiRTH** — 6 trackers (TOS / ABN / C411 / Torr9 / Nexum), webhook REBiRTH
+- **REBiRTH** — 6 trackers (TOS / ABN / C411 / Torr9 / Nexum / HDF), webhook REBiRTH
 - **FULL BD** — tracker HDT uniquement, webhook séparé
 
 ### 🗂️ Fichiers SB
@@ -404,6 +405,11 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.9.4
+- Feat (Trackers) : **ajout HDF (HD-France)** — announces, SFTP seedbox, création torrent via SSH + mktorrent
+- Feat (Full BD) : **HDT + HDF unifiés** en mode FULL BD — un seul bouton Discord, même canal, même webhook
+- Fix : **retrait complet du tracker LaCale** (fermeture définitive) — tous les fichiers nettoyés
 
 ### v2.9.3
 - Feat (Full BD) : **recherche TMDB intégrée** dans l'onglet Full BD — barre de recherche avec debounce, dropdown résultats (poster + titre + année), sélection → nom du dossier auto-formaté
@@ -498,13 +504,13 @@ rebirth-upload-bot/
 - L'onglet **Remux** nécessite : **MakeMKV**, **MKVToolNix**, **MediaInfo**, **ffmpeg** (voir INSTALL_WINDOWS.md)
 - **BD Info** nécessite BDInfo v0.7.5.6 + Whisky (macOS) ou `BDInfo_v0\` (Windows)
 - **Torrent SB** nécessite un accès SSH port 22 et `mktorrent` installé sur la seedbox
-- Trackers supportés : ABN · TOS · C411 · Torr9 · HDT · Nexum
+- Trackers supportés : ABN · TOS · C411 · Torr9 · HDT · Nexum · HDF
 
 ---
 
 <div align="center">
 
-**REBiRTH AIO v2.9.3** — macOS & Windows
+**REBiRTH AIO v2.9.4** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

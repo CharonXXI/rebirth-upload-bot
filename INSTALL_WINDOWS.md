@@ -1,4 +1,4 @@
-# 🪟 Installation Windows — REBiRTH AIO v2.9.3
+# 🪟 Installation Windows — REBiRTH AIO v2.9.4
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 
@@ -278,6 +278,7 @@ TRACKER_TORR9=https://torr9.com/announce/PASSKEY
 
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
 TRACKER_NEXUM=https://nexum-core.com/announce/PASSKEY
+TRACKER_HDF=https://tracker.hdf.world:2443/PASSKEY/announce
 ```
 
 4. Sauvegarde : **Ctrl+S**, puis ferme le Bloc-notes
