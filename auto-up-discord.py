@@ -418,12 +418,7 @@ def main():
     final_content = content_custom + "\n\n" + content_mediainfo
 
     base = os.path.basename(os.path.splitext(file_path)[0])
-    output_filename_utf8 = os.path.join(os.path.dirname(file_path), f"(LaCale)-{base}.nfo")
     output_filename_dos = os.path.splitext(file_path)[0] + ".nfo"
-
-    # Version UTF-8 pour LaCale
-    with open(output_filename_utf8, 'w', encoding='utf-8') as file:
-        file.write(final_content)
 
     # Version CP437 pour ABN/TOS
     with open(output_filename_dos, 'w', encoding='cp437', errors='replace') as file:
