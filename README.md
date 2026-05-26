@@ -407,8 +407,9 @@ rebirth-upload-bot/
 ## 📝 Changelog
 
 ### v2.9.4
-- Feat (Trackers) : **ajout HDF (HDForever)** — announces, SFTP seedbox, création torrent via SSH + mktorrent
-- Feat (Full BD) : **HDT + HDF unifiés** en mode FULL BD — un seul bouton Discord, même canal, même webhook
+- Feat (Trackers) : **ajout HDF (HDForever) + HDO (HD-Only)** — announces, SFTP seedbox, création torrent via SSH + mktorrent
+- Feat (Full BD) : **HDT + HDF + HDO** en mode FULL BD — un seul bouton Discord, même canal, même webhook
+- Feat (HDO) : piece size 16 MB (`-l 24`), source `"HD-Only"`, torrent privé — conformément aux règles du tracker
 - Fix : **retrait complet du tracker LaCale** (fermeture définitive) — tous les fichiers nettoyés
 
 ### v2.9.3
