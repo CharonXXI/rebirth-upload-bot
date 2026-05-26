@@ -279,6 +279,7 @@ TRACKER_TORR9=https://torr9.com/announce/PASSKEY
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
 TRACKER_NEXUM=https://nexum-core.com/announce/PASSKEY
 TRACKER_HDF=https://tracker.hdf.world:2443/PASSKEY/announce
+TRACKER_HDO=http://hd-only.org:2710/PASSKEY/announce
 ```
 
 4. Sauvegarde : **Ctrl+S**, puis ferme le Bloc-notes

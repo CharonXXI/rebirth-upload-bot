@@ -57,7 +57,7 @@
 | 🎨 **PREZ** | Génération de fiche de présentation HTML pour tracker — specs vidéo/audio/subs auto-remplies, screenshots uploadés sur ImgBB (350×197 px), aperçu en temps réel |
 | 💿 **BD Info** | Rapport exact via **BDInfo v0.7.5.6** (Wine/Whisky) — DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
 | 🗂️ **Fichiers SB** | Explorateur de fichiers seedbox — navigation dans les sous-dossiers, suppression via SSH sudo |
-| 🎛️ **Trackers** | Page dédiée pour gérer les announces URL (ABN · TOS · C411 · Torr9 · HDT · Nexum · HDF) |
+| 🎛️ **Trackers** | Page dédiée pour gérer les announces URL (ABN · TOS · C411 · Torr9 · HDT · Nexum · HDF · HDO) |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
 | 🌙 **Interface** | PyWebView moderne avec mode jour/nuit, animations, toasts |
 
@@ -148,6 +148,7 @@ TRACKER_TORR9=https://torr9.com/announce/PASSKEY
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
 TRACKER_NEXUM=https://nexum-core.com/announce/PASSKEY
 TRACKER_HDF=https://tracker.hdf.world:2443/PASSKEY/announce
+TRACKER_HDO=http://hd-only.org:2710/PASSKEY/announce
 SFTP_PATH_HDT=/home/rtorrent/rtorrent/download/FULL BD
 
 # ── BD Info ───────────────────────────
@@ -233,10 +234,10 @@ Sélectionner le .mkv (onglet Upload)
         │
         ▼
 Remplir Source / Note / Autre info
-Cocher les trackers : ABN / TOS / C411 / Torr9 / Nexum / HDF
+Cocher les trackers : ABN / TOS / C411 / Torr9 / Nexum / HDF / HDO
         │
         ▼
-Choisir type NFO : UTF-8 (C411 · Torr9 · Nexum · HDF)
+Choisir type NFO : UTF-8 (C411 · Torr9 · Nexum · HDF · HDO)
                    CP437 (TOS · ABN)
 Choisir plateforme : BuzzHeavier / Gofile / Ignorer
         │
@@ -345,7 +346,7 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 - Sections ordonnées : TMDB · Spécifications techniques · Screenshots · Release
 
 ### 📄 Type NFO
-- **UTF-8** → `(UTF8).nom.nfo` pour C411, Torr9, Nexum
+- **UTF-8** → `(UTF8).nom.nfo` pour C411, Torr9, Nexum, HDF, HDO
 - **CP437** → `(CP437).nom.nfo` pour TOS, ABN
 
 ### ☁️ Gofile
@@ -359,8 +360,8 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 - Upload automatique du dossier FINAL via FTP TLS
 
 ### 💬 Discord
-- **REBiRTH** — 6 trackers (TOS / ABN / C411 / Torr9 / Nexum / HDF), webhook REBiRTH
-- **FULL BD** — tracker HDT uniquement, webhook séparé
+- **REBiRTH** — 7 trackers (TOS / ABN / C411 / Torr9 / Nexum / HDF / HDO), webhook REBiRTH
+- **FULL BD** — HDT + HDF + HDO, webhook séparé
 
 ### 🗂️ Fichiers SB
 - Navigation dans `/home/rtorrent/rtorrent/download` et sous-dossiers
@@ -505,7 +506,7 @@ rebirth-upload-bot/
 - L'onglet **Remux** nécessite : **MakeMKV**, **MKVToolNix**, **MediaInfo**, **ffmpeg** (voir INSTALL_WINDOWS.md)
 - **BD Info** nécessite BDInfo v0.7.5.6 + Whisky (macOS) ou `BDInfo_v0\` (Windows)
 - **Torrent SB** nécessite un accès SSH port 22 et `mktorrent` installé sur la seedbox
-- Trackers supportés : ABN · TOS · C411 · Torr9 · HDT · Nexum · HDF
+- Trackers supportés : ABN · TOS · C411 · Torr9 · HDT · Nexum · HDF · HDO
 
 ---
 
