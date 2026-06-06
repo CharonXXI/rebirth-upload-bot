@@ -1340,9 +1340,22 @@ class API:
             )
 
             # Codec audio principal — convention: AC3 / EAC3 / DTS-HD.MA / TrueHD
+            # On choisit la piste de référence = piste FR avec le plus gros débit
+            # (évite de prendre une 2.0 en tête de liste quand une 5.1 existe)
             audio_codec_str = ""
             if kept_audio:
-                t = kept_audio[0]
+                def _br(t):
+                    try:
+                        return int(t.get("BitRate") or 0)
+                    except Exception:
+                        return 0
+                def _ch(t):
+                    try:
+                        return int(t.get("Channels") or 0)
+                    except Exception:
+                        return 0
+                # Piste la plus lourde toutes langues confondues
+                t = max(kept_audio, key=lambda x: (_br(x), _ch(x)))
                 fmt = (t.get("Format_Commercial_IfAny") or t.get("Format") or "").upper()
                 if "DTS-HD" in fmt or "MASTER" in fmt:
                     af = "DTS-HD.MA"

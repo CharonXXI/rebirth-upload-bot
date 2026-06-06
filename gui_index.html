@@ -441,7 +441,7 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH AIO</div>
-      <div class="logo-sub">v 2.9.4</div>
+      <div class="logo-sub">v 2.9.5</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
@@ -453,11 +453,14 @@ html.light body::before {
       <div class="nav-item" id="nav-fullbd" data-page="fullbd" onclick="showPage('fullbd', this)">
         <span class="nav-icon">📀</span> Full BD
       </div>
-      <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
-        <span class="nav-icon">📡</span> Trackers
-      </div>
       <div class="nav-item" data-page="bdinfo" onclick="showPage('bdinfo', this)">
         <span class="nav-icon">💿</span> BD Info
+      </div>
+      <div class="nav-item" data-page="prez" onclick="showPage('prez', this); prezCheckImgbbKey(); prezCheckImgboxSession()">
+        <span class="nav-icon">🎨</span> Prez <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
+      </div>
+      <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
+        <span class="nav-icon">📡</span> Trackers
       </div>
       <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this); tsbSyncTrackers(); tsbLoadFiles()">
         <span class="nav-icon">🧲</span> Torrent SB
@@ -476,9 +479,6 @@ html.light body::before {
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
         <span class="nav-icon">⚙</span> Config
-      </div>
-      <div class="nav-item" data-page="prez" onclick="showPage('prez', this); prezCheckImgbbKey(); prezCheckImgboxSession()">
-        <span class="nav-icon">🎨</span> Prez <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -1140,6 +1140,7 @@ html.light body::before {
         <div class="section-label">Configuration</div>
         <div class="config-grid" id="config-grid"></div>
         <button id="btn-save" onclick="saveConfig()">💾 &nbsp;SAUVEGARDER</button>
+
       </div>
 
       <!-- ═══════════════════════════════════════════════════ DISCORD -->
@@ -1291,8 +1292,16 @@ html.light body::before {
           <!-- Tech specs -->
           <div class="section-label" style="margin-bottom:8px;">VIDÉO</div>
           <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
-            <input id="prez-vid-source" type="text" placeholder="Source (ex: Blu-ray REMUX)"
-              style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input id="prez-vid-source" type="text" placeholder="Source (ex: Blu-ray REMUX)"
+                style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
+              <button onclick="prezDetectSource()" title="Détecter le groupe depuis le dossier FULL/"
+                style="padding:5px 8px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:10px;cursor:pointer;white-space:nowrap;transition:all .15s;"
+                onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'"
+                onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text-dim)'">
+                🔍 FULL/
+              </button>
+            </div>
             <div style="display:flex;gap:6px;">
               <input id="prez-vid-codec" type="text" placeholder="Codec (ex: AVC)"
                 style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none;" />
@@ -2934,8 +2943,8 @@ window.addEventListener('pywebviewready', function() {
   } catch(e){}
   setTimeout(function() {
     loadSbDisk();
-    setInterval(loadSbDisk, 60000); // rafraîchissement toutes les minutes
-  }, 5000); // délai 5s pour ne pas ralentir le démarrage
+    setInterval(loadSbDisk, 60000);
+  }, 5000);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3600,6 +3609,84 @@ function prezSet(id, val) {
 }
 
 // ── Audio tracks ───────────────────────────────────────────────────────────
+function langToFlag(lang) {
+  const l = lang.toUpperCase().trim();
+  if (!l) return '';
+
+  // ── Tags REBiRTH spécifiques ──────────────────────────────────────────────
+  if (l.includes('VF2'))                                              return '🇫🇷🇨🇦';
+  if (['VFQ','QUEBEC','QUÉBEC'].some(t => l.includes(t)))             return '🇨🇦';
+  if (['VFF','VFI','VOF','VOSTFR','VF','TRUEFRENCH','SUBFRENCH'].some(t => l.includes(t))) return '🇫🇷';
+  if (['AD VFF','AD VFQ','AD VFI','AUDIODESCRIPTION'].some(t => l.includes(t))) return '🇫🇷';
+
+  // ── Langues (noms complets NFO + codes ISO) ───────────────────────────────
+  if (['FRENCH','FRANÇAIS','FRANCAIS','FR-FR','FR-CA','FRA','FR'].some(t => l === t || l.startsWith(t+' ') || l.includes(t))) return '🇫🇷';
+  if (['ENGLISH','ENG','EN','VO'].some(t => l === t || l.startsWith(t+' ')))           return '🇬🇧';
+  if (['ARABIC','ARABE','ARA','AR'].some(t => l.includes(t)))         return '🇸🇦';
+  if (['SPANISH LAT'].some(t => l.includes(t)))                       return '🇲🇽';
+  if (['SPANISH','ESPAGNOL','ESP','ES'].some(t => l.includes(t)))     return '🇪🇸';
+  if (['JAPANESE','JAPONAIS','JPN','JA','JP'].some(t => l.includes(t))) return '🇯🇵';
+  if (['GERMAN','ALLEMAND','DEU','GER','DE'].some(t => l.includes(t))) return '🇩🇪';
+  if (['ITALIAN','ITALIEN','ITA','IT'].some(t => l.includes(t)))      return '🇮🇹';
+  if (['PORTUGUESE','PORTUGAIS','POR','PT'].some(t => l.includes(t))) return '🇵🇹';
+  if (['KOREAN','CORÉEN','COREEN','KOR','KO'].some(t => l.includes(t))) return '🇰🇷';
+  if (['CHINESE','CHINOIS','CHI','ZH'].some(t => l.includes(t)))      return '🇨🇳';
+  if (['RUSSIAN','RUSSE','RUS','RU'].some(t => l.includes(t)))        return '🇷🇺';
+  if (['DUTCH','HOLLANDAIS','NLD','NL'].some(t => l.includes(t)))     return '🇳🇱';
+  if (['POLISH','POLONAIS','POL','PL'].some(t => l.includes(t)))      return '🇵🇱';
+  if (['TURKISH','TURC','TUR','TR'].some(t => l.includes(t)))         return '🇹🇷';
+  if (['HINDI','HIN','HI'].some(t => l.includes(t)))                  return '🇮🇳';
+  if (['THAI','THA','TH'].some(t => l.includes(t)))                   return '🇹🇭';
+  if (['SWEDISH','SUÉDOIS','SUEDOIS','SWE','SV'].some(t => l.includes(t))) return '🇸🇪';
+  if (['NORWEGIAN','NORVEGIAN','NOR','NO'].some(t => l.includes(t)))  return '🇳🇴';
+  if (['DANISH','DANOIS','DAN','DA'].some(t => l.includes(t)))        return '🇩🇰';
+  if (['FINNISH','FINLANDAIS','FIN','FI'].some(t => l.includes(t)))   return '🇫🇮';
+  if (['GREEK','GREC','ELL','EL'].some(t => l.includes(t)))           return '🇬🇷';
+  if (['ROMANIAN','ROUMAIN','RON','RO'].some(t => l.includes(t)))     return '🇷🇴';
+  if (['UKRAINIAN','UKRAINIEN','UKR','UK'].some(t => l.includes(t)))  return '🇺🇦';
+  if (['CZECH','TCHÈQUE','CES','CS'].some(t => l.includes(t)))        return '🇨🇿';
+  if (['HUNGARIAN','HONGROIS','HUN','HU'].some(t => l.includes(t)))   return '🇭🇺';
+  if (['SLOVAK','SLOVAQUE','SLK','SK'].some(t => l.includes(t)))      return '🇸🇰';
+  if (['SLOVENIAN','SLOVÈNE','SLV','SL'].some(t => l.includes(t)))    return '🇸🇮';
+  if (['CROATIAN','CROATE','HRV','HR'].some(t => l.includes(t)))      return '🇭🇷';
+  if (['SERBIAN','SERBE','SRP','SR'].some(t => l.includes(t)))        return '🇷🇸';
+  if (['BOSNIAN','BOSNIEN','BOS','BS'].some(t => l.includes(t)))      return '🇧🇦';
+  if (['BULGARIAN','BULGARE','BUL','BG'].some(t => l.includes(t)))    return '🇧🇬';
+  if (['ALBANIAN','ALBANAIS','SQI','SQ'].some(t => l.includes(t)))    return '🇦🇱';
+  if (['MACEDONIAN','MACÉDONIEN','MKD','MK'].some(t => l.includes(t))) return '🇲🇰';
+  if (['ESTONIAN','ESTONIEN','EST','ET'].some(t => l.includes(t)))    return '🇪🇪';
+  if (['LATVIAN','LETTON','LAV','LV'].some(t => l.includes(t)))       return '🇱🇻';
+  if (['LITHUANIAN','LITUANIEN','LIT','LT'].some(t => l.includes(t))) return '🇱🇹';
+  if (['VIETNAMESE','VIETNAMIEN','VIE','VI'].some(t => l.includes(t))) return '🇻🇳';
+  if (['INDONESIAN','INDONÉSIEN','IND','ID'].some(t => l.includes(t))) return '🇮🇩';
+  if (['MALAY','MALAIS','MSA','MS'].some(t => l.includes(t)))         return '🇲🇾';
+  if (['FILIPINO','TAGALOG','FIL','TL'].some(t => l.includes(t)))     return '🇵🇭';
+  if (['ARMENIAN','ARMÉNIEN','HYE','HY'].some(t => l.includes(t)))    return '🇦🇲';
+  if (['GEORGIAN','GÉORGIEN','KAT','KA'].some(t => l.includes(t)))    return '🇬🇪';
+  if (['ICELANDIC','ISLANDAIS','ISL','IS'].some(t => l.includes(t)))  return '🇮🇸';
+  if (['FARSI','PERSIAN','PERSAN','FAS','FA'].some(t => l.includes(t))) return '🇮🇷';
+  if (['URDU','URD','UR'].some(t => l.includes(t)))                   return '🇵🇰';
+  if (['BENGALI','BEN','BN'].some(t => l.includes(t)))                return '🇧🇩';
+  if (['NEPALI','NÉPALAIS','NEP','NE'].some(t => l.includes(t)))      return '🇳🇵';
+  if (['SINHALA','SIN','SI'].some(t => l.includes(t)))                return '🇱🇰';
+  if (['KHMER','KHM','KM'].some(t => l.includes(t)))                  return '🇰🇭';
+  if (['SWAHILI','SWA','SW'].some(t => l.includes(t)))                return '🇹🇿';
+  if (['AFRIKAANS','AFR','AF'].some(t => l.includes(t)))              return '🇿🇦';
+  if (['ZULU','ZUL','ZU'].some(t => l.includes(t)))                   return '🇿🇦';
+  if (['XHOSA','XHO','XH'].some(t => l.includes(t)))                  return '🇿🇦';
+  if (['CATALAN','CAT','CA'].some(t => l.includes(t)))                return '🇪🇸';
+  if (['WELSH','GALLOIS','CYM','CY'].some(t => l.includes(t)))        return '🏴󠁧󠁢󠁷󠁬󠁳󠁿';
+  if (['PUNJABI','PAN','PA'].some(t => l.includes(t)))                return '🇮🇳';
+  if (['GUJARATI','GUJ','GU'].some(t => l.includes(t)))               return '🇮🇳';
+  if (['TAMIL','TAM','TA'].some(t => l.includes(t)))                  return '🇮🇳';
+  if (['TELUGU','TEL','TE'].some(t => l.includes(t)))                 return '🇮🇳';
+  if (['KANNADA','KAN','KN'].some(t => l.includes(t)))                return '🇮🇳';
+  if (['MALAYALAM','MAL','ML'].some(t => l.includes(t)))              return '🇮🇳';
+  if (['MARATHI','MAR','MR'].some(t => l.includes(t)))                return '🇮🇳';
+
+  return '';
+}
+
 function prezAddAudioTrack(lang="", codec="", channels="", bitrate="") {
   const idx = _prez.audioTracks.length;
   _prez.audioTracks.push({lang, codec, channels, bitrate});
@@ -3607,14 +3694,17 @@ function prezAddAudioTrack(lang="", codec="", channels="", bitrate="") {
   const div = document.createElement('div');
   div.id = 'prez-audio-' + idx;
   div.style.cssText = 'background:var(--bg);border:1px solid var(--border2);border-radius:4px;padding:8px;display:flex;flex-direction:column;gap:4px;';
+  const flag = langToFlag(lang);
   div.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
       <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;">PISTE ${idx+1}</span>
       <button onclick="prezRemoveAudio(${idx})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:0;" title="Supprimer">✕</button>
     </div>
-    <div style="display:flex;gap:4px;">
+    <div style="display:flex;gap:4px;align-items:center;">
+      <span id="prez-audio-flag-${idx}" style="font-size:18px;line-height:1;flex-shrink:0;min-width:24px;">${flag}</span>
       <input data-aidx="${idx}" data-akey="lang" type="text" placeholder="Langue (ex: VFF)" value="${lang}"
-        style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;" oninput="prezUpdateAudio(this)" />
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;"
+        oninput="prezUpdateAudio(this); document.getElementById('prez-audio-flag-${idx}').textContent = langToFlag(this.value);" />
       <input data-aidx="${idx}" data-akey="channels" type="text" placeholder="ex: 5.1" value="${channels}"
         style="width:55px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:4px 6px;outline:none;" oninput="prezUpdateAudio(this)" />
     </div>
@@ -3714,6 +3804,21 @@ function prezRenderScreensList() {
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:10px;">${name}</span>
     </div>`;
   }).join('');
+}
+
+// ── Détection source depuis dossier FULL/ ────────────────────────────────────
+async function prezDetectSource() {
+  const r = await window.pywebview.api.prez_detect_full_source();
+  if (r.ok && r.source) {
+    document.getElementById('prez-vid-source').value = r.source;
+    // Petit feedback visuel
+    const inp = document.getElementById('prez-vid-source');
+    inp.style.borderColor = 'var(--orange)';
+    setTimeout(() => { inp.style.borderColor = 'var(--border2)'; }, 1500);
+  } else {
+    const msg = r.error || 'Aucun groupe détecté dans FULL/';
+    alert(msg);
+  }
 }
 
 // ── Extraction screenshots depuis FILMS/ pour PREZ ───────────────────────────
@@ -4031,8 +4136,14 @@ function prezGenerate() {
   const vidBlock = [vidRes, vidCodec, vidBitrate ? _stripKbs(vidBitrate) + " kb/s" : ""].filter(Boolean);
   // ── Blocs audio
   const audioBlocks = audioTracks.map(t => {
-    const items = [t.lang, t.codec + (t.channels ? " " + t.channels : ""), t.bitrate ? _stripKbs(t.bitrate) + " kb/s" : ""].filter(Boolean);
-    return items.map(i => `<div class="prez-spec-item">${h(i)}</div>`).join('');
+    const flag = langToFlag(t.lang || '');
+    const langDisplay = flag ? `${flag} ${h(t.lang)}` : h(t.lang);
+    const items = [
+      t.lang ? `<div class="prez-spec-item">${langDisplay}</div>` : '',
+      t.codec || t.channels ? `<div class="prez-spec-item">${h(t.codec + (t.channels ? ' ' + t.channels : ''))}</div>` : '',
+      t.bitrate ? `<div class="prez-spec-item">${_stripKbs(t.bitrate)} kb/s</div>` : ''
+    ].filter(Boolean);
+    return items.join('');
   }).join('<hr style="border:none;border-top:1px solid #222;margin:6px 0;">');
   // ── Sous-titres
   const subItems = subTracks.length

@@ -4852,6 +4852,33 @@ class API:
         except Exception as e:
             return {"error": str(e)}
 
+    def prez_detect_full_source(self):
+        """Détecte le nom du groupe source depuis le dossier FULL BD dans remux_tool/FULL/.
+        Convention scene : le groupe est toujours après le dernier tiret '-' dans le nom du dossier.
+        Ex: La.voix.de.Hind.Rajab.2025.MULTI.VFF.1080p.Bluray.ISO.DTS.HD.MA.5.1.AVC-Kaoru111
+            → source = 'Kaoru111'
+        """
+        full_dir = BASE_DIR / "remux_tool" / "FULL"
+        if not full_dir.exists():
+            return {"ok": False, "source": "", "folder": "", "error": "Dossier FULL introuvable"}
+
+        # Chercher les dossiers dans FULL/ (pas les fichiers)
+        folders = [d for d in full_dir.iterdir() if d.is_dir()]
+        if not folders:
+            return {"ok": False, "source": "", "folder": "", "error": "Aucun dossier dans FULL/"}
+
+        # Prendre le plus récent
+        folder = max(folders, key=lambda d: d.stat().st_mtime)
+        name = folder.name
+
+        # Extraire le groupe : tout ce qui suit le dernier '-'
+        if "-" in name:
+            source = name.rsplit("-", 1)[-1].strip()
+        else:
+            source = ""
+
+        return {"ok": True, "source": source, "folder": name}
+
     def prez_list_screenshots(self, film_title: str = ""):
         """Liste les screenshots disponibles dans PICS/<film_title>/ ou le dossier le plus récent."""
         pics_dir = BASE_DIR / "PICS"

@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.9.4-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.5-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -407,6 +407,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.9.5
+- Fix (Remux) : détection FORCED des sous-titres — le flag `Forced` de MediaInfo n'est plus pris pour argent comptant si l'`ElementCount` dépasse 800 (certains BDs taguent un FULL comme Forced à tort)
+- Fix (Remux) : classification FORCED/FULL/SDH (cas 3+ pistes) — comparaison désormais faite par rapport au 2e plus gros élément (au lieu du plus gros), plus robuste quand la piste forcée fait 25-35 % de la suivante
+- Fix (Remux) : sélection de la piste audio "de référence" (codec/canaux affichés dans le nom final) — prend désormais la piste avec le plus gros débit/canaux toutes langues confondues, au lieu de la première piste FR (évite une 2.0 alors qu'une 5.1 existe)
+- Feat (Full BD/PREZ) : nouvelle méthode `prez_detect_full_source()` — détection automatique du nom du groupe source depuis le dossier dans `FULL/` (tout ce qui suit le dernier `-`)
+
 ### v2.9.4
 - Feat (Trackers) : **ajout HDF (HDForever) + HDO (HD-Only)** — announces, SFTP seedbox, création torrent via SSH + mktorrent
 - Feat (Full BD) : **HDT + HDF + HDO** en mode FULL BD — un seul bouton Discord, même canal, même webhook
@@ -512,7 +518,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH AIO v2.9.4** — macOS & Windows
+**REBiRTH AIO v2.9.5** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

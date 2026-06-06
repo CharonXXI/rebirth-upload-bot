@@ -206,7 +206,14 @@ def _parse_with_mediainfo(mediainfo: str, file: str) -> Tuple[Dict, List[Dict], 
                 pass
             
             # Détection par titre ou flag
-            if forced_flag or "FORCED" in title:
+            # ⚠ Le flag "Forced" peut être mal positionné sur certains BDs
+            # (ex: un FULL avec Forced:Yes). On ne le croit que si l'element count
+            # est cohérent avec un vrai FORCED (< 800 éléments).
+            FORCED_MAX_ELEMENTS = 800
+            forced_by_flag = (forced_flag or "FORCED" in title) and (
+                element_count == 0 or element_count < FORCED_MAX_ELEMENTS
+            )
+            if forced_by_flag:
                 t["SubType"] = "FORCED"
             elif "SDH" in title or "HEARING" in title or "IMPAIRED" in title:
                 t["SubType"] = "SDH"
@@ -285,28 +292,29 @@ def _classify_subtitles_by_comparison(subs: List[Dict[str, Any]]) -> None:
                 big["SubType"] = "SDH"
         
         elif len(auto_tracks) >= 3:
-            # 3+ sous-titres. On distingue 3 catégories par taille :
-            #  - FORCED : éléments < 20% du plus gros
-            #  - FULL   : "full-sized" — élé. ≥ 50% du plus gros
-            #  - SDH    : seulement si on a 2+ FULL et que le plus gros sort
-            #             vraiment du lot (≥1.20x du 2e plus gros FULL).
+            # 3+ sous-titres. Logique :
+            #  - FORCED : significativement plus petit que le 2e (< 40% du 2e)
+            #  - FULL   : taille standard
+            #  - SDH    : le plus gros est ≥ 1.20x du 2e plus gros FULL
+            # On compare au 2e (pas au plus gros) pour être robuste quand
+            # le plus petit est à 25-35% du 2e (ex: 580 vs 2182 éléments).
+            second_elem  = auto_tracks[1].get("ElementCount", 0)
             largest_elem = auto_tracks[-1].get("ElementCount", 0)
-
-            full_sized = [t for t in auto_tracks
-                          if t.get("ElementCount", 0) >= largest_elem * 0.5]
 
             for t in auto_tracks:
                 e = t.get("ElementCount", 0)
-                if largest_elem > 0 and e < largest_elem * 0.2:
+                if second_elem > 0 and e < second_elem * 0.40:
                     t["SubType"] = "FORCED"
                 else:
                     t["SubType"] = "FULL"
 
-            # SDH ? Comparer le plus gros au 2e plus gros parmi les FULL
-            if len(full_sized) >= 2:
-                second_largest = full_sized[-2].get("ElementCount", 0)
-                if second_largest > 0 and largest_elem >= second_largest * 1.20:
-                    auto_tracks[-1]["SubType"] = "SDH"
+            # SDH ? Le plus gros doit dépasser le 2e FULL d'au moins 20 %
+            full_tracks = [t for t in auto_tracks if t.get("SubType") == "FULL"]
+            if len(full_tracks) >= 2:
+                full_tracks.sort(key=lambda x: x.get("ElementCount", 0))
+                second_full = full_tracks[-2].get("ElementCount", 0)
+                if second_full > 0 and full_tracks[-1].get("ElementCount", 0) >= second_full * 1.20:
+                    full_tracks[-1]["SubType"] = "SDH"
 
 
 def _parse_with_ffprobe(ffprobe: str, file: str) -> Tuple[Dict, List[Dict], List[Dict]]:

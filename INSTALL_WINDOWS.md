@@ -1,4 +1,4 @@
-# 🪟 Installation Windows — REBiRTH AIO v2.9.4
+# 🪟 Installation Windows — REBiRTH AIO v2.9.5
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 
@@ -120,7 +120,7 @@ $env:PYTHONUTF8="1"
 *(pas de sortie visible — c'est normal)*
 
 ```powershell
-pip install pywebview python-dotenv requests requests_toolbelt tqdm rich pymediainfo parse-torrent-name numpy
+pip install pywebview python-dotenv requests requests_toolbelt tqdm rich pymediainfo parse-torrent-name numpy keyring bcrypt
 ```
 *(téléchargement de plusieurs packages — peut prendre 1 à 2 minutes)*
 

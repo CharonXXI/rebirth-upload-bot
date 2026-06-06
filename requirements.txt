@@ -8,4 +8,6 @@ pymediainfo
 parse-torrent-name
 numpy
 paramiko
+keyring
+bcrypt
 # pywinpty  # Windows uniquement — installer manuellement sur Windows si nécessaire

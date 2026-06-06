@@ -1,4 +1,4 @@
-# 🍎 Installation macOS — REBiRTH AIO v2.9.4
+# 🍎 Installation macOS — REBiRTH AIO v2.9.5
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 
@@ -125,7 +125,7 @@ Tu dois voir `(venv)` apparaître devant ton invite de commande :
 Avec `(venv)` actif, installe les packages (attends la fin de chaque commande) :
 
 ```bash
-pip install pywebview python-dotenv requests requests_toolbelt tqdm rich pymediainfo parse-torrent-name numpy paramiko
+pip install pywebview python-dotenv requests requests_toolbelt tqdm rich pymediainfo parse-torrent-name numpy paramiko keyring bcrypt
 pip install -r NFO_CUSTOM/requirements.txt
 ```
 

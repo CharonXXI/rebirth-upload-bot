@@ -29,4 +29,11 @@ remux_tool/*.log
 PICS/
 # Bot Discord GUI (local uniquement)
 discord_bot_gui.py
+discord_bot_app.py
+discord_bot.html
 discord_bot.command
+
+# Fichiers locaux / hors projet
+backup/
+REBIRTH_NAMING_GUIDE.md
+role_messages.json
