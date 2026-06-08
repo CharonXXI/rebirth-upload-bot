@@ -141,6 +141,8 @@ class API:
             "WEBHOOK_HDF_URL":    os.getenv("WEBHOOK_HDF_URL", ""),
             "SFTP_PATH_HDO":      os.getenv("SFTP_PATH_HDO", "/home/rtorrent/rtorrent/download/FULL BD"),
             "WEBHOOK_HDO_URL":    os.getenv("WEBHOOK_HDO_URL", ""),
+            "WEBHOOK_WEB_URL":        os.getenv("WEBHOOK_WEB_URL", ""),
+            "WEBHOOK_BLURAYRIP_URL":  os.getenv("WEBHOOK_BLURAYRIP_URL", ""),
             "BDINFO_CLI_PATH":    os.getenv("BDINFO_CLI_PATH", ""),
         }
 
@@ -4340,9 +4342,24 @@ class API:
 
         return "https://buzzheavier.com/" + info["id"]
 
+    def _pick_upload_webhook(self, source: str) -> str:
+        """Choisit le webhook Discord cible selon le champ Source de l'upload.
+        Règle : REMUX (même 'BluRay REMUX') → salon REMUX/REBiRTH ;
+        WEB → salon WEB ; BluRay seul (sans REMUX) → salon BluRay Rip.
+        IMPORTANT : on teste REMUX en premier, car une release BluRay REMUX
+        contient le mot 'BluRay' mais ne doit PAS partir dans BluRay Rip."""
+        s = (source or "").upper()
+        if "REMUX" in s:
+            return os.getenv("WEBHOOK_URL", "")
+        if "WEB" in s:
+            return os.getenv("WEBHOOK_WEB_URL", "") or os.getenv("WEBHOOK_URL", "")
+        if "BLURAY" in s or "BLU-RAY" in s or "BLU RAY" in s:
+            return os.getenv("WEBHOOK_BLURAYRIP_URL", "") or os.getenv("WEBHOOK_URL", "")
+        return os.getenv("WEBHOOK_URL", "")
+
     def _discord(self, url, filename, source, note, trackers, autre,
                  tmdb_link, imdb_link, poster_url):
-        wh = os.getenv("WEBHOOK_URL", "")
+        wh = self._pick_upload_webhook(source)
         fields = []
         if tmdb_link: fields.append({"name": "TMDB",     "value": tmdb_link, "inline": False})
         if imdb_link: fields.append({"name": "IMDb",     "value": imdb_link, "inline": False})
@@ -4412,13 +4429,20 @@ class API:
         def _run():
             try:
                 mode = data.get("mode", "rebirth")
-                if mode == "hdt":
-                    # FULL BD : HDT + HDF → même canal, même webhook
-                    webhook_urls = [os.getenv("WEBHOOK_HDT_URL", "")]
+
+                MODE_WEBHOOK_ENV = {
+                    "hdt":       ("WEBHOOK_HDT_URL",       "FULL BD"),
+                    "web":       ("WEBHOOK_WEB_URL",       "WEB"),
+                    "blurayrip": ("WEBHOOK_BLURAYRIP_URL", "BluRay Rip"),
+                }
+
+                if mode in MODE_WEBHOOK_ENV:
+                    env_key, mode_label = MODE_WEBHOOK_ENV[mode]
+                    webhook_urls = [os.getenv(env_key, "")]
                     webhook_urls = [u for u in webhook_urls if u]
                     if not webhook_urls:
                         self._emit("discord_send_done",
-                                   {"ok": False, "error": "WEBHOOK_HDT_URL non configuré dans le .env"})
+                                   {"ok": False, "error": f"{env_key} non configuré dans le .env"})
                         return
                     webhook_url = webhook_urls[0]
                 else:

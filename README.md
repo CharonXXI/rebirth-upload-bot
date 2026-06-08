@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.9.5-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.6-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -407,6 +407,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.9.6
+- Feat (Discord) : **guide de nommage REBiRTH enrichi** — placement du tag `[CUSTOM]`, règles REPACK / éditions (`THEATRICAL.CUT`, `EXTENDED.CUT`, `DIRECTOR'S.CUT`, `UNRATED`, `UNCENSORED`, `REMASTERED`), titrage des pistes audio MULTi/VO clarifié (langues réelles : Français / Anglais / Japonais…) — guide complet `REBIRTH_NAMING_GUIDE.md` désormais joint en pièce jointe au message Discord
+- Feat (Discord/Upload) : **routage automatique des notifications par salon** — détection du type de release depuis le champ Source (REMUX → salon REMUX, WEB → salon WEB, BluRay seul → salon BluRay Rip), avec priorité REMUX pour ne pas confondre un `BluRay REMUX` avec un `BluRay Rip`
+- Feat (Config) : ajout des webhooks dédiés `WEBHOOK_WEB_URL` et `WEBHOOK_BLURAYRIP_URL`
+- Feat (Discord) : **mode « Saisie manuelle »** sur la page de notification Discord — permet de chercher un film via TMDB et de saisir le nom de la release à la main quand le fichier n'est pas présent dans la seedbox
+
 ### v2.9.5
 - Fix (Remux) : détection FORCED des sous-titres — le flag `Forced` de MediaInfo n'est plus pris pour argent comptant si l'`ElementCount` dépasse 800 (certains BDs taguent un FULL comme Forced à tort)
 - Fix (Remux) : classification FORCED/FULL/SDH (cas 3+ pistes) — comparaison désormais faite par rapport au 2e plus gros élément (au lieu du plus gros), plus robuste quand la piste forcée fait 25-35 % de la suivante
@@ -518,7 +524,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH AIO v2.9.5** — macOS & Windows
+**REBiRTH AIO v2.9.6** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

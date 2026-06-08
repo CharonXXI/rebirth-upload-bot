@@ -1,4 +1,4 @@
-# 🍎 Installation macOS — REBiRTH AIO v2.9.5
+# 🍎 Installation macOS — REBiRTH AIO v2.9.6
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 

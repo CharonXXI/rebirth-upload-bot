@@ -34,6 +34,15 @@ except Exception:
 WEBHOOK_URL  = os.getenv("WEBHOOK_URL", "")
 TMDB_API_KEY = os.getenv("API_KEY", "")
 
+# Webhooks par type de release (un salon Discord = un webhook).
+# Si le webhook spécifique n'est pas renseigné dans V1.env, on retombe sur WEBHOOK_URL.
+RELEASE_TYPES = ["REMUX / FULL BD", "WEB", "BluRay Rip"]
+WEBHOOKS_BY_TYPE = {
+    "REMUX / FULL BD": os.getenv("WEBHOOK_URL", "") or WEBHOOK_URL,
+    "WEB":             os.getenv("WEBHOOK_WEB_URL", "") or WEBHOOK_URL,
+    "BluRay Rip":      os.getenv("WEBHOOK_BLURAYRIP_URL", "") or WEBHOOK_URL,
+}
+
 class RebirthApp:
     def __init__(self):
         self.root = tk.Tk()
@@ -234,6 +243,11 @@ class RebirthApp:
         
         self.rel_entry.bind("<Button-3>", self.show_context_menu)
 
+        tk.Label(form_content, text="TYPE DE RELEASE (salon Discord) :", bg="#2c2c2c", fg="#bdc3c7", font=("Arial", 11, "bold")).pack(anchor="w", padx=50, pady=(15, 5))
+        self.type_var = tk.StringVar(value=RELEASE_TYPES[0])
+        self.type_cb = ttk.Combobox(form_content, textvariable=self.type_var, values=RELEASE_TYPES, width=25, state="readonly", font=("Arial", 11, "bold"))
+        self.type_cb.pack(anchor="w", padx=50, pady=(0, 10))
+
         self.maj_var = tk.BooleanVar(value=False)
         maj_frame = tk.Frame(form_content, bg="#2c2c2c", cursor="hand2")
         maj_frame.pack(anchor="w", padx=100, pady=20)
@@ -299,13 +313,22 @@ class RebirthApp:
         img = f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}" if m.get('poster_path') else None
         
         try:
-            self.post_to_discord(m['title'], (m.get('release_date') or "0000")[:4], rel, img, uploads, self.maj_var.get(), m['id'])
+            self.post_to_discord(m['title'], (m.get('release_date') or "0000")[:4], rel, img, uploads, self.maj_var.get(), m['id'], self.type_var.get())
             messagebox.showinfo("REBIRTH", "Notification envoyee !")
             self.cancel_form()
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur d envoi : {e}")
 
-    def post_to_discord(self, title, year, rel, img, uploads, is_maj, fid):
+    def post_to_discord(self, title, year, rel, img, uploads, is_maj, fid, release_type=None):
+        target_webhook = WEBHOOKS_BY_TYPE.get(release_type, WEBHOOK_URL)
+        if not target_webhook:
+            messagebox.showwarning(
+                "REBIRTH",
+                f"Aucun webhook configuré pour « {release_type} ».\n"
+                f"Ajoute son URL dans V1.env, puis relance l'app."
+            )
+            return
+
         status_lines = []
         for site, data in uploads.items():
             s = data['status']
@@ -327,13 +350,14 @@ class RebirthApp:
                f"{maj_text}\n" \
                + upload_block
         
+        type_badge = f" — {release_type}" if release_type else ""
         embed = {
-            "title": f"🎬 Nom du film : {title} ({year})",
+            "title": f"🎬 Nom du film : {title} ({year}){type_badge}",
             "description": desc,
             "color": 16776960 if is_maj else 15548997,
             "thumbnail": {"url": img} if img else None,
         }
-        requests.post(WEBHOOK_URL, json={"content": "@everyone", "embeds": [embed]}, timeout=10)
+        requests.post(target_webhook, json={"content": "@everyone", "embeds": [embed]}, timeout=10)
 
     def run(self):
         self.root.mainloop()

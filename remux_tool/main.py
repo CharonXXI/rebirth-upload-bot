@@ -602,6 +602,11 @@ def run_workflow(movie_entry: str, auto_mode: bool = False):
     vf_types_found = []
     has_en = False
     has_fr = False
+    # Présence d'au moins une piste audio dans une langue autre que le
+    # français (anglais, arabe, espagnol, japonais...) — sert à détecter
+    # MULTi pour les films dont la VO n'est pas anglaise (ex: VO arabe +
+    # doublage VFi -> MULTi.VFi).
+    has_other = False
     best_audio_info = None  # Pour le nom du fichier
     
     for t in audio_tracks:
@@ -654,7 +659,10 @@ def run_workflow(movie_entry: str, auto_mode: bool = False):
         is_fr = lang in ("fr", "fra", "fre", "french", "fr-fr", "fr-ca") or \
                 any(x in title.lower() for x in ["french", "français", "vf"])
         is_en_track = lang in ("en", "eng", "english", "en-us", "en-gb") or "english" in title.lower()
-        
+
+        if not is_fr:
+            has_other = True
+
         # Garder les infos de la meilleure piste (EN prioritaire, sinon FR)
         if is_en_track and not best_audio_info:
             best_audio_info = t
@@ -752,7 +760,9 @@ def run_workflow(movie_entry: str, auto_mode: bool = False):
                 vf_tag = "VFF"
     
     # Construire le tag langue
-    is_multi = has_en and has_fr
+    # MULTi dès qu'il y a une piste FR ET au moins une piste dans une autre
+    # langue (anglaise ou non — arabe, espagnol, etc.), pas seulement EN+FR.
+    is_multi = has_other and has_fr
     if is_multi:
         lang_tag = f"MULTi.{vf_tag}" if vf_tag else "MULTi"
     else:

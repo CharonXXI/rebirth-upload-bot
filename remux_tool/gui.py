@@ -1319,6 +1319,11 @@ class API:
             ]
             has_en = any(_is_en(t) for t in kept_audio)
             has_fr = any(_is_fr(t) for t in kept_audio)
+            # Présence d'au moins une piste audio dans une langue autre que le
+            # français (anglais, arabe, espagnol, japonais...) — sert à détecter
+            # MULTi pour les films dont la VO n'est pas anglaise (ex: VO arabe +
+            # doublage VFi -> MULTi.VFi).
+            has_other = any(not _is_fr(t) for t in kept_audio)
 
             # Tag VF — dérivé 100% des overrides (et auto-détection en fallback)
             uniq = set(vf_types_found)
@@ -1335,7 +1340,7 @@ class API:
             else:
                 vf_tag = "VFF" if has_fr else ""
 
-            lang_tag = (f"MULTi.{vf_tag}" if vf_tag else "MULTi") if (has_en and has_fr) else (
+            lang_tag = (f"MULTi.{vf_tag}" if vf_tag else "MULTi") if (has_other and has_fr) else (
                 vf_tag or ("FRENCH" if has_fr else "ENGLISH" if has_en else "")
             )
 
