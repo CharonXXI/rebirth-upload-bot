@@ -357,7 +357,7 @@ class RebirthApp:
             "color": 16776960 if is_maj else 15548997,
             "thumbnail": {"url": img} if img else None,
         }
-        requests.post(target_webhook, json={"content": "@everyone", "embeds": [embed]}, timeout=10)
+        requests.post(target_webhook, json={"content": "", "embeds": [embed]}, timeout=10)
 
     def run(self):
         self.root.mainloop()

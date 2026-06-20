@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.9.6-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.7-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -407,6 +407,12 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.9.7
+- Feat (BD Info) : **upload Seedbox découplé de la création des torrents** — un seul bouton « ↑ SB UPLOAD » envoie le dossier FULL BD une seule fois ; les boutons HDT / HDF / HDO ne font plus que créer le `.torrent` depuis ce dossier déjà sur la SB (plus de triple ré-upload du même contenu)
+- Feat (Discord) : nouveau salon **« à faire »** dédié — les notifications d'upload Gofile/BuzzHeavier (REMUX et tout nom non reconnu) partent désormais sur ce salon (`WEBHOOK_TODO_URL`) au lieu de `#remux`, qui restait encombré par les releases déjà traitées. WEB et BluRay Rip gardent leur salon dédié, inchangé
+- Fix (Discord) : retrait du ping `@everyone` sur les notifications de statut d'upload (mode REBiRTH, statut des 7 trackers) — l'embed part toujours, mais sans notifier tout le serveur
+- Chore : synchronisation du numéro de version (`version_win.txt`, `build_mac.spec`) qui était resté bloqué sur 2.8.3 alors que le badge/changelog étaient déjà à 2.9.6
+
 ### v2.9.6
 - Feat (Discord) : **guide de nommage REBiRTH enrichi** — placement du tag `[CUSTOM]`, règles REPACK / éditions (`THEATRICAL.CUT`, `EXTENDED.CUT`, `DIRECTOR'S.CUT`, `UNRATED`, `UNCENSORED`, `REMASTERED`), titrage des pistes audio MULTi/VO clarifié (langues réelles : Français / Anglais / Japonais…) — guide complet `REBIRTH_NAMING_GUIDE.md` désormais joint en pièce jointe au message Discord
 - Feat (Discord/Upload) : **routage automatique des notifications par salon** — détection du type de release depuis le champ Source (REMUX → salon REMUX, WEB → salon WEB, BluRay seul → salon BluRay Rip), avec priorité REMUX pour ne pas confondre un `BluRay REMUX` avec un `BluRay Rip`
@@ -524,7 +530,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH AIO v2.9.6** — macOS & Windows
+**REBiRTH AIO v2.9.7** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

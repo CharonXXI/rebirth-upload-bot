@@ -18,6 +18,7 @@ BASE_DIR     = Path(__file__).parent
 ENV_FILE     = BASE_DIR / "V1.env"
 HISTORY_FILE = BASE_DIR / "history.json"
 THEME_FILE   = BASE_DIR / "theme.txt"
+TAB_LABELS_FILE = BASE_DIR / "tab_labels.json"
 sys.path.insert(0, str(BASE_DIR))
 
 from gofile import gofile_upload
@@ -182,6 +183,27 @@ class API:
         if THEME_FILE.exists():
             return THEME_FILE.read_text(encoding="utf-8").strip()
         return "dark"
+
+    def load_tab_labels(self):
+        """Charge les libellés personnalisés des onglets du menu (réglage 100% local
+        à cette installation — chaque copie du logiciel a son propre fichier)."""
+        if not TAB_LABELS_FILE.exists():
+            return {}
+        try:
+            with open(TAB_LABELS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def save_tab_labels(self, labels: dict):
+        """Sauvegarde les libellés personnalisés des onglets dans un fichier local
+        (tab_labels.json). N'affecte que cette installation — jamais synchronisé."""
+        try:
+            with open(TAB_LABELS_FILE, "w", encoding="utf-8") as f:
+                json.dump(labels or {}, f, ensure_ascii=False, indent=2)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def confirm_torrents(self, data):
         self._torrent_confirmed = data.get("selected", [])
@@ -748,6 +770,8 @@ class API:
 
         # Mémoriser le dossier source pour l'upload ultérieur
         self._bdi_last_folder = folder_path
+        # Nouveau scan → l'éventuel upload SB précédent ne correspond plus
+        self._bdi_sb_state = None
 
         _status("▶ " + Path(folder_path).name)
 
@@ -2168,16 +2192,17 @@ class API:
         self._log(f"  [SFTP] {msg_done}", "success")
         self._emit("bdinfo_hdt_status", {"msg": msg_done})
 
-    def torrent_bdinfo_hdt(self):
-        """Upload le dossier FULL BD sur la seedbox puis crée le torrent HD-Torrents.
-        1. SFTP upload récursif du dossier local vers SFTP_PATH_HDT/<nom>
-        2. Création du torrent via mktorrent (SSH) + chargement ruTorrent
+    def bdinfo_upload_sb(self):
+        """Upload le dossier FULL BD sur la seedbox — UNE SEULE FOIS.
+        Une fois ce dossier présent sur la SB, les boutons HDT / HDF / HDO
+        n'ont qu'à créer leur .torrent respectif (cf. _bdinfo_create_torrent_only),
+        sans ré-uploader le contenu à chaque fois.
         """
         def _worker():
             try:
                 bdi_folder = getattr(self, "_bdi_last_folder", "")
                 if not bdi_folder:
-                    self._emit("bdinfo_hdt_done", {
+                    self._emit("bdinfo_sb_done", {
                         "ok": False, "error": "Aucune source — sélectionne et scanne d'abord un dossier BDMV"
                     })
                     return
@@ -2188,33 +2213,27 @@ class API:
                 films_candidate = BASE_DIR / "FILMS" / folder_name
                 if films_candidate.exists() and films_candidate.is_dir():
                     folder = str(films_candidate)
-                    self._log(f"  [HDT] Source FILMS/ : {folder}")
+                    self._log(f"  [SB] Source FILMS/ : {folder}")
                 elif Path(bdi_folder).exists():
                     folder = bdi_folder
-                    self._log(f"  [HDT] Source (scan) : {folder}")
+                    self._log(f"  [SB] Source (scan) : {folder}")
                 else:
-                    self._emit("bdinfo_hdt_done", {
+                    self._emit("bdinfo_sb_done", {
                         "ok": False,
                         "error": f"Dossier introuvable dans FILMS/ ni à l'emplacement scanné : {folder_name}"
                     })
                     return
 
-                hdt_announce = os.getenv("TRACKER_HDT", "")
-                if not hdt_announce:
-                    self._emit("bdinfo_hdt_done", {
-                        "ok": False, "error": "TRACKER_HDT non configuré dans le .env"
-                    })
-                    return
+                base       = Path(folder).name
+                sftp_base  = (os.getenv("SFTP_PATH_HDT") or os.getenv("SFTP_PATH_HDF")
+                              or os.getenv("SFTP_PATH_HDO") or "/home/rtorrent/rtorrent/download/FULL BD")
+                remote_path = sftp_base.rstrip("/") + "/" + base
 
-                base          = Path(folder).name
-                hdt_sftp_base = os.getenv("SFTP_PATH_HDT", "/home/rtorrent/rtorrent/download/FULL BD")
-                hdt_remote_path = hdt_sftp_base.rstrip("/") + "/" + base
-
-                self._log(f"▶ BD Info HDT : {base}")
+                self._log(f"▶ BD Info — Upload SB : {base}")
                 self._log(f"  dossier local  : {folder}")
-                self._log(f"  seedbox target : {hdt_remote_path}")
+                self._log(f"  seedbox target : {remote_path}")
 
-                # ── 1. SFTP upload récursif du dossier ─────────────────────────
+                # ── SFTP upload récursif du dossier ─────────────────────────────
                 try:
                     import paramiko
                 except ImportError:
@@ -2228,7 +2247,7 @@ class API:
                 user     = os.getenv("SFTP_USER", "")
                 password = os.getenv("SFTP_PASS", "")
 
-                self._emit("bdinfo_hdt_status", {"msg": f"Connexion SFTP vers {host}…"})
+                self._emit("bdinfo_sb_status", {"msg": f"Connexion SFTP vers {host}…"})
                 transport = paramiko.Transport((host, port))
                 transport.window_size              = 67108864
                 transport.packetizer.REKEY_BYTES   = pow(2, 40)
@@ -2237,20 +2256,53 @@ class API:
                 sftp = paramiko.SFTPClient.from_transport(transport)
                 sftp.MAX_REQUEST_SIZE = 1048576
 
-                self._sftp_upload_folder(sftp, folder, hdt_remote_path)
+                self._sftp_upload_folder(sftp, folder, remote_path)
 
                 sftp.close()
                 transport.close()
                 self._log("  [SFTP] ✅ Dossier uploadé", "success")
 
-                # ── 2. Créer le torrent et démarrer le seeding ─────────────────
-                self._emit("bdinfo_hdt_status", {"msg": "Création torrent HDT…"})
-                self._create_torrent_rutorrent(base, hdt_remote_path, {"HDT": hdt_announce}, private=True, auto_start=False)
+                # Mémorise l'état pour les créations de torrent suivantes (pas de ré-upload)
+                self._bdi_sb_state = {"base": base, "remote_path": remote_path}
 
-                self._emit("bdinfo_hdt_done", {
-                    "ok": True, "base": base, "path": hdt_remote_path
-                })
+                self._emit("bdinfo_sb_done", {"ok": True, "base": base, "path": remote_path})
 
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._emit("bdinfo_sb_done", {"ok": False, "error": str(e)})
+
+        threading.Thread(target=_worker, daemon=True).start()
+        return {"ok": True}
+
+    def _bdinfo_create_torrent_only(self, tk_name, announce_env, done_event, status_event):
+        """Crée le .torrent pour `tk_name` depuis le dossier déjà uploadé sur la SB
+        (via bdinfo_upload_sb). Ne re-upload jamais le contenu.
+        """
+        state = getattr(self, "_bdi_sb_state", None)
+        if not state:
+            self._emit(done_event, {
+                "ok": False,
+                "error": "Le dossier n'est pas encore sur la seedbox — clique d'abord sur « ↑ SB UPLOAD »"
+            })
+            return
+
+        announce = os.getenv(announce_env, "")
+        if not announce:
+            self._emit(done_event, {"ok": False, "error": f"{announce_env} non configuré dans le .env"})
+            return
+
+        base, remote_path = state["base"], state["remote_path"]
+        self._log(f"▶ BD Info {tk_name} : {base} (déjà sur la SB, pas de ré-upload)")
+        self._emit(status_event, {"msg": f"Création torrent {tk_name}…"})
+        self._create_torrent_rutorrent(base, remote_path, {tk_name: announce}, private=True, auto_start=False)
+        self._emit(done_event, {"ok": True, "base": base, "path": remote_path})
+
+    def torrent_bdinfo_hdt(self):
+        """Crée le torrent HD-Torrents depuis le dossier déjà présent sur la SB."""
+        def _worker():
+            try:
+                self._bdinfo_create_torrent_only("HDT", "TRACKER_HDT", "bdinfo_hdt_done", "bdinfo_hdt_status")
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -2260,80 +2312,10 @@ class API:
         return {"ok": True}
 
     def torrent_bdinfo_hdf(self):
-        """Upload le dossier FULL BD sur la seedbox puis crée le torrent HDF.
-        Même workflow que HDT — dossier identique, announce URL différente.
-        """
+        """Crée le torrent HDF depuis le dossier déjà présent sur la SB."""
         def _worker():
             try:
-                bdi_folder = getattr(self, "_bdi_last_folder", "")
-                if not bdi_folder:
-                    self._emit("bdinfo_hdf_done", {
-                        "ok": False, "error": "Aucune source — sélectionne et scanne d'abord un dossier BDMV"
-                    })
-                    return
-
-                folder_name = Path(bdi_folder).name
-                films_candidate = BASE_DIR / "FILMS" / folder_name
-                if films_candidate.exists() and films_candidate.is_dir():
-                    folder = str(films_candidate)
-                    self._log(f"  [HDF] Source FILMS/ : {folder}")
-                elif Path(bdi_folder).exists():
-                    folder = bdi_folder
-                    self._log(f"  [HDF] Source (scan) : {folder}")
-                else:
-                    self._emit("bdinfo_hdf_done", {
-                        "ok": False,
-                        "error": f"Dossier introuvable : {folder_name}"
-                    })
-                    return
-
-                hdf_announce = os.getenv("TRACKER_HDF", "")
-                if not hdf_announce:
-                    self._emit("bdinfo_hdf_done", {
-                        "ok": False, "error": "TRACKER_HDF non configuré dans le .env"
-                    })
-                    return
-
-                base            = Path(folder).name
-                hdf_sftp_base   = os.getenv("SFTP_PATH_HDF", "/home/rtorrent/rtorrent/download/FULL BD")
-                hdf_remote_path = hdf_sftp_base.rstrip("/") + "/" + base
-
-                self._log(f"▶ BD Info HDF : {base}")
-                self._log(f"  dossier local  : {folder}")
-                self._log(f"  seedbox target : {hdf_remote_path}")
-
-                try:
-                    import paramiko
-                except ImportError:
-                    import subprocess as _sp
-                    _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
-                             "--break-system-packages", "--quiet"], capture_output=True)
-                    import paramiko  # noqa: F811
-
-                host     = os.getenv("SFTP_HOST_FTP", "")
-                port     = int(os.getenv("SFTP_PORT", "22"))
-                user     = os.getenv("SFTP_USER", "")
-                password = os.getenv("SFTP_PASS", "")
-
-                self._emit("bdinfo_hdf_status", {"msg": f"Connexion SFTP vers {host}…"})
-                transport = paramiko.Transport((host, port))
-                transport.window_size              = 67108864
-                transport.packetizer.REKEY_BYTES   = pow(2, 40)
-                transport.packetizer.REKEY_PACKETS = pow(2, 40)
-                transport.connect(username=user, password=password)
-                sftp = paramiko.SFTPClient.from_transport(transport)
-                sftp.MAX_REQUEST_SIZE = 1048576
-
-                self._sftp_upload_folder(sftp, folder, hdf_remote_path)
-                sftp.close()
-                transport.close()
-                self._log("  [SFTP] ✅ Dossier uploadé", "success")
-
-                self._emit("bdinfo_hdf_status", {"msg": "Création torrent HDF…"})
-                self._create_torrent_rutorrent(base, hdf_remote_path, {"HDF": hdf_announce}, private=True, auto_start=False)
-
-                self._emit("bdinfo_hdf_done", {"ok": True, "base": base, "path": hdf_remote_path})
-
+                self._bdinfo_create_torrent_only("HDF", "TRACKER_HDF", "bdinfo_hdf_done", "bdinfo_hdf_status")
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -2343,81 +2325,10 @@ class API:
         return {"ok": True}
 
     def torrent_bdinfo_hdo(self):
-        """Upload le dossier FULL BD sur la seedbox puis crée le torrent HD-Only.
-        Même workflow que HDT/HDF — piece size 16 MB (-l 24) imposé par HDO.
-        """
+        """Crée le torrent HD-Only (16 MB pieces) depuis le dossier déjà présent sur la SB."""
         def _worker():
             try:
-                bdi_folder = getattr(self, "_bdi_last_folder", "")
-                if not bdi_folder:
-                    self._emit("bdinfo_hdo_done", {
-                        "ok": False, "error": "Aucune source — sélectionne et scanne d'abord un dossier BDMV"
-                    })
-                    return
-
-                folder_name = Path(bdi_folder).name
-                films_candidate = BASE_DIR / "FILMS" / folder_name
-                if films_candidate.exists() and films_candidate.is_dir():
-                    folder = str(films_candidate)
-                    self._log(f"  [HDO] Source FILMS/ : {folder}")
-                elif Path(bdi_folder).exists():
-                    folder = bdi_folder
-                    self._log(f"  [HDO] Source (scan) : {folder}")
-                else:
-                    self._emit("bdinfo_hdo_done", {
-                        "ok": False,
-                        "error": f"Dossier introuvable : {folder_name}"
-                    })
-                    return
-
-                hdo_announce = os.getenv("TRACKER_HDO", "")
-                if not hdo_announce:
-                    self._emit("bdinfo_hdo_done", {
-                        "ok": False, "error": "TRACKER_HDO non configuré dans le .env"
-                    })
-                    return
-
-                base            = Path(folder).name
-                hdo_sftp_base   = os.getenv("SFTP_PATH_HDO", "/home/rtorrent/rtorrent/download/FULL BD")
-                hdo_remote_path = hdo_sftp_base.rstrip("/") + "/" + base
-
-                self._log(f"▶ BD Info HDO : {base}")
-                self._log(f"  dossier local  : {folder}")
-                self._log(f"  seedbox target : {hdo_remote_path}")
-
-                try:
-                    import paramiko
-                except ImportError:
-                    import subprocess as _sp
-                    _sp.run([sys.executable, "-m", "pip", "install", "paramiko",
-                             "--break-system-packages", "--quiet"], capture_output=True)
-                    import paramiko  # noqa: F811
-
-                host     = os.getenv("SFTP_HOST_FTP", "")
-                port     = int(os.getenv("SFTP_PORT", "22"))
-                user     = os.getenv("SFTP_USER", "")
-                password = os.getenv("SFTP_PASS", "")
-
-                self._emit("bdinfo_hdo_status", {"msg": f"Connexion SFTP vers {host}…"})
-                transport = paramiko.Transport((host, port))
-                transport.window_size              = 67108864
-                transport.packetizer.REKEY_BYTES   = pow(2, 40)
-                transport.packetizer.REKEY_PACKETS = pow(2, 40)
-                transport.connect(username=user, password=password)
-                sftp = paramiko.SFTPClient.from_transport(transport)
-                sftp.MAX_REQUEST_SIZE = 1048576
-
-                self._sftp_upload_folder(sftp, folder, hdo_remote_path)
-                sftp.close()
-                transport.close()
-                self._log("  [SFTP] ✅ Dossier uploadé", "success")
-
-                # HDO : piece size 16 MB (-l 24), source "HD-Only", torrent privé
-                self._emit("bdinfo_hdo_status", {"msg": "Création torrent HDO (16 MB pieces)…"})
-                self._create_torrent_rutorrent(base, hdo_remote_path, {"HDO": hdo_announce}, private=True, auto_start=False)
-
-                self._emit("bdinfo_hdo_done", {"ok": True, "base": base, "path": hdo_remote_path})
-
+                self._bdinfo_create_torrent_only("HDO", "TRACKER_HDO", "bdinfo_hdo_done", "bdinfo_hdo_status")
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -4342,24 +4253,28 @@ class API:
 
         return "https://buzzheavier.com/" + info["id"]
 
-    def _pick_upload_webhook(self, source: str) -> str:
-        """Choisit le webhook Discord cible selon le champ Source de l'upload.
-        Règle : REMUX (même 'BluRay REMUX') → salon REMUX/REBiRTH ;
+    def _pick_upload_webhook(self, filename: str) -> str:
+        """Choisit le webhook Discord cible selon le nom du fichier uploadé.
+        Règle : REMUX → salon "à faire" ;
         WEB → salon WEB ; BluRay seul (sans REMUX) → salon BluRay Rip.
         IMPORTANT : on teste REMUX en premier, car une release BluRay REMUX
-        contient le mot 'BluRay' mais ne doit PAS partir dans BluRay Rip."""
-        s = (source or "").upper()
+        contient le mot 'BluRay' mais ne doit PAS partir dans BluRay Rip.
+        NB : REMUX (et tout nom non reconnu) partait avant dans le salon
+        #remux, qui finissait encombré de releases déjà traitées — ça part
+        maintenant dans #à-faire (WEBHOOK_TODO_URL), avec repli sur
+        WEBHOOK_URL si jamais ce webhook n'est pas configuré."""
+        s = (filename or "").upper().replace(".", " ").replace("-", " ")
         if "REMUX" in s:
-            return os.getenv("WEBHOOK_URL", "")
+            return os.getenv("WEBHOOK_TODO_URL", "") or os.getenv("WEBHOOK_URL", "")
         if "WEB" in s:
             return os.getenv("WEBHOOK_WEB_URL", "") or os.getenv("WEBHOOK_URL", "")
-        if "BLURAY" in s or "BLU-RAY" in s or "BLU RAY" in s:
+        if "BLURAY" in s or "BLU RAY" in s:
             return os.getenv("WEBHOOK_BLURAYRIP_URL", "") or os.getenv("WEBHOOK_URL", "")
-        return os.getenv("WEBHOOK_URL", "")
+        return os.getenv("WEBHOOK_TODO_URL", "") or os.getenv("WEBHOOK_URL", "")
 
     def _discord(self, url, filename, source, note, trackers, autre,
                  tmdb_link, imdb_link, poster_url):
-        wh = self._pick_upload_webhook(source)
+        wh = self._pick_upload_webhook(filename)
         fields = []
         if tmdb_link: fields.append({"name": "TMDB",     "value": tmdb_link, "inline": False})
         if imdb_link: fields.append({"name": "IMDb",     "value": imdb_link, "inline": False})
@@ -4500,7 +4415,7 @@ class API:
                 for wh in targets:
                     resp = requests.post(
                         wh,
-                        json={"content": "@everyone", "embeds": [embed]},
+                        json={"content": "", "embeds": [embed]},
                         timeout=10
                     )
                     if resp.status_code not in (200, 204):

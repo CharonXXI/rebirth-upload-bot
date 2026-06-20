@@ -15,6 +15,7 @@ BDINFO/
 BDInfo_v0/
 history.json
 theme.txt
+tab_labels.json
 .env
 .DS_Store
 NFO_CUSTOM/.DS_Store

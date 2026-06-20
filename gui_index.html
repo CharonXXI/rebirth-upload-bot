@@ -441,44 +441,44 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH AIO</div>
-      <div class="logo-sub">v 2.9.6</div>
+      <div class="logo-sub">v 2.9.7</div>
     </div>
     <nav class="nav">
       <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
-        <span class="nav-icon">⬆</span> Upload
+        <span class="nav-icon">⬆</span> <span class="nav-label" data-default="Upload">Upload</span>
       </div>
       <div class="nav-item" id="nav-remux" data-page="remux" onclick="showPage('remux', this); rmxOnOpen()">
-        <span class="nav-icon">🔄</span> Remux <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
+        <span class="nav-icon">🔄</span> <span class="nav-label" data-default="Remux">Remux</span> <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
       </div>
       <div class="nav-item" id="nav-fullbd" data-page="fullbd" onclick="showPage('fullbd', this)">
-        <span class="nav-icon">📀</span> Full BD
+        <span class="nav-icon">📀</span> <span class="nav-label" data-default="Full BD">Full BD</span>
       </div>
       <div class="nav-item" data-page="bdinfo" onclick="showPage('bdinfo', this)">
-        <span class="nav-icon">💿</span> BD Info
+        <span class="nav-icon">💿</span> <span class="nav-label" data-default="BD Info">BD Info</span>
       </div>
       <div class="nav-item" data-page="prez" onclick="showPage('prez', this); prezCheckImgbbKey(); prezCheckImgboxSession()">
-        <span class="nav-icon">🎨</span> Prez <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
+        <span class="nav-icon">🎨</span> <span class="nav-label" data-default="Prez">Prez</span> <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
       </div>
       <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
-        <span class="nav-icon">📡</span> Trackers
+        <span class="nav-icon">📡</span> <span class="nav-label" data-default="Trackers">Trackers</span>
       </div>
       <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this); tsbSyncTrackers(); tsbLoadFiles()">
-        <span class="nav-icon">🧲</span> Torrent SB
+        <span class="nav-icon">🧲</span> <span class="nav-label" data-default="Torrent SB">Torrent SB</span>
       </div>
       <div class="nav-item" data-page="sbfiles" onclick="showPage('sbfiles', this); sbfLoad('/home/rtorrent/rtorrent/download')">
-        <span class="nav-icon">🗂️</span> Fichiers SB
+        <span class="nav-icon">🗂️</span> <span class="nav-label" data-default="Fichiers SB">Fichiers SB</span>
       </div>
       <div class="nav-item" data-page="discord" onclick="showPage('discord', this); discordLoadFiles()">
-        <span class="nav-icon">🔔</span> Discord
+        <span class="nav-icon">🔔</span> <span class="nav-label" data-default="Discord">Discord</span>
       </div>
       <div class="nav-item" data-page="history" onclick="showPage('history', this); renderHistory()">
-        <span class="nav-icon">🕘</span> Historique
+        <span class="nav-icon">🕘</span> <span class="nav-label" data-default="Historique">Historique</span>
       </div>
       <div class="nav-item" data-page="stats" onclick="showPage('stats', this); renderStatsPage()">
-        <span class="nav-icon">📊</span> Stats
+        <span class="nav-icon">📊</span> <span class="nav-label" data-default="Stats">Stats</span>
       </div>
       <div class="nav-item" data-page="config" onclick="showPage('config', this)">
-        <span class="nav-icon">⚙</span> Config
+        <span class="nav-icon">⚙</span> <span class="nav-label" data-default="Config">Config</span>
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -833,47 +833,62 @@ html.light body::before {
             <div id="bdi-upload-status"
                  style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:8px;min-height:16px;transition:color .2s;padding:0 2px;word-break:break-all;"></div>
 
-            <!-- HDT Seedbox torrent -->
+            <!-- Seedbox upload (unique, partagé par les 3 trackers) -->
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
-              <div style="font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text-dim);margin-bottom:8px;">HD-TORRENTS</div>
-              <button id="bdi-hdt-btn" onclick="bdiTorrentHDT()"
-                style="width:100%;padding:10px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
-                onmouseover="if(!this.disabled)this.style.background='rgba(255,140,0,0.1)'"
-                onmouseout="if(!this.disabled)this.style.background='transparent'">
-                ↑ &nbsp;SB + 🧲 TORRENT HDT
+              <div style="font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text-dim);margin-bottom:8px;">SEEDBOX</div>
+              <button id="bdi-sb-btn" onclick="bdiUploadSB()"
+                style="width:100%;padding:10px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
+                onmouseover="if(!this.disabled)this.style.background='var(--orange2)'"
+                onmouseout="if(!this.disabled)this.style.background='var(--orange)'">
+                ↑ &nbsp;SB UPLOAD
               </button>
               <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
-                Upload le dossier sur la seedbox → <span style="color:var(--orange);">FULL BD/</span> puis crée le torrent HDT
+                Upload le dossier sur la seedbox → <span style="color:var(--orange);">FULL BD/</span> — une seule fois, puis choisis ci-dessous quel(s) torrent(s) créer
+              </div>
+              <div id="bdi-sb-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;min-height:14px;word-break:break-all;"></div>
+            </div>
+
+            <!-- HDT torrent (création seule, nécessite l'upload SB ci-dessus) -->
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
+              <div style="font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text-dim);margin-bottom:8px;">HD-TORRENTS</div>
+              <button id="bdi-hdt-btn" onclick="bdiTorrentHDT()" disabled
+                style="width:100%;padding:10px;background:transparent;border:1px solid var(--orange);border-radius:4px;color:var(--orange);font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;opacity:.4;"
+                onmouseover="if(!this.disabled)this.style.background='rgba(255,140,0,0.1)'"
+                onmouseout="if(!this.disabled)this.style.background='transparent'">
+                🧲 &nbsp;TORRENT HDT
+              </button>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
+                Crée le torrent HDT depuis le dossier déjà sur la seedbox (pas de ré-upload)
               </div>
               <div id="bdi-hdt-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;min-height:14px;word-break:break-all;"></div>
             </div>
 
-            <!-- HDF Seedbox torrent -->
+            <!-- HDF torrent (création seule, nécessite l'upload SB ci-dessus) -->
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
               <div style="font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text-dim);margin-bottom:8px;">HDFOREVER (HDF)</div>
-              <button id="bdi-hdf-btn" onclick="bdiTorrentHDF()"
-                style="width:100%;padding:10px;background:transparent;border:1px solid #4fc3f7;border-radius:4px;color:#4fc3f7;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
+              <button id="bdi-hdf-btn" onclick="bdiTorrentHDF()" disabled
+                style="width:100%;padding:10px;background:transparent;border:1px solid #4fc3f7;border-radius:4px;color:#4fc3f7;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;opacity:.4;"
                 onmouseover="if(!this.disabled)this.style.background='rgba(79,195,247,0.1)'"
                 onmouseout="if(!this.disabled)this.style.background='transparent'">
-                ↑ &nbsp;SB + 🧲 TORRENT HDF
+                🧲 &nbsp;TORRENT HDF
               </button>
               <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
-                Upload le dossier sur la seedbox → <span style="color:#4fc3f7;">FULL BD/</span> puis crée le torrent HDF
+                Crée le torrent HDF depuis le dossier déjà sur la seedbox (pas de ré-upload)
               </div>
               <div id="bdi-hdf-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;min-height:14px;word-break:break-all;"></div>
             </div>
 
-            <!-- HDO Seedbox torrent -->
+            <!-- HDO torrent (création seule, nécessite l'upload SB ci-dessus) -->
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);">
               <div style="font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text-dim);margin-bottom:8px;">HD-ONLY (HDO)</div>
-              <button id="bdi-hdo-btn" onclick="bdiTorrentHDO()"
-                style="width:100%;padding:10px;background:transparent;border:1px solid #69f0ae;border-radius:4px;color:#69f0ae;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;"
+              <button id="bdi-hdo-btn" onclick="bdiTorrentHDO()" disabled
+                style="width:100%;padding:10px;background:transparent;border:1px solid #69f0ae;border-radius:4px;color:#69f0ae;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .15s;opacity:.4;"
                 onmouseover="if(!this.disabled)this.style.background='rgba(105,240,174,0.1)'"
                 onmouseout="if(!this.disabled)this.style.background='transparent'">
-                ↑ &nbsp;SB + 🧲 TORRENT HDO
+                🧲 &nbsp;TORRENT HDO
               </button>
               <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
-                Upload le dossier sur la seedbox → <span style="color:#69f0ae;">FULL BD/</span> puis crée le torrent HDO <span style="color:var(--text-dim)">(16 MB pieces · privé · source "HD-Only")</span>
+                Crée le torrent HDO depuis le dossier déjà sur la seedbox <span style="color:var(--text-dim)">(16 MB pieces · privé · source "HD-Only")</span> — pas de ré-upload
               </div>
               <div id="bdi-hdo-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:6px;min-height:14px;word-break:break-all;"></div>
             </div>
@@ -1140,6 +1155,24 @@ html.light body::before {
         <div class="section-label">Configuration</div>
         <div class="config-grid" id="config-grid"></div>
         <button id="btn-save" onclick="saveConfig()">💾 &nbsp;SAUVEGARDER</button>
+
+        <!-- ── Renommage des onglets (purement local, n'affecte que cette installation) ── -->
+        <div class="section-label" style="margin-top:32px;">Renommer les onglets du menu</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:.5px;margin-bottom:14px;max-width:640px;line-height:1.6;">
+          Personnalise les libellés affichés dans le menu de gauche. Ce réglage est enregistré
+          uniquement sur cette installation (fichier local) — il n'a aucun impact sur les autres copies du logiciel.
+          Laisse un champ vide pour revenir au nom par défaut.
+        </div>
+        <div id="tab-labels-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;max-width:900px;"></div>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <button id="btn-tab-labels-save" onclick="saveTabLabels()">💾 &nbsp;ENREGISTRER LES NOMS</button>
+          <button id="btn-tab-labels-reset" onclick="resetTabLabels()"
+                  style="padding:9px 20px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:all .15s;"
+                  onmouseover="this.style.borderColor='var(--orange)';this.style.color='var(--orange)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text-dim)'">
+            ↺ RÉINITIALISER
+          </button>
+        </div>
+        <div id="tab-labels-status" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-top:10px;letter-spacing:.5px;"></div>
 
       </div>
 
@@ -1525,6 +1558,8 @@ window._emit = function(event, data) {
   if (event === 'bdinfo_upload_done')   bdiUploadDone(data);
   if (event === 'bdinfo_waiting_input') bdiShowInput(data.prompt);
   if (event === 'bdinfo_hide_input')    bdiHideInput();
+  if (event === 'bdinfo_sb_status')     bdiSbStatus(data.msg);
+  if (event === 'bdinfo_sb_done')       bdiSbDone(data);
   if (event === 'bdinfo_hdt_status')    bdiHdtStatus(data.msg);
   if (event === 'bdinfo_hdt_done')      bdiHdtDone(data);
   if (event === 'bdinfo_hdf_status')    bdiHdfStatus(data.msg);
@@ -1706,6 +1741,16 @@ function bdiOnDone(data) {
     document.getElementById('bdi-upload-status').textContent = '';
     document.getElementById('bdi-send-btn').disabled = false;
     document.getElementById('bdi-send-btn').innerHTML = '↑ &nbsp;ENVOYER';
+    // Nouveau scan → reset de l'état SB/torrents (le dossier précédemment
+    // uploadé, le cas échéant, n'est plus celui de ce film)
+    bdiSbUploaded = false;
+    document.getElementById('bdi-sb-status').textContent = '';
+    document.getElementById('bdi-sb-btn').disabled = false;
+    document.getElementById('bdi-sb-btn').innerHTML = '↑ &nbsp;SB UPLOAD';
+    document.getElementById('bdi-hdt-status').textContent = '';
+    document.getElementById('bdi-hdf-status').textContent = '';
+    document.getElementById('bdi-hdo-status').textContent = '';
+    bdiSetTorrentButtonsEnabled(false);
     setTimeout(function(){
       prog.style.display    = 'none';
       fill.style.width      = '0%';
@@ -1764,6 +1809,54 @@ function bdiUploadDone(data) {
   }
 }
 
+// ── Seedbox upload (unique) ────────────────────────────────────────────────
+var bdiSbUploaded = false;
+
+function bdiSetTorrentButtonsEnabled(enabled) {
+  ['bdi-hdt-btn', 'bdi-hdf-btn', 'bdi-hdo-btn'].forEach(function(id) {
+    var b = document.getElementById(id);
+    if (b) { b.disabled = !enabled; b.style.opacity = enabled ? '1' : '.4'; }
+  });
+}
+
+function bdiSbStatus(msg) {
+  var el = document.getElementById('bdi-sb-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = 'var(--text-dim)';
+}
+
+function bdiSbDone(data) {
+  var btn = document.getElementById('bdi-sb-btn');
+  if (btn) { btn.disabled = false; btn.innerHTML = '↑ &nbsp;SB UPLOAD'; }
+  var el = document.getElementById('bdi-sb-status');
+  if (data.ok) {
+    bdiSbUploaded = true;
+    if (el) { el.textContent = '✅ Dossier sur la SB — ' + data.path; el.style.color = 'var(--green)'; }
+    bdiSetTorrentButtonsEnabled(true);
+    showToast('✓ Dossier envoyé sur la seedbox — choisis le(s) torrent(s) à créer', 'success', 5000);
+  } else {
+    bdiSbUploaded = false;
+    if (el) { el.textContent = '✖ ' + (data.error || 'Erreur'); el.style.color = 'var(--red)'; }
+    bdiSetTorrentButtonsEnabled(false);
+    showToast('✗ SB : ' + (data.error || 'Erreur'), 'error', 7000);
+  }
+}
+
+async function bdiUploadSB() {
+  var btn = document.getElementById('bdi-sb-btn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ &nbsp;UPLOAD EN COURS…';
+  bdiSetTorrentButtonsEnabled(false);
+  bdiSbStatus('Upload du dossier vers la seedbox…');
+  try {
+    await window.pywebview.api.bdinfo_upload_sb();
+  } catch(e) {
+    bdiSbDone({ ok: false, error: 'Erreur JS : ' + e });
+  }
+}
+
+// ── HDT / HDF / HDO : création du .torrent seule (dossier déjà sur la SB) ──
 function bdiHdtStatus(msg) {
   var el = document.getElementById('bdi-hdt-status');
   if (!el) return;
@@ -1773,7 +1866,7 @@ function bdiHdtStatus(msg) {
 
 function bdiHdtDone(data) {
   var btn = document.getElementById('bdi-hdt-btn');
-  if (btn) { btn.disabled = false; btn.innerHTML = '↑ &nbsp;SB + 🧲 TORRENT HDT'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '🧲 &nbsp;TORRENT HDT'; }
   var el = document.getElementById('bdi-hdt-status');
   if (!el) return;
   if (data.ok) {
@@ -1788,10 +1881,11 @@ function bdiHdtDone(data) {
 }
 
 async function bdiTorrentHDT() {
+  if (!bdiSbUploaded) { showToast('Envoie d\'abord le dossier sur la SB', 'error', 4000); return; }
   var btn = document.getElementById('bdi-hdt-btn');
   btn.disabled = true;
-  btn.innerHTML = '⏳ &nbsp;UPLOAD + TORRENT EN COURS…';
-  bdiHdtStatus('Upload seedbox + création torrent HDT…');
+  btn.innerHTML = '⏳ &nbsp;CRÉATION TORRENT…';
+  bdiHdtStatus('Création torrent HDT…');
   try {
     await window.pywebview.api.torrent_bdinfo_hdt();
   } catch(e) {
@@ -1808,7 +1902,7 @@ function bdiHdfStatus(msg) {
 
 function bdiHdfDone(data) {
   var btn = document.getElementById('bdi-hdf-btn');
-  if (btn) { btn.disabled = false; btn.innerHTML = '↑ &nbsp;SB + 🧲 TORRENT HDF'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '🧲 &nbsp;TORRENT HDF'; }
   var el = document.getElementById('bdi-hdf-status');
   if (!el) return;
   if (data.ok) {
@@ -1823,10 +1917,11 @@ function bdiHdfDone(data) {
 }
 
 async function bdiTorrentHDF() {
+  if (!bdiSbUploaded) { showToast('Envoie d\'abord le dossier sur la SB', 'error', 4000); return; }
   var btn = document.getElementById('bdi-hdf-btn');
   btn.disabled = true;
-  btn.innerHTML = '⏳ &nbsp;UPLOAD + TORRENT EN COURS…';
-  bdiHdfStatus('Upload seedbox + création torrent HDF…');
+  btn.innerHTML = '⏳ &nbsp;CRÉATION TORRENT…';
+  bdiHdfStatus('Création torrent HDF…');
   try {
     await window.pywebview.api.torrent_bdinfo_hdf();
   } catch(e) {
@@ -1841,19 +1936,20 @@ function bdiHdoStatus(msg) {
 function bdiHdoDone(data) {
   var btn = document.getElementById('bdi-hdo-btn');
   var el  = document.getElementById('bdi-hdo-status');
-  if (btn) { btn.disabled = false; btn.innerHTML = '↑ &nbsp;SB + 🧲 TORRENT HDO'; }
+  if (btn) { btn.disabled = false; btn.innerHTML = '🧲 &nbsp;TORRENT HDO'; }
   if (el) {
     el.style.color = data.ok ? '#69f0ae' : 'var(--red)';
     el.textContent = data.ok
-      ? '✅ Seedbox + torrent HDO OK — ' + (data.base || '')
+      ? '✅ Torrent HDO créé — ' + (data.base || '')
       : '❌ ' + (data.error || 'Erreur inconnue');
   }
 }
 async function bdiTorrentHDO() {
+  if (!bdiSbUploaded) { showToast('Envoie d\'abord le dossier sur la SB', 'error', 4000); return; }
   var btn = document.getElementById('bdi-hdo-btn');
   btn.disabled = true;
-  btn.innerHTML = '⏳ &nbsp;UPLOAD + TORRENT EN COURS…';
-  bdiHdoStatus('Upload seedbox + création torrent HDO (16 MB pieces)…');
+  btn.innerHTML = '⏳ &nbsp;CRÉATION TORRENT…';
+  bdiHdoStatus('Création torrent HDO (16 MB pieces)…');
   try {
     await window.pywebview.api.torrent_bdinfo_hdo();
   } catch(e) {
@@ -2304,6 +2400,94 @@ async function saveConfig() {
   var btn = document.getElementById('btn-save');
   btn.textContent = '✓  SAUVEGARDÉ';
   setTimeout(function() { btn.textContent = '💾  SAUVEGARDER'; }, 2000);
+}
+
+// ── Renommage des onglets du menu (réglage 100% local à cette installation) ──
+
+// Liste des onglets renommables : clé = data-page, label = nom par défaut affiché dans l'éditeur
+var TAB_LABEL_ITEMS = [
+  { page:'upload',     icon:'⬆',  def:'Upload'      },
+  { page:'remux',      icon:'🔄', def:'Remux'       },
+  { page:'fullbd',     icon:'📀', def:'Full BD'     },
+  { page:'bdinfo',     icon:'💿', def:'BD Info'     },
+  { page:'prez',       icon:'🎨', def:'Prez'        },
+  { page:'trackers',   icon:'📡', def:'Trackers'    },
+  { page:'torrent-sb', icon:'🧲', def:'Torrent SB'  },
+  { page:'sbfiles',    icon:'🗂️', def:'Fichiers SB' },
+  { page:'discord',    icon:'🔔', def:'Discord'     },
+  { page:'history',    icon:'🕘', def:'Historique'  },
+  { page:'stats',      icon:'📊', def:'Stats'       },
+  { page:'config',     icon:'⚙', def:'Config'      },
+];
+
+// Applique des libellés personnalisés (ou par défaut) aux items du menu latéral
+function applyTabLabels(labels) {
+  labels = labels || {};
+  document.querySelectorAll('.nav-item .nav-label').forEach(function(span) {
+    var def = span.getAttribute('data-default');
+    var custom = (labels[def] || '').trim();
+    span.textContent = custom || def;
+  });
+}
+
+// Construit la grille d'édition dans la page Config
+function renderTabLabelEditor(labels) {
+  labels = labels || {};
+  var grid = document.getElementById('tab-labels-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  TAB_LABEL_ITEMS.forEach(function(item) {
+    var div = document.createElement('div');
+    div.className = 'config-field';
+    var label = document.createElement('label');
+    label.className = 'config-label';
+    label.innerHTML = item.icon + ' &nbsp;' + item.def + ' <span style="opacity:.5;">(par défaut)</span>';
+    var input = document.createElement('input');
+    input.className = 'config-input';
+    input.id = 'tab-label-' + item.page;
+    input.type = 'text';
+    input.placeholder = item.def;
+    input.value = labels[item.def] || '';
+    input.autocomplete = 'off';
+    div.appendChild(label);
+    div.appendChild(input);
+    grid.appendChild(div);
+  });
+}
+
+async function loadTabLabels() {
+  var labels = {};
+  try { labels = await window.pywebview.api.load_tab_labels() || {}; } catch(e) {}
+  applyTabLabels(labels);
+  renderTabLabelEditor(labels);
+}
+
+async function saveTabLabels() {
+  var labels = {};
+  TAB_LABEL_ITEMS.forEach(function(item) {
+    var val = document.getElementById('tab-label-' + item.page).value.trim();
+    if (val) labels[item.def] = val;
+  });
+  await window.pywebview.api.save_tab_labels(labels);
+  applyTabLabels(labels);
+  var status = document.getElementById('tab-labels-status');
+  if (status) {
+    status.textContent = '✓ Noms enregistrés — appliqués immédiatement (local à cette installation).';
+    setTimeout(function(){ status.textContent = ''; }, 4000);
+  }
+}
+
+async function resetTabLabels() {
+  TAB_LABEL_ITEMS.forEach(function(item) {
+    document.getElementById('tab-label-' + item.page).value = '';
+  });
+  await window.pywebview.api.save_tab_labels({});
+  applyTabLabels({});
+  var status = document.getElementById('tab-labels-status');
+  if (status) {
+    status.textContent = '↺ Noms réinitialisés aux valeurs par défaut.';
+    setTimeout(function(){ status.textContent = ''; }, 4000);
+  }
 }
 
 var TRACKER_KEYS = ['abn','tos','c411','torr9','hdt','nexum','hdf','hdo'];
@@ -2994,6 +3178,7 @@ document.addEventListener('click', function(e) {
 window.addEventListener('pywebviewready', function() {
   loadConfig();
   loadTrackers();
+  loadTabLabels();
   try {
     window.pywebview.api.load_theme().then(function(t){ applyTheme(t); });
   } catch(e){}
