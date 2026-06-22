@@ -1228,7 +1228,9 @@ class API:
                 elif "AV1" in fmt:
                     codec = "AV1"
                 elif "VC-1" in fmt or "VC1" in fmt:
-                    codec = "VC-1"
+                    # Pas de tiret dans le tag : "VC-1-REBiRTH" ferait deux
+                    # tirets qui se suivent visuellement. On garde "VC1".
+                    codec = "VC1"
 
                 if "2160" in height or "3840" in width or "4k" in height.lower():
                     # UHD/4K → 2160p obligatoire, quel que soit le scan type.
@@ -1245,7 +1247,7 @@ class API:
                 if codec == "HEVC":
                     resolution = "2160p"
                     is_uhd = True
-                elif codec in ("AVC", "VC-1") and resolution == "2160p":
+                elif codec in ("AVC", "VC1") and resolution == "2160p":
                     resolution = "1080i" if "interlac" in scan else "1080p"
                     is_uhd = False
                 # MediaInfo expose HDR_Format (le format primaire) ET

@@ -583,7 +583,9 @@ def run_workflow(movie_entry: str, auto_mode: bool = False):
         elif "VP9" in codec_str:
             codec = "VP9"
         elif "VC-1" in codec_str or "VC1" in codec_str:
-            codec = "VC-1"
+            # Pas de tiret dans le tag : "VC-1-REBiRTH" ferait deux
+            # tirets qui se suivent visuellement. On garde "VC1".
+            codec = "VC1"
 
         if "2160" in height or "3840" in width or "4k" in height.lower():
             # UHD/4K → 2160p obligatoire, quel que soit le scan type.
@@ -600,7 +602,7 @@ def run_workflow(movie_entry: str, auto_mode: bool = False):
         if codec == "HEVC":
             resolution = "2160p"
             is_uhd = True
-        elif codec in ("AVC", "VC-1") and resolution == "2160p":
+        elif codec in ("AVC", "VC1") and resolution == "2160p":
             resolution = "1080i" if "interlac" in scan else "1080p"
             is_uhd = False
         
