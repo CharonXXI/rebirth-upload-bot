@@ -567,11 +567,12 @@ def run_workflow(movie_entry: str, auto_mode: bool = False):
     
     # Détecter résolution et HDR depuis MediaInfo (plus précis)
     if video_info:
-        height = str(video_info.get("Height", ""))
-        if "2160" in height:
-            resolution = "2160p"
-            is_uhd = True
-        
+        # Espaces normaux ET espaces fines insécables (MediaInfo formate
+        # parfois "2 160" / "1 080" avec U+202F).
+        height = str(video_info.get("Height", "")).replace(" ", "").replace(" ", "")
+        width = str(video_info.get("Width", "")).replace(" ", "").replace(" ", "")
+        scan = (video_info.get("ScanType", "") or "").strip().lower()
+
         codec_str = (video_info.get("Format", "") or "").upper()
         if "HEVC" in codec_str or "265" in codec_str:
             codec = "HEVC"
@@ -581,6 +582,27 @@ def run_workflow(movie_entry: str, auto_mode: bool = False):
             codec = "AV1"
         elif "VP9" in codec_str:
             codec = "VP9"
+        elif "VC-1" in codec_str or "VC1" in codec_str:
+            codec = "VC-1"
+
+        if "2160" in height or "3840" in width or "4k" in height.lower():
+            # UHD/4K → 2160p obligatoire, quel que soit le scan type.
+            resolution = "2160p"
+            is_uhd = True
+        elif "1080" in height:
+            # 1080 : on distingue progressif (1080p) vs entrelacé (1080i)
+            # via le ScanType réel de MediaInfo (pas le nom de dossier).
+            resolution = "1080i" if "interlac" in scan else "1080p"
+
+        # Le codec confirme/corrige la résolution :
+        # HEVC = toujours UHD (2160p) ; AVC/VC-1 = toujours Blu-ray
+        # standard (1080p ou 1080i), jamais 2160p.
+        if codec == "HEVC":
+            resolution = "2160p"
+            is_uhd = True
+        elif codec in ("AVC", "VC-1") and resolution == "2160p":
+            resolution = "1080i" if "interlac" in scan else "1080p"
+            is_uhd = False
         
         hdr_info  = video_info.get("HDR_Format", "") or ""
         hdr_compat = video_info.get("HDR_Format_Compatibility", "") or ""
