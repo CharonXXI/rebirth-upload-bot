@@ -71,7 +71,6 @@ html.light body::before {
 .history-badge.tk-tos    { color:#39ff14; border-color:rgba(57,255,20,0.3);    background:rgba(57,255,20,0.07); }
 .history-badge.tk-c411   { color:#c77dff; border-color:rgba(199,125,255,0.3);  background:rgba(199,125,255,0.07); }
 .history-badge.tk-torr9  { color:#ff9f43; border-color:rgba(255,159,67,0.3);   background:rgba(255,159,67,0.07); }
-.history-badge.tk-nexum  { color:#00e5cc; border-color:rgba(0,229,204,0.3);     background:rgba(0,229,204,0.07); }
 .history-badge.tk-hdf    { color:#4fc3f7; border-color:rgba(79,195,247,0.3);   background:rgba(79,195,247,0.07); }
 .history-badge.tk-hdo    { color:#69f0ae; border-color:rgba(105,240,174,0.3);  background:rgba(105,240,174,0.07); }
 /* Toast notifications */
@@ -522,7 +521,6 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tck-c411"   checked/><span class="tck-lbl">C411</span></label>
               <label class="tck-row"><input type="checkbox" id="tck-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
               <div></div>
-              <label class="tck-row"><input type="checkbox" id="tck-nexum"  checked/><span class="tck-lbl">Nexum</span></label>
               <label class="tck-row"><input type="checkbox" id="tck-hdf"    checked/><span class="tck-lbl">HDF</span></label>
               <label class="tck-row"><input type="checkbox" id="tck-hdo"    checked/><span class="tck-lbl">HDO</span></label>
             </div>
@@ -533,7 +531,7 @@ html.light body::before {
           </div>
           <div class="section-label">Type NFO</div>
           <div class="nfo-toggle">
-            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>C411 · Torr9 · Nexum · HDF · HDO</small></button>
+            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>C411 · Torr9 · HDF · HDO</small></button>
             <button class="nfo-btn"        id="nfo-cp437" onclick="setNFO('cp437')">📄 CP437<br><small>TOS · ABN</small></button>
           </div>
           <div class="section-label">Plateforme</div>
@@ -617,10 +615,6 @@ html.light body::before {
           <input id="tk-hdt" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
         </div>
         <div class="tracker-row">
-          <span class="tracker-name">NEXUM</span>
-          <input id="tk-nexum" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
-        </div>
-        <div class="tracker-row">
           <span class="tracker-name">HDF</span>
           <input id="tk-hdf" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
         </div>
@@ -695,7 +689,6 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tsb-tos"    checked/><span class="tck-lbl">TOS</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-c411"   checked/><span class="tck-lbl">C411</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
-              <label class="tck-row"><input type="checkbox" id="tsb-nexum" checked/><span class="tck-lbl">Nexum</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-hdf"   checked/><span class="tck-lbl">HDF</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-hdo"   checked/><span class="tck-lbl">HDO</span></label>
             </div>
@@ -2033,7 +2026,7 @@ function setPlatform(p) {
 }
 
 function _getTrackers() {
-  var map = { 'tck-abn':'ABN', 'tck-tos':'TOS', 'tck-c411':'C411', 'tck-torr9':'Torr9', 'tck-nexum':'Nexum', 'tck-hdf':'HDF', 'tck-hdo':'HDO' };
+  var map = { 'tck-abn':'ABN', 'tck-tos':'TOS', 'tck-c411':'C411', 'tck-torr9':'Torr9', 'tck-hdf':'HDF', 'tck-hdo':'HDO' };
   return Object.entries(map).filter(function(kv) {
     var el = document.getElementById(kv[0]);
     return el && el.checked;
@@ -2138,7 +2131,7 @@ var _tsbRunning = false;
 // Synchronise les cases trackers depuis la page Upload vers Torrent SB
 function tsbSyncTrackers() {
   var map = { 'tck-abn':'tsb-abn', 'tck-tos':'tsb-tos', 'tck-c411':'tsb-c411',
-              'tck-torr9':'tsb-torr9', 'tck-nexum':'tsb-nexum', 'tck-hdf':'tsb-hdf', 'tck-hdo':'tsb-hdo' };
+              'tck-torr9':'tsb-torr9', 'tck-hdf':'tsb-hdf', 'tck-hdo':'tsb-hdo' };
   Object.entries(map).forEach(function(kv) {
     var src = document.getElementById(kv[0]);
     var dst = document.getElementById(kv[1]);
@@ -2214,7 +2207,7 @@ function _tsbLog(msg, cls) {
 }
 
 function _tsbGetTrackers() {
-  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-nexum':'Nexum', 'tsb-hdf':'HDF', 'tsb-hdo':'HDO' };
+  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-hdf':'HDF', 'tsb-hdo':'HDO' };
   return Object.entries(map).filter(function(kv){
     var el = document.getElementById(kv[0]); return el && el.checked;
   }).map(function(kv){ return kv[1]; }).join(' ');
@@ -2490,7 +2483,7 @@ async function resetTabLabels() {
   }
 }
 
-var TRACKER_KEYS = ['abn','tos','c411','torr9','hdt','nexum','hdf','hdo'];
+var TRACKER_KEYS = ['abn','tos','c411','torr9','hdt','hdf','hdo'];
 
 async function saveTrackers() {
   var cfg = {};
@@ -2612,8 +2605,8 @@ async function clearHistory() {
   renderHistory();
 }
 
-var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TORR9', 'NEXUM', 'HDF', 'HDO'];
-var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TORR9:'Torr9', NEXUM:'Nexum', HDF:'HDF', HDO:'HDO' };
+var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TORR9', 'HDF', 'HDO'];
+var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TORR9:'Torr9', HDF:'HDF', HDO:'HDO' };
 
 async function renderStatsPage() {
   var entries = await window.pywebview.api.load_history() || [];
@@ -2631,7 +2624,7 @@ async function renderStatsPage() {
   }).length;
 
   // Trackers — détection parmi les 5 connus uniquement
-  var tkCounts = { ABN:0, TOS:0, C411:0, TORR9:0, NEXUM:0, HDF:0, HDO:0 };
+  var tkCounts = { ABN:0, TOS:0, C411:0, TORR9:0, HDF:0, HDO:0 };
   entries.forEach(function(e) {
     if (!e.trackers) return;
     var up = e.trackers.toUpperCase();
@@ -2748,7 +2741,7 @@ function loadSbDisk() {
 var _discCurrentMovie  = null;
 var _discSelectedFile  = null;
 var _discMode          = 'rebirth';
-var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'Nexum', 'HDF', 'HDO'];
+var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'HDF', 'HDO'];
 
 // Extrait un titre TMDB depuis un nom de release (retire tags techniques)
 function discExtractTitle(name) {
@@ -2923,7 +2916,7 @@ function discordSetMode(mode) {
 
   // Tracker list
   if (mode === 'hdt')            _discTrackers = ['HDT', 'HDF', 'HDO'];
-  else                           _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'Nexum', 'HDF', 'HDO'];
+  else                           _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'HDF', 'HDO'];
 
   // Button styles
   var btnR  = document.getElementById('disc-mode-rebirth');

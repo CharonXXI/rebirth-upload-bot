@@ -132,7 +132,6 @@ class API:
             "TRACKER_TOS":        os.getenv("TRACKER_TOS", ""),
             "TRACKER_C411":       os.getenv("TRACKER_C411", ""),
             "TRACKER_TORR9":      os.getenv("TRACKER_TORR9", ""),
-            "TRACKER_NEXUM":      os.getenv("TRACKER_NEXUM", ""),
             "TRACKER_HDF":        os.getenv("TRACKER_HDF", ""),
             "TRACKER_HDT":        os.getenv("TRACKER_HDT", ""),
             "TRACKER_HDO":        os.getenv("TRACKER_HDO", ""),
@@ -449,7 +448,6 @@ class API:
                 "TOS":    os.getenv("TRACKER_TOS", ""),
                 "C411":   os.getenv("TRACKER_C411", ""),
                 "TORR9":  os.getenv("TRACKER_TORR9", ""),
-                "NEXUM":  os.getenv("TRACKER_NEXUM", ""),
                 "HDF":    os.getenv("TRACKER_HDF", ""),
                 "HDO":    os.getenv("TRACKER_HDO", ""),
             }
@@ -3738,7 +3736,6 @@ class API:
             "C411":   "C411",
             "TORR9":  "Torr9",
             "HDT":    "HD-Torrents",
-            "NEXUM":  "Nexum",
             "HDF":    "HDF",
             "HDO":    "HD-Only",
         }
