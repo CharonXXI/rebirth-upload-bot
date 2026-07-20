@@ -263,7 +263,7 @@ class RebirthApp:
         self.maj_label.bind("<Button-1>", self.toggle_maj)
 
         tk.Label(form_content, text="STATUTS DES TRACKERS :", bg="#2c2c2c", fg="#bdc3c7", font=("Arial", 11, "bold")).pack(anchor="w", padx=100, pady=(15, 5))
-        self.trackers = ["TOS", "ABN", "Torr9", "C411", "HDF", "HDO"]
+        self.trackers = ["TOS", "ABN", "TR4KER", "C411", "HDF", "HDO"]
         self.tracker_vars = {}
         for t in self.trackers:
             row = tk.Frame(form_content, bg="#34495e", padx=15, pady=8)

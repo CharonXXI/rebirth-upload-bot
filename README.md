@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.9.7-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.8-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -406,6 +406,14 @@ rebirth-upload-bot/
 
 ## 📝 Changelog
 
+### v2.9.8
+- Feat (CUSTOM) : **onglet CUSTOM muxer** — détection automatique des pistes depuis les fichiers MKV/SRT du dossier `CUSTOM/`, configuration par piste (langue, nom, forced, default, inclure/exclure), bitrate audio affiché via pymediainfo (`@ XXXX kbps`), classification automatique des sous-titres (FORCED / SDH / FULL / COMMENTARY) portée depuis le moteur remux, détection VF (VFF / VFQ / VFi / VOF) depuis le nom de la piste source
+- Feat (CUSTOM) : **aperçu NFO** (bouton 👁 NFO) — prévisualisation du NFO final dans la section CUSTOM avant muxage, basée sur la config pistes en cours ; séparé du NFO réel généré par `NFO_v1_7.py`
+- Fix (CUSTOM) : duplication du tag de langue dans le nom de sortie lors des renommages successifs — `_cstFinalizeOutputName` repart désormais toujours du nom vidéo original stocké dans `window._cstVideoBaseName`
+- Fix (CUSTOM) : titres des pistes affichaient les noms de la team source — désormais ignorés, noms générés entièrement côté outil
+- Tracker : **TORR9 fusionné avec TR4KER** — toutes les références `TORR9` remplacées par `TR4KER` (`app.py`, `gui_index.html`, `PREDB/`, `DISCORD/`, `notif_upload_discord.py`) ; announce URL à renseigner dans `V1.env`
+- Seedbox : configuration vidée (`SFTP_HOST/USER/PASS/PATH`, ruTorrent) — structure conservée pour la prochaine seedbox
+
 ### v2.9.7
 - Feat (BD Info) : **upload Seedbox découplé de la création des torrents** — un seul bouton « ↑ SB UPLOAD » envoie le dossier FULL BD une seule fois ; les boutons HDT / HDF / HDO ne font plus que créer le `.torrent` depuis ce dossier déjà sur la SB (plus de triple ré-upload du même contenu)
 - Feat (Discord) : nouveau salon **« à faire »** dédié — les notifications d'upload Gofile/BuzzHeavier (REMUX et tout nom non reconnu) partent désormais sur ce salon (`WEBHOOK_TODO_URL`) au lieu de `#remux`, qui restait encombré par les releases déjà traitées. WEB et BluRay Rip gardent leur salon dédié, inchangé
@@ -523,7 +531,7 @@ rebirth-upload-bot/
 
 <div align="center">
 
-**REBiRTH AIO v2.9.7** — macOS & Windows
+**REBiRTH AIO v2.9.8** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 

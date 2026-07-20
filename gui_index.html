@@ -52,11 +52,21 @@ html.light body::before {
 }
 #app { display:flex; height:100vh; }
 #sidebar { width:220px; min-width:220px; background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
-.logo-area { padding:28px 20px 20px; border-bottom:1px solid var(--border); }
+.logo-area { position:relative; padding:28px 20px 20px; border-bottom:1px solid var(--border); }
 .logo-tag  { font-family:var(--mono); font-size:10px; color:var(--orange); letter-spacing:3px; margin-bottom:6px; }
 .logo-title { font-family:var(--sans); font-size:26px; font-weight:700; color:var(--text-bright); letter-spacing:4px; text-transform:uppercase; line-height:1; }
 .logo-sub  { font-family:var(--mono); font-size:10px; color:var(--text-dim); margin-top:4px; }
-.nav { padding:16px 12px; flex:1; }
+.config-btn { position:absolute; top:14px; right:14px; background:none; border:1px solid var(--border2); border-radius:4px; color:var(--text-dim); font-size:13px; padding:4px 7px; cursor:pointer; transition:all .15s; line-height:1; }
+.config-btn:hover { color:var(--text); border-color:var(--border); background:var(--bg3); }
+.config-btn.active { color:var(--orange); border-color:rgba(255,107,0,0.3); background:var(--orange-dim); }
+.nav { padding:8px 12px 16px; flex:1; overflow-y:auto; }
+.nav-section { display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); transition:all .15s; margin-top:6px; border-radius:4px; user-select:none; }
+.nav-section:first-child { margin-top:0; }
+.nav-section:hover { color:var(--text); background:var(--bg3); }
+.nav-section.open { color:var(--orange); }
+.nav-section-arrow { font-size:8px; width:10px; flex-shrink:0; }
+.nav-section-items { overflow:hidden; max-height:0; transition:max-height 0.22s ease; }
+.nav-section-items.open { max-height:600px; }
 .nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:4px; cursor:pointer; font-family:var(--sans); font-size:13px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-dim); transition:all .15s; margin-bottom:2px; border:1px solid transparent; position:relative; }
 .nav-item:hover { color:var(--text); background:var(--bg3); }
 .nav-item.active { color:var(--orange); background:var(--orange-dim); border-color:rgba(255,107,0,0.2); }
@@ -70,7 +80,7 @@ html.light body::before {
 .history-badge.tk-abn    { color:#4da6ff; border-color:rgba(77,166,255,0.3);   background:rgba(77,166,255,0.07); }
 .history-badge.tk-tos    { color:#39ff14; border-color:rgba(57,255,20,0.3);    background:rgba(57,255,20,0.07); }
 .history-badge.tk-c411   { color:#c77dff; border-color:rgba(199,125,255,0.3);  background:rgba(199,125,255,0.07); }
-.history-badge.tk-torr9  { color:#ff9f43; border-color:rgba(255,159,67,0.3);   background:rgba(255,159,67,0.07); }
+.history-badge.tk-tr4ker  { color:#ff9f43; border-color:rgba(255,159,67,0.3);   background:rgba(255,159,67,0.07); }
 .history-badge.tk-hdf    { color:#4fc3f7; border-color:rgba(79,195,247,0.3);   background:rgba(79,195,247,0.07); }
 .history-badge.tk-hdo    { color:#69f0ae; border-color:rgba(105,240,174,0.3);  background:rgba(105,240,174,0.07); }
 /* Toast notifications */
@@ -432,6 +442,65 @@ html.light body::before {
 .rmx-done-banner.show { display:block; animation:pageFadeIn .2s ease; }
 .rmx-done-title { font-family:var(--mono); font-size:11px; color:var(--green); letter-spacing:2px; margin-bottom:5px; }
 .rmx-done-name  { font-family:var(--mono); font-size:11px; color:var(--text-bright); word-break:break-all; margin-bottom:6px; }
+
+/* ── Custom Muxer ─────────────────────────────────────────────────────────── */
+.cst-file-card {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  margin-bottom: 12px;
+  background: var(--bg2);
+  overflow: hidden;
+  transition: border-color .15s;
+}
+.cst-file-card:hover { border-color: var(--border2); }
+.cst-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.cst-card-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cst-card-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+.cst-card-size {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  opacity: .5;
+  flex-shrink: 0;
+}
+.cst-tracks-zone {
+  padding: 8px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cst-track-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  transition: opacity .15s;
+}
+.cst-track-row:hover { border-color: var(--border2); }
 </style>
 </head>
 <body>
@@ -440,45 +509,71 @@ html.light body::before {
     <div class="logo-area">
       <div class="logo-tag"><span class="logo-pulse">●</span> ACTIVE</div>
       <div class="logo-title">REBiRTH AIO</div>
-      <div class="logo-sub">v 2.9.7</div>
+      <div class="logo-sub">v 2.9.8</div>
+      <button class="config-btn" onclick="showPage('config', this)" title="Config">⚙</button>
     </div>
     <nav class="nav">
-      <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
-        <span class="nav-icon">⬆</span> <span class="nav-label" data-default="Upload">Upload</span>
+
+      <!-- ── UPLOAD ─────────────────────────── -->
+      <div class="nav-section open" id="section-upload" onclick="toggleSection(this)">
+        <span class="nav-section-arrow">▼</span>
+        <span>📤</span><span>Upload</span>
       </div>
-      <div class="nav-item" id="nav-remux" data-page="remux" onclick="showPage('remux', this); rmxOnOpen()">
-        <span class="nav-icon">🔄</span> <span class="nav-label" data-default="Remux">Remux</span> <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
+      <div class="nav-section-items open">
+        <div class="nav-item active" data-page="upload" onclick="showPage('upload', this)">
+          <span class="nav-icon">⬆</span> <span class="nav-label" data-default="Upload">Upload</span>
+        </div>
+        <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this); tsbSyncTrackers(); tsbLoadFiles()">
+          <span class="nav-icon">🧲</span> <span class="nav-label" data-default="Torrent SB">Torrent SB</span>
+        </div>
+        <div class="nav-item" data-page="sbfiles" onclick="showPage('sbfiles', this); sbfLoad('/home/rtorrent/rtorrent/download')">
+          <span class="nav-icon">🗂️</span> <span class="nav-label" data-default="Fichiers SB">Fichiers SB</span>
+        </div>
+        <div class="nav-item" data-page="discord" onclick="showPage('discord', this); discordLoadFiles()">
+          <span class="nav-icon">🔔</span> <span class="nav-label" data-default="Discord">Discord</span>
+        </div>
+        <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
+          <span class="nav-icon">📡</span> <span class="nav-label" data-default="Trackers">Trackers</span>
+        </div>
+        <div class="nav-item" data-page="history" onclick="showPage('history', this); renderHistory()">
+          <span class="nav-icon">🕘</span> <span class="nav-label" data-default="Historique">Historique</span>
+        </div>
+        <div class="nav-item" data-page="stats" onclick="showPage('stats', this); renderStatsPage()">
+          <span class="nav-icon">📊</span> <span class="nav-label" data-default="Stats">Stats</span>
+        </div>
       </div>
-      <div class="nav-item" id="nav-fullbd" data-page="fullbd" onclick="showPage('fullbd', this)">
-        <span class="nav-icon">📀</span> <span class="nav-label" data-default="Full BD">Full BD</span>
+
+      <!-- ── ENCODE ─────────────────────────── -->
+      <div class="nav-section" id="section-encode" onclick="toggleSection(this)">
+        <span class="nav-section-arrow">▶</span>
+        <span>🎬</span><span>Encode</span>
       </div>
-      <div class="nav-item" data-page="bdinfo" onclick="showPage('bdinfo', this)">
-        <span class="nav-icon">💿</span> <span class="nav-label" data-default="BD Info">BD Info</span>
+      <div class="nav-section-items">
+        <div class="nav-item" id="nav-remux" data-page="remux" onclick="showPage('remux', this); rmxOnOpen()">
+          <span class="nav-icon">🔄</span> <span class="nav-label" data-default="Remux">Remux</span> <span style="font-size:9px;color:var(--orange);font-weight:600;opacity:.85;">(BETA)</span>
+        </div>
+        <div class="nav-item" id="nav-fullbd" data-page="fullbd" onclick="showPage('fullbd', this)">
+          <span class="nav-icon">📀</span> <span class="nav-label" data-default="Full BD">Full BD</span>
+        </div>
+        <div class="nav-item" data-page="bdinfo" onclick="showPage('bdinfo', this)">
+          <span class="nav-icon">💿</span> <span class="nav-label" data-default="BD Info">BD Info</span>
+        </div>
+        <div class="nav-item" data-page="custom" onclick="showPage('custom', this); cstRefresh()">
+          <span class="nav-icon">✂</span> <span class="nav-label" data-default="Custom">Custom</span>
+        </div>
       </div>
-      <div class="nav-item" data-page="prez" onclick="showPage('prez', this); prezCheckImgbbKey(); prezCheckImgboxSession()">
-        <span class="nav-icon">🎨</span> <span class="nav-label" data-default="Prez">Prez</span> <span style="font-size:9px; color:var(--orange); font-weight:600; opacity:0.85;">(BETA)</span>
+
+      <!-- ── PREZ ───────────────────────────── -->
+      <div class="nav-section" id="section-prez" onclick="toggleSection(this)">
+        <span class="nav-section-arrow">▶</span>
+        <span>🎨</span><span>Prez</span>
       </div>
-      <div class="nav-item" data-page="trackers" onclick="showPage('trackers', this)">
-        <span class="nav-icon">📡</span> <span class="nav-label" data-default="Trackers">Trackers</span>
+      <div class="nav-section-items">
+        <div class="nav-item" data-page="prez" onclick="showPage('prez', this); prezCheckImgbbKey(); prezCheckImgboxSession()">
+          <span class="nav-icon">🎨</span> <span class="nav-label" data-default="Prez">Prez</span> <span style="font-size:9px;color:var(--orange);font-weight:600;opacity:.85;">(BETA)</span>
+        </div>
       </div>
-      <div class="nav-item" data-page="torrent-sb" onclick="showPage('torrent-sb', this); tsbSyncTrackers(); tsbLoadFiles()">
-        <span class="nav-icon">🧲</span> <span class="nav-label" data-default="Torrent SB">Torrent SB</span>
-      </div>
-      <div class="nav-item" data-page="sbfiles" onclick="showPage('sbfiles', this); sbfLoad('/home/rtorrent/rtorrent/download')">
-        <span class="nav-icon">🗂️</span> <span class="nav-label" data-default="Fichiers SB">Fichiers SB</span>
-      </div>
-      <div class="nav-item" data-page="discord" onclick="showPage('discord', this); discordLoadFiles()">
-        <span class="nav-icon">🔔</span> <span class="nav-label" data-default="Discord">Discord</span>
-      </div>
-      <div class="nav-item" data-page="history" onclick="showPage('history', this); renderHistory()">
-        <span class="nav-icon">🕘</span> <span class="nav-label" data-default="Historique">Historique</span>
-      </div>
-      <div class="nav-item" data-page="stats" onclick="showPage('stats', this); renderStatsPage()">
-        <span class="nav-icon">📊</span> <span class="nav-label" data-default="Stats">Stats</span>
-      </div>
-      <div class="nav-item" data-page="config" onclick="showPage('config', this)">
-        <span class="nav-icon">⚙</span> <span class="nav-label" data-default="Config">Config</span>
-      </div>
+
     </nav>
     <div class="sidebar-footer">
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -519,7 +614,7 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tck-abn"    checked/><span class="tck-lbl">ABN</span></label>
               <label class="tck-row"><input type="checkbox" id="tck-tos"    checked/><span class="tck-lbl">TOS</span></label>
               <label class="tck-row"><input type="checkbox" id="tck-c411"   checked/><span class="tck-lbl">C411</span></label>
-              <label class="tck-row"><input type="checkbox" id="tck-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
+              <label class="tck-row"><input type="checkbox" id="tck-tr4ker"  checked/><span class="tck-lbl">TR4KER</span></label>
               <div></div>
               <label class="tck-row"><input type="checkbox" id="tck-hdf"    checked/><span class="tck-lbl">HDF</span></label>
               <label class="tck-row"><input type="checkbox" id="tck-hdo"    checked/><span class="tck-lbl">HDO</span></label>
@@ -531,7 +626,7 @@ html.light body::before {
           </div>
           <div class="section-label">Type NFO</div>
           <div class="nfo-toggle">
-            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>C411 · Torr9 · HDF · HDO</small></button>
+            <button class="nfo-btn active" id="nfo-utf8" onclick="setNFO('utf8')">🌐 UTF-8<br><small>C411 · TR4KER · HDF · HDO</small></button>
             <button class="nfo-btn"        id="nfo-cp437" onclick="setNFO('cp437')">📄 CP437<br><small>TOS · ABN</small></button>
           </div>
           <div class="section-label">Plateforme</div>
@@ -607,8 +702,8 @@ html.light body::before {
           <input id="tk-c411" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
         </div>
         <div class="tracker-row">
-          <span class="tracker-name">TORR9</span>
-          <input id="tk-torr9" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
+          <span class="tracker-name">TR4KER</span>
+          <input id="tk-tr4ker" class="tracker-input" type="password" placeholder="https://..." autocomplete="off"/>
         </div>
         <div class="tracker-row">
           <span class="tracker-name">HDT</span>
@@ -688,7 +783,7 @@ html.light body::before {
               <label class="tck-row"><input type="checkbox" id="tsb-abn"    checked/><span class="tck-lbl">ABN</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-tos"    checked/><span class="tck-lbl">TOS</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-c411"   checked/><span class="tck-lbl">C411</span></label>
-              <label class="tck-row"><input type="checkbox" id="tsb-torr9"  checked/><span class="tck-lbl">Torr9</span></label>
+              <label class="tck-row"><input type="checkbox" id="tsb-tr4ker"  checked/><span class="tck-lbl">TR4KER</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-hdf"   checked/><span class="tck-lbl">HDF</span></label>
               <label class="tck-row"><input type="checkbox" id="tsb-hdo"   checked/><span class="tck-lbl">HDO</span></label>
             </div>
@@ -1143,6 +1238,84 @@ html.light body::before {
         </div>
 
       </div><!-- /page-fullbd -->
+
+      <!-- ══════════════════════════════════════════════════════════════════════
+           PAGE CUSTOM MUXER
+      ═══════════════════════════════════════════════════════════════════════ -->
+      <div id="page-custom" class="page" style="flex-direction:column;overflow:hidden;padding:0;">
+
+        <!-- topbar custom -->
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border);flex-shrink:0;">
+          <span style="font-family:var(--mono);font-size:11px;color:var(--orange);letter-spacing:2px;font-weight:700;">✂ CUSTOM MUXER</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;">→ FILMS/</span>
+          <div style="flex:1;"></div>
+          <span id="cst-mkv-status" style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;"></span>
+          <button class="btn-small" onclick="cstRefresh()" title="Rafraîchir le dossier CUSTOM">🔄 Refresh</button>
+        </div>
+
+        <div style="display:flex;flex:1;overflow:hidden;">
+
+          <!-- ── Colonne gauche : fichiers sources ────────────────────── -->
+          <div style="flex:1;overflow-y:auto;padding:20px 24px;border-right:1px solid var(--border);">
+
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;margin-bottom:14px;opacity:.6;">
+              FICHIERS SOURCES — dossier <span style="color:var(--orange);">CUSTOM/</span>
+            </div>
+
+            <div id="cst-file-list">
+              <div id="cst-empty" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px;padding:30px 0;text-align:center;opacity:.5;">
+                Aucun fichier dans CUSTOM/<br>
+                <span style="font-size:9px;">Place tes MKV et SRT dans le dossier CUSTOM/ puis clique Refresh</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ── Colonne droite : sortie + log ────────────────────────── -->
+          <div style="width:340px;min-width:280px;display:flex;flex-direction:column;overflow:hidden;">
+
+            <!-- Output name -->
+            <div style="padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;margin-bottom:8px;opacity:.6;">FICHIER DE SORTIE</div>
+              <input id="cst-output-name" class="field-input" placeholder="Film.Titre.2025.MULTi.REMUX.CUSTOM.mkv"
+                     style="width:100%;box-sizing:border-box;font-family:var(--mono);font-size:11px;" />
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:6px;opacity:.5;">→ FILMS/<span id="cst-output-preview" style="color:var(--orange);">…</span></div>
+            </div>
+
+            <!-- Boutons Mux + NFO preview -->
+            <div style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;">
+              <button id="cst-mux-btn" onclick="cstMux()"
+                style="flex:1;padding:11px;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:2px;background:var(--orange);color:#000;border:none;border-radius:4px;cursor:pointer;transition:opacity .15s;">
+                🔨 MUXER
+              </button>
+              <button id="cst-nfo-btn" onclick="cstNfoPreview()"
+                style="padding:11px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;background:var(--bg3);color:var(--text-dim);border:1px solid var(--border2);border-radius:4px;cursor:pointer;transition:opacity .15s;"
+                title="Aperçu NFO">
+                👁 NFO
+              </button>
+            </div>
+
+            <!-- Log -->
+            <div style="flex:1;overflow-y:auto;padding:14px 20px;display:flex;flex-direction:column;gap:12px;">
+              <div>
+                <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;margin-bottom:8px;opacity:.6;">LOG</div>
+                <div id="cst-log" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);line-height:1.7;white-space:pre-wrap;word-break:break-all;"></div>
+              </div>
+              <!-- NFO preview panel (caché par défaut) -->
+              <div id="cst-nfo-panel" style="display:none;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;opacity:.6;">NFO PREVIEW</span>
+                  <button onclick="document.getElementById('cst-nfo-panel').style.display='none';"
+                    style="font-family:var(--mono);font-size:9px;background:none;border:none;color:var(--text-dim);cursor:pointer;opacity:.5;">✕ fermer</button>
+                </div>
+                <pre id="cst-nfo-pre"
+                  style="font-family:'Courier New',Courier,monospace;font-size:10px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px;overflow-x:auto;white-space:pre;line-height:1.35;tab-size:1;margin:0;"></pre>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div><!-- /page-custom -->
 
       <div id="page-config" class="page">
         <div class="section-label">Configuration</div>
@@ -1994,12 +2167,54 @@ function confirmTMDB(ok) {
   window.pywebview.api.confirm_tmdb({"tmdb_link": link});
 }
 
+var _SECTION_MAP = {
+  'upload':'section-upload','torrent-sb':'section-upload','sbfiles':'section-upload',
+  'discord':'section-upload','trackers':'section-upload','history':'section-upload','stats':'section-upload',
+  'remux':'section-encode','fullbd':'section-encode','bdinfo':'section-encode','custom':'section-encode',
+  'prez':'section-prez'
+};
+
+function _openSection(sectionId) {
+  document.querySelectorAll('.nav-section').forEach(function(s) {
+    s.classList.remove('open');
+    var arr = s.querySelector('.nav-section-arrow');
+    if (arr) arr.textContent = '▶';
+  });
+  document.querySelectorAll('.nav-section-items').forEach(function(s) { s.classList.remove('open'); });
+  var sec = document.getElementById(sectionId);
+  if (sec) {
+    sec.classList.add('open');
+    var arr = sec.querySelector('.nav-section-arrow');
+    if (arr) arr.textContent = '▼';
+    if (sec.nextElementSibling) sec.nextElementSibling.classList.add('open');
+  }
+}
+
+function toggleSection(el) {
+  var isOpen = el.classList.contains('open');
+  document.querySelectorAll('.nav-section').forEach(function(s) {
+    s.classList.remove('open');
+    var arr = s.querySelector('.nav-section-arrow');
+    if (arr) arr.textContent = '▶';
+  });
+  document.querySelectorAll('.nav-section-items').forEach(function(s) { s.classList.remove('open'); });
+  if (!isOpen) {
+    el.classList.add('open');
+    var arr = el.querySelector('.nav-section-arrow');
+    if (arr) arr.textContent = '▼';
+    if (el.nextElementSibling) el.nextElementSibling.classList.add('open');
+  }
+}
+
 function showPage(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.config-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   el.classList.add('active');
   document.getElementById('topbar-path').textContent = name;
+  var sectionId = _SECTION_MAP[name];
+  if (sectionId) _openSection(sectionId);
 }
 
 async function pickFile() {
@@ -2026,7 +2241,7 @@ function setPlatform(p) {
 }
 
 function _getTrackers() {
-  var map = { 'tck-abn':'ABN', 'tck-tos':'TOS', 'tck-c411':'C411', 'tck-torr9':'Torr9', 'tck-hdf':'HDF', 'tck-hdo':'HDO' };
+  var map = { 'tck-abn':'ABN', 'tck-tos':'TOS', 'tck-c411':'C411', 'tck-tr4ker':'TR4KER', 'tck-hdf':'HDF', 'tck-hdo':'HDO' };
   return Object.entries(map).filter(function(kv) {
     var el = document.getElementById(kv[0]);
     return el && el.checked;
@@ -2131,7 +2346,7 @@ var _tsbRunning = false;
 // Synchronise les cases trackers depuis la page Upload vers Torrent SB
 function tsbSyncTrackers() {
   var map = { 'tck-abn':'tsb-abn', 'tck-tos':'tsb-tos', 'tck-c411':'tsb-c411',
-              'tck-torr9':'tsb-torr9', 'tck-hdf':'tsb-hdf', 'tck-hdo':'tsb-hdo' };
+              'tck-tr4ker':'tsb-tr4ker', 'tck-hdf':'tsb-hdf', 'tck-hdo':'tsb-hdo' };
   Object.entries(map).forEach(function(kv) {
     var src = document.getElementById(kv[0]);
     var dst = document.getElementById(kv[1]);
@@ -2207,7 +2422,7 @@ function _tsbLog(msg, cls) {
 }
 
 function _tsbGetTrackers() {
-  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-torr9':'Torr9', 'tsb-hdf':'HDF', 'tsb-hdo':'HDO' };
+  var map = { 'tsb-abn':'ABN', 'tsb-tos':'TOS', 'tsb-c411':'C411', 'tsb-tr4ker':'TR4KER', 'tsb-hdf':'HDF', 'tsb-hdo':'HDO' };
   return Object.entries(map).filter(function(kv){
     var el = document.getElementById(kv[0]); return el && el.checked;
   }).map(function(kv){ return kv[1]; }).join(' ');
@@ -2410,7 +2625,7 @@ var TAB_LABEL_ITEMS = [
   { page:'discord',    icon:'🔔', def:'Discord'     },
   { page:'history',    icon:'🕘', def:'Historique'  },
   { page:'stats',      icon:'📊', def:'Stats'       },
-  { page:'config',     icon:'⚙', def:'Config'      },
+  { page:'custom',     icon:'✂',  def:'Custom'      },
 ];
 
 // Applique des libellés personnalisés (ou par défaut) aux items du menu latéral
@@ -2483,7 +2698,7 @@ async function resetTabLabels() {
   }
 }
 
-var TRACKER_KEYS = ['abn','tos','c411','torr9','hdt','hdf','hdo'];
+var TRACKER_KEYS = ['abn','tos','c411','tr4ker','hdt','hdf','hdo'];
 
 async function saveTrackers() {
   var cfg = {};
@@ -2605,8 +2820,8 @@ async function clearHistory() {
   renderHistory();
 }
 
-var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TORR9', 'HDF', 'HDO'];
-var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TORR9:'Torr9', HDF:'HDF', HDO:'HDO' };
+var KNOWN_TRACKERS = ['ABN', 'TOS', 'C411', 'TR4KER', 'HDF', 'HDO'];
+var TRACKER_LABELS = { ABN:'ABN', TOS:'TOS', C411:'C411', TR4KER:'TR4KER', HDF:'HDF', HDO:'HDO' };
 
 async function renderStatsPage() {
   var entries = await window.pywebview.api.load_history() || [];
@@ -2624,7 +2839,7 @@ async function renderStatsPage() {
   }).length;
 
   // Trackers — détection parmi les 5 connus uniquement
-  var tkCounts = { ABN:0, TOS:0, C411:0, TORR9:0, HDF:0, HDO:0 };
+  var tkCounts = { ABN:0, TOS:0, C411:0, TR4KER:0, HDF:0, HDO:0 };
   entries.forEach(function(e) {
     if (!e.trackers) return;
     var up = e.trackers.toUpperCase();
@@ -2741,7 +2956,7 @@ function loadSbDisk() {
 var _discCurrentMovie  = null;
 var _discSelectedFile  = null;
 var _discMode          = 'rebirth';
-var _discTrackers      = ['TOS', 'ABN', 'Torr9', 'C411', 'HDF', 'HDO'];
+var _discTrackers      = ['TOS', 'ABN', 'TR4KER', 'C411', 'HDF', 'HDO'];
 
 // Extrait un titre TMDB depuis un nom de release (retire tags techniques)
 function discExtractTitle(name) {
@@ -2916,7 +3131,7 @@ function discordSetMode(mode) {
 
   // Tracker list
   if (mode === 'hdt')            _discTrackers = ['HDT', 'HDF', 'HDO'];
-  else                           _discTrackers = ['TOS', 'ABN', 'Torr9', 'C411', 'HDF', 'HDO'];
+  else                           _discTrackers = ['TOS', 'ABN', 'TR4KER', 'C411', 'HDF', 'HDO'];
 
   // Button styles
   var btnR  = document.getElementById('disc-mode-rebirth');
@@ -4545,6 +4760,716 @@ function prezStatus(msg) {
   const el = document.getElementById('prez-status');
   if (el) el.textContent = msg;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CUSTOM MUXER — JS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// ── Langues courantes (code ISO 639-2 → label) ──────────────────────────────
+var CST_LANGS = [
+  ["fre","Français"],["eng","English"],["spa","Español"],["deu","Deutsch"],
+  ["ita","Italiano"],["por","Português"],["jpn","日本語"],["chi","中文"],
+  ["ara","العربية"],["rus","Русский"],["kor","한국어"],["pol","Polski"],
+  ["nld","Nederlands"],["swe","Svenska"],["nor","Norsk"],["dan","Dansk"],
+  ["fin","Suomi"],["tur","Türkçe"],["heb","עברית"],["und","Indéfini"]
+];
+
+// ── Noms français des langues (ISO 639-2 → label — miroir de LANG_FR python) ─
+var _CST_LANG_FR = {
+  eng:'Anglais',   en:'Anglais',
+  fre:'Français',  fra:'Français',  fr:'Français',
+  que:'Français',
+  spa:'Espagnol',  es:'Espagnol',
+  esl:'Espagnol LAT',
+  deu:'Allemand',  ger:'Allemand',  de:'Allemand',
+  ita:'Italien',   it:'Italien',
+  por:'Portugais', pt:'Portugais',
+  jpn:'Japonais',  ja:'Japonais',
+  chi:'Chinois',   zho:'Chinois',   zh:'Chinois',
+  kor:'Coréen',    ko:'Coréen',
+  rus:'Russe',     ru:'Russe',
+  nld:'Néerlandais', dut:'Néerlandais', nl:'Néerlandais',
+  pol:'Polonais',  pl:'Polonais',
+  swe:'Suédois',   sv:'Suédois',
+  nor:'Norvégien', no:'Norvégien',
+  dan:'Danois',    da:'Danois',
+  fin:'Finnois',   fi:'Finnois',
+  ara:'Arabe',     ar:'Arabe',
+  tur:'Turc',      tr:'Turc',
+  hun:'Hongrois',  hu:'Hongrois',
+  ces:'Tchèque',   cze:'Tchèque',   cs:'Tchèque',
+  gre:'Grec',      ell:'Grec',      el:'Grec',
+  heb:'Hébreu',    he:'Hébreu',
+  hin:'Hindi',     hi:'Hindi',
+  tha:'Thaï',      th:'Thaï',
+  ukr:'Ukrainien', uk:'Ukrainien',
+  ron:'Roumain',   rum:'Roumain',   ro:'Roumain',
+  bul:'Bulgare',   bg:'Bulgare',
+  hrv:'Croate',    hr:'Croate',
+  srp:'Serbe',     sr:'Serbe',
+  ind:'Indonésien',id:'Indonésien',
+};
+
+// ── Code court pour noms de sous-titres (FR, EN, DE…) ─────────────────────
+function _cstSubShortLang(lang) {
+  var m = {
+    fre:'FR', fra:'FR', que:'FR', fr:'FR',
+    eng:'EN', en:'EN',
+    spa:'ES', esl:'ES', es:'ES',
+    deu:'DE', ger:'DE', de:'DE',
+    ita:'IT', it:'IT',
+    por:'PT', pt:'PT',
+    jpn:'JP', ja:'JP',
+    chi:'ZH', zho:'ZH', zh:'ZH',
+    kor:'KO', ko:'KO',
+    rus:'RU', ru:'RU',
+    nld:'NL', dut:'NL', nl:'NL',
+    pol:'PL', pl:'PL',
+    swe:'SV', sv:'SV',
+    nor:'NO', no:'NO',
+    dan:'DA', da:'DA',
+    fin:'FI', fi:'FI',
+    ara:'AR', ar:'AR',
+    tur:'TR', tr:'TR',
+    hun:'HU', hu:'HU',
+    ces:'CZ', cze:'CZ', cs:'CZ',
+    heb:'HE', he:'HE',
+    hrv:'HR', hr:'HR',
+    ukr:'UA', uk:'UA',
+    bul:'BG', bg:'BG',
+    ron:'RO', ro:'RO',
+  };
+  return m[lang] || lang.toUpperCase().substring(0, 2);
+}
+
+// ── Normalisation codec (miroir de mkvtoolnix_remux.py) ───────────────────
+function _cstNormalizeCodec(codec) {
+  if (!codec) return '';
+  var s = codec;
+  // mkvmerge renvoie souvent des noms courts déjà ("TrueHD Atmos", "AC-3"…)
+  s = s.replace('DTS-HD Master Audio', 'DTS-HD MA');
+  s = s.replace('Dolby TrueHD with Dolby Atmos', 'TrueHD Atmos');
+  s = s.replace('Dolby TrueHD', 'TrueHD');
+  s = s.replace('with Dolby Atmos', 'Atmos');
+  s = s.replace('Dolby Digital Plus', 'EAC3');
+  s = s.replace('Dolby Digital', 'AC3');
+  s = s.replace('E-AC-3', 'EAC3');
+  s = s.replace('AC-3', 'AC3');
+  // codec strings courts que mkvmerge peut renvoyer
+  if (s === 'TrueHD Atmos') return 'TrueHD Atmos';
+  if (s === 'TrueHD')       return 'TrueHD';
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+function _cstChannels(ch) {
+  if (!ch) return '';
+  var n = parseInt(ch, 10);
+  if (n >= 8) return '7.1';
+  if (n >= 6) return '5.1';
+  if (n >= 2) return '2.0';
+  if (n == 1) return '1.0';
+  return '';
+}
+
+// ── Génère les suggestions de noms (prend le track complet pour codec/ch) ──
+// tr = { type, codec, channels, language, ... }
+// lang = langue ISO 639-2 sélectionnée (peut différer de tr.language)
+function _cstGetSuggestions(tr, lang) {
+  var type = (tr.type === 'subtitles') ? 'subtitle' : tr.type;
+  var codec = _cstNormalizeCodec(tr.codec || '');
+  var ch    = _cstChannels(tr.channels || '');
+  var codecCh = [codec, ch].filter(Boolean).join(' ');
+
+  // Bitrate : "@ 3000 kbps" si disponible
+  var bitrateStr = (tr.bitrate_kbps && tr.bitrate_kbps > 0)
+    ? ' @ ' + tr.bitrate_kbps + ' kbps' : '';
+  var codecChBr = codecCh + bitrateStr;
+
+  var isFr = (lang === 'fre' || lang === 'fra' || lang === 'que');
+
+  if (type === 'audio') {
+    if (isFr) {
+      // Audio FR : toutes les variantes VF — la variante détectée dans la source passe en premier
+      var baseVariants = (lang === 'que')
+        ? ['VFQ','VFF','VFi','VOF','VF2']
+        : ['VFF','VFQ','VFi','VOF','VF2'];
+
+      // Si custom_identify a détecté une variante précise, on la met en tête
+      var detectedVf = (tr.vf_type || '').trim();
+      if (detectedVf && baseVariants.indexOf(detectedVf) >= 0) {
+        baseVariants = [detectedVf].concat(baseVariants.filter(function(v) {
+          return v !== detectedVf;
+        }));
+      }
+
+      return baseVariants.map(function(v) {
+        if (v === 'VF2') return 'VF2';
+        return codecChBr ? v + ' ' + codecChBr : v;
+      });
+    } else {
+      // Audio non-FR : "Anglais DTS-HD MA 7.1 @ 3000 kbps"
+      var label = _CST_LANG_FR[lang] || lang.toUpperCase();
+      var full  = codecChBr ? label + ' ' + codecChBr : label;
+      return [full];
+    }
+  }
+
+  if (type === 'subtitle') {
+    var short = _cstSubShortLang(lang);
+    var base = [
+      short + ' FULL',
+      short + ' FORCED',
+      short + ' SDH',
+      short + ' COMMENTARY',
+    ];
+    if (isFr) {
+      // Variantes spécifiques FR
+      base = base.concat([
+        'VFF FULL','VFF FORCED',
+        'VFQ FULL','VFQ FORCED',
+        'VFI FULL','VOF FULL',
+      ]);
+    }
+    return base;
+  }
+
+  return [];
+}
+
+function _cstDefaultName(tr, lang) {
+  var s = _cstGetSuggestions(tr, lang);
+  return s.length > 0 ? s[0] : '';
+}
+
+// Extrait un titre humain depuis le nom de fichier vidéo (SANS l'année)
+// "Passenger.2026.MULTi.FRENCH.1080p.WEB.H264-FHD.mkv" → "Passenger"
+// "The.Sheep.Detectives.2026.MULTi.VF2.1080p.WEB.H264-TyHD.mkv" → "The Sheep Detectives"
+function _cstVideoHumanTitle(filename) {
+  if (!filename) return '';
+  var base = filename.replace(/\.mkv$/i, '');
+  // Retirer le tag groupe : -FHD, -FLUX, -FTM, -TyHD, etc.
+  base = base.replace(/-[A-Za-z0-9]+$/, '');
+  // Extraire uniquement ce qui est avant l'année YYYY (sans l'année)
+  var m = base.match(/^(.*?)\.(\d{4})(\..*)?$/);
+  if (m) {
+    return m[1].replace(/\./g, ' ');
+  }
+  // Fallback : juste remplacer les points
+  return base.replace(/\./g, ' ');
+}
+
+// Nom de piste sous-titre auto — miroir exact de _classify_subtitle + heuristique du remux tool
+function _cstDefaultSubName(tr, lang) {
+  var short = _cstSubShortLang(lang);
+  if (!short) return '';
+  // 1. sub_type renvoyé par custom_identify (classification Python)
+  var st = (tr.sub_type || '').toUpperCase();
+  if (st === 'FORCED')      return short + ' FORCED';
+  if (st === 'SDH')         return short + ' SDH';
+  if (st === 'COMMENTARY')  return short + ' COMMENTARY';
+  if (st === 'FULL')        return short + ' FULL';
+  // 2. Fallback : flag forced mkvmerge
+  if (tr.forced) return short + ' FORCED';
+  // 3. Fallback : indice dans le nom source
+  var hint = (tr.name || '').toLowerCase();
+  if (/forced|forc[eé]/.test(hint))                    return short + ' FORCED';
+  if (/\bsdh\b|hearing.impaired|malentend/.test(hint)) return short + ' SDH';
+  if (/comment/.test(hint))                            return short + ' COMMENTARY';
+  return short + ' FULL';
+}
+
+// Met à jour window._cstVideoBaseName depuis la première piste vidéo cochée
+function _cstUpdateVideoSource() {
+  var rows = document.querySelectorAll('.cst-track-row[data-type="video"]');
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var chk = row.querySelector('.cst-track-chk');
+    if (chk && chk.checked) {
+      var fp = row.getAttribute('data-filepath') || '';
+      var bn = fp.split('/').pop().split('\\').pop();
+      if (bn) { window._cstVideoBaseName = bn; return; }
+    }
+  }
+}
+
+// ── Utilitaires ─────────────────────────────────────────────────────────────
+function cstLog(msg) {
+  var el = document.getElementById('cst-log');
+  if (!el) return;
+  var t = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  el.textContent += "[" + t + "] " + msg + "\n";
+  el.scrollTop = el.scrollHeight;
+}
+
+function _cstLangSelect(id, selected) {
+  var s = document.createElement('select');
+  s.className = 'cst-lang-sel';
+  s.setAttribute('data-trackid', id);
+  s.style.cssText = 'font-family:var(--mono);font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:3px;padding:2px 4px;';
+  CST_LANGS.forEach(function(l) {
+    var o = document.createElement('option');
+    o.value = l[0]; o.textContent = l[0] + " · " + l[1];
+    if (l[0] === selected) o.selected = true;
+    s.appendChild(o);
+  });
+  return s;
+}
+
+// ── Rendu des pistes pour un fichier ─────────────────────────────────────────
+function cstRenderTracks(tracks, container, filePath, fileExt) {
+  container.innerHTML = '';
+  if (!tracks || tracks.length === 0) {
+    container.innerHTML = '<span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);opacity:.5;">Aucune piste détectée</span>';
+    return;
+  }
+
+  tracks.forEach(function(tr) {
+    var row = document.createElement('div');
+    row.className = 'cst-track-row';
+    row.setAttribute('data-trackid', tr.id);
+    row.setAttribute('data-type', tr.type);
+    row.setAttribute('data-filepath', filePath);
+    // Données brutes pour le preview NFO
+    if (tr.channels)    row.setAttribute('data-channels',   tr.channels);
+    if (tr.bitrate_kbps) row.setAttribute('data-bitrate',   tr.bitrate_kbps);
+    if (tr.codec)       row.setAttribute('data-codec',      tr.codec);
+
+    // icône par type
+    var icon = tr.type === 'video' ? '🎬' : tr.type === 'audio' ? '🔊' : '💬';
+    var typeLabel = tr.type === 'video' ? 'VIDEO' : tr.type === 'audio' ? 'AUDIO' : 'SUB';
+
+    // langue par défaut : depuis l'identification mkvmerge, sinon 'und'
+    var defLang = (tr.language && tr.language !== 'und' && tr.language !== '')
+                  ? tr.language : 'und';
+    var langUnknown = (defLang === 'und' && tr.type !== 'video');
+
+    // Nom de piste : TOUJOURS notre convention, on ignore le nom source (nom de l'ancienne team)
+    var suggestedName;
+    var trTypeNorm = (tr.type === 'subtitles') ? 'subtitle' : tr.type;
+    if (trTypeNorm === 'video') {
+      // Titre humain extrait du nom de CE fichier (pas du global)
+      var _bn = filePath.split('/').pop().split('\\').pop();
+      suggestedName = _cstVideoHumanTitle(_bn);
+    } else if (langUnknown) {
+      suggestedName = '';
+    } else if (trTypeNorm === 'subtitle') {
+      suggestedName = _cstDefaultSubName(tr, defLang);
+    } else {
+      suggestedName = _cstDefaultName(tr, defLang);
+    }
+
+    // checkbox include
+    var chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = true;
+    chk.className = 'cst-track-chk';
+    chk.style.cssText = 'cursor:pointer;accent-color:var(--orange);flex-shrink:0;';
+    // Piste vidéo : quand on la coche/décoche → recalculer le fichier source du titre de sortie
+    if (trTypeNorm === 'video') {
+      chk.addEventListener('change', function() {
+        _cstUpdateVideoSource();
+        _cstFinalizeOutputName();
+      });
+    }
+
+    // type badge
+    var badge = document.createElement('span');
+    badge.style.cssText = 'font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:1px;background:var(--bg3);padding:2px 5px;border-radius:3px;color:var(--text-dim);flex-shrink:0;';
+    badge.textContent = typeLabel;
+
+    // codec (affichage court : codec + canaux + bitrate)
+    var codec = document.createElement('span');
+    codec.style.cssText = 'font-family:var(--mono);font-size:9px;color:var(--text-dim);opacity:.6;flex-shrink:0;';
+    var codecStr = _cstNormalizeCodec(tr.codec || '');
+    var chStr = _cstChannels(tr.channels || '');
+    if (codecStr && chStr) codecStr += ' ' + chStr;
+    if (codecStr && tr.bitrate_kbps > 0) codecStr += ' @ ' + tr.bitrate_kbps + ' kbps';
+    codec.textContent = codecStr;
+
+    // langue select — orange si inconnue pour signaler l'action requise
+    var langSel = _cstLangSelect(tr.id, defLang);
+    langSel.setAttribute('data-filepath', filePath);
+    if (langUnknown) {
+      langSel.style.borderColor = 'var(--orange)';
+      langSel.title = 'Langue inconnue — sélectionne la langue';
+    }
+
+    // datalist pour suggestions de noms
+    var dlId = 'cst-dl-' + tr.id + '-' + Date.now();
+    var dl = document.createElement('datalist');
+    dl.id = dlId;
+    (function buildDl(lang) {
+      dl.innerHTML = '';
+      _cstGetSuggestions(tr, lang).forEach(function(s) {
+        var o = document.createElement('option'); o.value = s; dl.appendChild(o);
+      });
+    })(defLang);
+
+    // input nom avec datalist
+    var nameIn = document.createElement('input');
+    nameIn.type = 'text';
+    nameIn.className = 'cst-track-name';
+    nameIn.value = suggestedName;
+    nameIn.placeholder = langUnknown ? '← choisis la langue d\'abord' : 'Nom de la piste…';
+    nameIn.setAttribute('list', dlId);
+    nameIn.style.cssText = 'font-family:var(--mono);font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:3px;padding:2px 6px;flex:1;min-width:0;';
+
+    // mise à jour datalist + nom auto si langue change
+    langSel.addEventListener('change', function() {
+      var newLang = langSel.value;
+      // enlever le highlight orange si langue était inconnue
+      langSel.style.borderColor = '';
+      langSel.title = '';
+      nameIn.placeholder = 'Nom de la piste…';
+      // reconstruire les suggestions selon la nouvelle langue
+      dl.innerHTML = '';
+      var suggs = _cstGetSuggestions(tr, newLang);
+      suggs.forEach(function(s) {
+        var o = document.createElement('option'); o.value = s; dl.appendChild(o);
+      });
+      // auto-remplir avec la première suggestion (toujours, car c'est un changement intentionnel)
+      if (suggs.length > 0) nameIn.value = suggs[0];
+      // Mettre à jour le nom de sortie si c'est une piste audio
+      if (tr.type === 'audio') setTimeout(_cstFinalizeOutputName, 50);
+    });
+
+    // checkboxes forced / default (seulement audio et sub)
+    var extras = document.createElement('div');
+    extras.style.cssText = 'display:flex;gap:8px;align-items:center;flex-shrink:0;';
+    if (tr.type !== 'video') {
+      var mkLabel = function(id, text, checked) {
+        var lbl = document.createElement('label');
+        lbl.style.cssText = 'font-family:var(--mono);font-size:8px;color:var(--text-dim);display:flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;';
+        var c = document.createElement('input');
+        c.type = 'checkbox'; c.checked = checked; c.className = id;
+        c.style.cssText = 'cursor:pointer;accent-color:var(--orange);';
+        lbl.appendChild(c); lbl.append(text);
+        return lbl;
+      };
+      extras.appendChild(mkLabel('cst-forced', 'forced', false));
+      extras.appendChild(mkLabel('cst-default', 'default', tr.default || false));
+    }
+
+    // dim row si décoché
+    chk.addEventListener('change', function() {
+      row.style.opacity = chk.checked ? '1' : '0.35';
+    });
+
+    row.appendChild(chk);
+    row.appendChild(badge);
+    row.appendChild(codec);
+    if (tr.type !== 'video') row.appendChild(langSel);
+    row.appendChild(nameIn);
+    row.appendChild(extras);
+
+    container.appendChild(row);
+    container.appendChild(dl); // datalist doit être dans le DOM
+  });
+}
+
+// ── Analyser un fichier (identify) — retourne une Promise ────────────────────
+function cstAnalyzeFile(path, ext, cardEl) {
+  var tracksZone = cardEl.querySelector('.cst-tracks-zone');
+  var spinner = cardEl.querySelector('.cst-spinner');
+  if (spinner) spinner.style.display = 'inline';
+  if (tracksZone) tracksZone.innerHTML = '<span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);opacity:.5;">Analyse…</span>';
+
+  return window.pywebview.api.custom_identify(path).then(function(res) {
+    if (spinner) spinner.style.display = 'none';
+    if (!res.ok) {
+      if (tracksZone) tracksZone.innerHTML = '<span style="font-family:var(--mono);font-size:9px;color:#f66;">Erreur : ' + (res.error || '?') + '</span>';
+    } else {
+      if (tracksZone) cstRenderTracks(res.tracks, tracksZone, path, ext);
+    }
+    return res;
+  }).catch(function(e) {
+    if (spinner) spinner.style.display = 'none';
+    if (tracksZone) tracksZone.innerHTML = '<span style="font-family:var(--mono);font-size:9px;color:#f66;">Erreur identify</span>';
+    return null;
+  });
+}
+
+// ── Construire le tag langue depuis les pistes audio cochées ─────────────────
+function _cstBuildLangTag() {
+  var vfSeen = [], hasVO = false;
+  document.querySelectorAll('.cst-track-row').forEach(function(row) {
+    if (row.getAttribute('data-type') !== 'audio') return;
+    var chk = row.querySelector('.cst-track-chk');
+    if (chk && !chk.checked) return;
+    var langSel = row.querySelector('.cst-lang-sel');
+    var nameIn  = row.querySelector('.cst-track-name');
+    if (!langSel) return;
+    var lang = langSel.value;
+    var isFr = (lang === 'fre' || lang === 'fra' || lang === 'que');
+    if (isFr && nameIn) {
+      var n = nameIn.value.trim().toUpperCase();
+      if      (n.indexOf('VFQ') === 0) vfSeen.push('VFQ');
+      else if (n.indexOf('VFI') === 0) vfSeen.push('VFI');
+      else if (n.indexOf('VOF') === 0) vfSeen.push('VOF');
+      else if (n.indexOf('VF2') === 0) { vfSeen.push('VFF'); vfSeen.push('VFQ'); }
+      else                              vfSeen.push('VFF');
+    } else if (lang !== 'und') {
+      hasVO = true;
+    }
+  });
+  var hasFr = vfSeen.length > 0;
+  var uniq = vfSeen.filter(function(v,i,a){ return a.indexOf(v)===i; });
+  var vfTag = '';
+  if      (uniq.indexOf('VFF')>=0 && uniq.indexOf('VFQ')>=0) vfTag = 'VF2';
+  else if (uniq.indexOf('VFQ')>=0) vfTag = 'VFQ';
+  else if (uniq.indexOf('VFI')>=0) vfTag = 'VFi';
+  else if (uniq.indexOf('VOF')>=0) vfTag = 'VOF';
+  else if (uniq.indexOf('VFF')>=0) vfTag = 'VFF';
+  if (hasFr && hasVO) return vfTag ? 'MULTi.' + vfTag : 'MULTi';
+  if (hasFr)          return vfTag ? 'FRENCH.' + vfTag : 'FRENCH';
+  return '';
+}
+
+// ── Construire/mettre à jour le nom de sortie final ──────────────────────────
+function _cstFinalizeOutputName(videoName) {
+  var inp  = document.getElementById('cst-output-name');
+  var prev = document.getElementById('cst-output-preview');
+  if (!inp) return;
+
+  // Toujours partir du NOM D'ORIGINE du fichier vidéo, jamais de inp.value
+  // pour éviter l'accumulation à chaque appel
+  if (videoName) window._cstVideoBaseName = videoName;
+  var base = window._cstVideoBaseName || '';
+  if (!base) return;
+
+  var name = base;
+
+  // 1. Insérer CUSTOM après REMUX
+  if (/\.REMUX\./i.test(name) && !/\.CUSTOM\./i.test(name)) {
+    name = name.replace(/\.REMUX\./i, '.REMUX.CUSTOM.');
+  }
+
+  // 2. Remplacer/ajouter -REBiRTH (groupe source → notre tag)
+  if (/-([A-Za-z][A-Za-z0-9]*)\.mkv$/i.test(name)) {
+    name = name.replace(/-([A-Za-z][A-Za-z0-9]*)\.mkv$/i, '-REBiRTH.mkv');
+  } else if (/\.mkv$/i.test(name)) {
+    name = name.replace(/\.mkv$/i, '-REBiRTH.mkv');
+  } else {
+    name = name.replace(/\.[^.]+$/, '') + '-REBiRTH.mkv';
+  }
+
+  // 3. Reconstruire le tag langue depuis les pistes analysées
+  var langTag = _cstBuildLangTag();
+  if (langTag) {
+    // Test d'abord si un tag lang est présent dans le nom d'origine
+    var langRx = /\.(MULTi(?:\.[A-Z0-9i]+)?|FRENCH(?:\.[A-Z0-9i]+)?|ENGLISH|TRUEFRENCH|VFF|VFQ|VF2|VFi|VOF)\./i;
+    if (langRx.test(name)) {
+      // Remplacer uniquement la première occurrence (sans /g pour éviter les doublons)
+      name = name.replace(langRx, '.' + langTag + '.');
+    } else {
+      // Aucun tag trouvé : insérer après l'année
+      name = name.replace(/(\.\d{4}\.)/i, '$1' + langTag + '.');
+    }
+  }
+
+  inp.value = name;
+  if (prev) prev.textContent = name;
+}
+
+// ── Refresh : liste les fichiers CUSTOM/ ─────────────────────────────────────
+function cstRefresh() {
+  var list = document.getElementById('cst-file-list');
+  var empty = document.getElementById('cst-empty');
+  var mkvStatus = document.getElementById('cst-mkv-status');
+  if (!list) return;
+
+  // reset
+  list.innerHTML = '<div id="cst-empty" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px;padding:30px 0;text-align:center;opacity:.5;">Chargement…</div>';
+
+  window.pywebview.api.custom_scan().then(function(res) {
+    // état mkvmerge
+    if (mkvStatus) {
+      if (res.mkvmerge) {
+        mkvStatus.textContent = '✓ mkvmerge';
+        mkvStatus.style.color = 'var(--green, #4caf50)';
+      } else {
+        mkvStatus.textContent = '✗ mkvmerge introuvable';
+        mkvStatus.style.color = '#f66';
+      }
+    }
+
+    if (!res.files || res.files.length === 0) {
+      list.innerHTML = '<div id="cst-empty" style="font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px;padding:30px 0;text-align:center;opacity:.5;">Aucun fichier dans CUSTOM/<br><span style="font-size:9px;">Place tes MKV et SRT dans le dossier CUSTOM/ puis clique Refresh</span></div>';
+      return;
+    }
+
+    list.innerHTML = '';
+
+    // Fichier vidéo principal (pour le titre de sortie et le nom de la piste vidéo)
+    var videoFile = res.files.find(function(f) { return f.type === 'video'; });
+    // Stocker le nom de base AVANT les promises (utilisé dans cstRenderTracks pour la piste vidéo)
+    window._cstVideoBaseName = videoFile ? videoFile.name : '';
+
+    // Créer les cards et lancer les identifications
+    var analyzePromises = res.files.map(function(f) {
+      var card = document.createElement('div');
+      card.className = 'cst-file-card';
+      card.setAttribute('data-path', f.path);
+      card.setAttribute('data-ext', f.ext);
+
+      var typeIcon = f.type === 'video' ? '🎬' : f.type === 'subtitle' ? '💬' : '📄';
+      var typeBadgeColor = f.type === 'video' ? 'var(--orange)' : f.type === 'subtitle' ? '#7ec8e3' : 'var(--text-dim)';
+      var sizeMb = f.size > 0 ? (f.size / 1048576).toFixed(1) + ' Mo' : '';
+
+      card.innerHTML =
+        '<div class="cst-card-header">' +
+          '<span style="font-size:14px;">' + typeIcon + '</span>' +
+          '<span class="cst-card-name">' + f.name + '</span>' +
+          '<span class="cst-card-badge" style="color:' + typeBadgeColor + ';">' + f.ext.toUpperCase() + '</span>' +
+          '<span class="cst-card-size">' + sizeMb + '</span>' +
+          '<span class="cst-spinner" style="display:none;font-family:var(--mono);font-size:9px;color:var(--text-dim);opacity:.6;">…</span>' +
+        '</div>' +
+        '<div class="cst-tracks-zone"></div>';
+
+      list.appendChild(card);
+      return cstAnalyzeFile(f.path, f.ext, card);
+    });
+
+    // Quand TOUTES les analyses sont terminées → nom de sortie final
+    Promise.all(analyzePromises).then(function() {
+      _cstFinalizeOutputName(videoFile ? videoFile.name : '');
+    });
+
+  }).catch(function(e) {
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#f66;padding:20px;">Erreur scan : ' + e + '</div>';
+  });
+}
+
+// ── Collecter la config depuis l'UI ──────────────────────────────────────────
+function _cstBuildConfig() {
+  var output = document.getElementById('cst-output-name').value.trim();
+  if (!output) return null;
+  if (!output.toLowerCase().endsWith('.mkv')) output += '.mkv';
+
+  var files = [];
+  document.querySelectorAll('.cst-file-card').forEach(function(card) {
+    var filePath = card.getAttribute('data-path');
+    var ext = card.getAttribute('data-ext');
+    var tracks = [];
+
+    card.querySelectorAll('.cst-track-row').forEach(function(row) {
+      var tid = row.getAttribute('data-trackid');
+      var type = row.getAttribute('data-type');
+      var chk = row.querySelector('.cst-track-chk');
+      var langSel = row.querySelector('.cst-lang-sel');
+      var nameIn = row.querySelector('.cst-track-name');
+      var forcedChk = row.querySelector('.cst-forced');
+      var defaultChk = row.querySelector('.cst-default');
+
+      tracks.push({
+        id: parseInt(tid, 10),
+        type: type,
+        include: chk ? chk.checked : true,
+        language: langSel ? langSel.value : 'und',
+        name: nameIn ? nameIn.value.trim() : '',
+        forced: forcedChk ? forcedChk.checked : false,
+        default: defaultChk ? defaultChk.checked : false
+      });
+    });
+
+    if (tracks.length > 0) {
+      files.push({ path: filePath, ext: ext, tracks: tracks });
+    }
+  });
+
+  if (files.length === 0) return null;
+  return { output: output, files: files };
+}
+
+// ── Lancer le mux ────────────────────────────────────────────────────────────
+function cstMux() {
+  var config = _cstBuildConfig();
+  if (!config) {
+    cstLog("⚠ Nom de sortie manquant ou aucune piste configurée.");
+    return;
+  }
+
+  var btn = document.getElementById('cst-mux-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ MUXAGE EN COURS…'; }
+
+  cstLog("▶ Lancement du mux → FILMS/" + config.output);
+  cstLog("  " + config.files.length + " fichier(s) source(s)");
+
+  window.pywebview.api.custom_mux(config).then(function(res) {
+    if (btn) { btn.disabled = false; btn.textContent = '🔨 MUXER'; }
+    if (res.ok) {
+      cstLog("✓ Succès → " + res.output);
+      if (res.stdout) cstLog("─── stdout ───\n" + res.stdout.trim());
+    } else {
+      cstLog("✗ Erreur mkvmerge");
+      if (res.stderr) cstLog("─── stderr ───\n" + res.stderr.trim());
+      if (res.stdout) cstLog("─── stdout ───\n" + res.stdout.trim());
+    }
+  }).catch(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '🔨 MUXER'; }
+    cstLog("✗ Exception : " + e);
+  });
+}
+
+// ── Aperçu NFO ───────────────────────────────────────────────────────────────
+function cstNfoPreview() {
+  var config = _cstBuildConfig();
+  if (!config) {
+    cstLog("⚠ Configure d'abord les pistes et le nom de sortie.");
+    return;
+  }
+  // Ajouter channels/bitrate_kbps depuis les data-* de chaque row
+  // (ils ne sont pas dans _cstBuildConfig mais on en a besoin pour le NFO)
+  document.querySelectorAll('.cst-file-card').forEach(function(card) {
+    var cardPath = card.getAttribute('data-path');
+    card.querySelectorAll('.cst-track-row').forEach(function(row) {
+      var tid = parseInt(row.getAttribute('data-trackid'), 10);
+      var fp  = row.getAttribute('data-filepath') || cardPath;
+      // Retrouver la piste correspondante dans config
+      config.files.forEach(function(f) {
+        if (f.path !== fp && f.path !== cardPath) return;
+        f.tracks.forEach(function(t) {
+          if (t.id !== tid) return;
+          t.channels     = parseInt(row.getAttribute('data-channels') || '0', 10) || undefined;
+          t.bitrate_kbps = parseInt(row.getAttribute('data-bitrate') || '0', 10) || undefined;
+          t.codec        = row.getAttribute('data-codec') || '';
+        });
+      });
+    });
+  });
+
+  var btn = document.getElementById('cst-nfo-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  window.pywebview.api.custom_nfo_preview(config).then(function(res) {
+    if (btn) { btn.disabled = false; btn.textContent = '👁 NFO'; }
+    var panel = document.getElementById('cst-nfo-panel');
+    var pre   = document.getElementById('cst-nfo-pre');
+    if (!panel || !pre) return;
+    if (res.ok) {
+      pre.textContent = res.nfo;
+      panel.style.display = 'block';
+    } else {
+      cstLog("✗ NFO preview : " + (res.error || '?'));
+    }
+  }).catch(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '👁 NFO'; }
+    cstLog("✗ NFO exception : " + e);
+  });
+}
+
+// ── Mise à jour de l'aperçu du nom de sortie ─────────────────────────────────
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var inp = document.getElementById('cst-output-name');
+    var prev = document.getElementById('cst-output-preview');
+    if (inp && prev) {
+      inp.addEventListener('input', function() {
+        prev.textContent = inp.value.trim() || '…';
+      });
+    }
+  });
+})();
 
 </script>
 <div id="toast-container"></div>

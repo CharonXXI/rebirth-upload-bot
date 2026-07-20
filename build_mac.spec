@@ -104,7 +104,7 @@ app = BUNDLE(
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': True,
-        'CFBundleShortVersionString': '2.9.7',
+        'CFBundleShortVersionString': '2.9.8',
         'CFBundleName': 'REBiRTH',
         'NSRequiresAquaSystemAppearance': False,
     },
