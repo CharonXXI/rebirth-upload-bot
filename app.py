@@ -6000,8 +6000,32 @@ if __name__ == "__main__":
         background_color="#0d0d0d",
     )
     api.window = window
-    # Sur Windows, forcer EdgeChromium (WebView2) pour éviter la récursion infinie
-    # du backend MSHTML (IE) sur les propriétés COM GenericSansSerif
-    import platform as _platform
-    _gui = "edgechromium" if _platform.system() == "Windows" else None
-    webview.start(debug=False, gui=_gui)
+    import platform as _platform, sys as _sys, io as _io
+
+    if _platform.system() == "Windows":
+        # Forcer EdgeChromium (WebView2) — évite la récursion MSHTML
+        # Filtrer le bruit pywebview (property inspector sur thread de fond)
+        _NOISE = (
+            "maximum recursion depth",
+            "can only be accessed from the UI thread",
+            "CoreWebView2Controller members",
+            ".Empty.Empty",
+            "GenericSansSerif",
+        )
+
+        class _PwvFilter(_io.TextIOWrapper):
+            def __init__(self, wrapped):
+                self._w = wrapped
+            def write(self, s):
+                if "[pywebview]" in s and any(p in s for p in _NOISE):
+                    return len(s)
+                return self._w.write(s)
+            def flush(self):
+                return self._w.flush()
+            def __getattr__(self, a):
+                return getattr(self._w, a)
+
+        _sys.stderr = _PwvFilter(_sys.stderr)
+        webview.start(debug=False, gui="edgechromium")
+    else:
+        webview.start(debug=False)
