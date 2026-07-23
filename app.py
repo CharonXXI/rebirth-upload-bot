@@ -6000,31 +6000,41 @@ if __name__ == "__main__":
         background_color="#0d0d0d",
     )
     api.window = window
-    import platform as _platform, sys as _sys, io as _io
+    import platform as _platform, sys as _sys
 
     if _platform.system() == "Windows":
         # Forcer EdgeChromium (WebView2) — évite la récursion MSHTML
-        # Filtrer le bruit pywebview (property inspector sur thread de fond)
-        _NOISE = (
-            "maximum recursion depth",
-            "can only be accessed from the UI thread",
-            "CoreWebView2Controller members",
-            ".Empty.Empty",
-            "GenericSansSerif",
-        )
+        # Filtrer le bruit pywebview sur stdout (property inspector, stack traces COM)
+        _in_pwv_noise = [False]   # mutable pour closure
 
-        class _PwvFilter(_io.TextIOWrapper):
+        class _PwvFilter:
+            """Filtre stdout : supprime le bruit pywebview/WebView2 de démarrage."""
             def __init__(self, wrapped):
                 self._w = wrapped
             def write(self, s):
-                if "[pywebview]" in s and any(p in s for p in _NOISE):
+                # Début d'un bloc de bruit → activer le filtre
+                if "[pywebview] Error while processing window.native" in s:
+                    _in_pwv_noise[0] = True
                     return len(s)
+                # Lignes de stack trace qui suivent le bloc de bruit
+                if _in_pwv_noise[0]:
+                    stripped = s.strip()
+                    if (stripped.startswith("at System.")
+                            or stripped.startswith("at Microsoft.")
+                            or stripped.startswith("--- End of inner")
+                            or stripped == ""
+                            or all(c in "Bold. \n\r" for c in stripped)
+                            or all(c in "Empty. \n\r" for c in stripped)):
+                        return len(s)
+                    # Fin du bloc de bruit → reprendre l'affichage normal
+                    _in_pwv_noise[0] = False
                 return self._w.write(s)
             def flush(self):
                 return self._w.flush()
             def __getattr__(self, a):
                 return getattr(self._w, a)
 
+        _sys.stdout = _PwvFilter(_sys.stdout)
         _sys.stderr = _PwvFilter(_sys.stderr)
         webview.start(debug=False, gui="edgechromium")
     else:
