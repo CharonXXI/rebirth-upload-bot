@@ -5990,4 +5990,8 @@ if __name__ == "__main__":
         background_color="#0d0d0d",
     )
     api.window = window
-    webview.start(debug=False)
+    # Sur Windows, forcer EdgeChromium (WebView2) pour éviter la récursion infinie
+    # du backend MSHTML (IE) sur les propriétés COM GenericSansSerif
+    import platform as _platform
+    _gui = "edgechromium" if _platform.system() == "Windows" else None
+    webview.start(debug=False, gui=_gui)
