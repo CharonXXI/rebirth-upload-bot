@@ -1,4 +1,4 @@
-# 🪟 Installation Windows — REBiRTH AIO v2.9.6
+# 🪟 Installation Windows — REBiRTH AIO v2.9.8
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 
@@ -274,7 +274,7 @@ RUTORRENT_PASS=ton_password
 TRACKER_ABN=https://abn.com/announce/PASSKEY
 TRACKER_TOS=https://tos.com/announce/PASSKEY
 TRACKER_C411=https://c411.com/announce/PASSKEY
-TRACKER_TORR9=https://torr9.com/announce/PASSKEY
+TRACKER_TR4KER=https://tk.tr4ker.net/announce/PASSKEY
 
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
 TRACKER_HDF=https://tracker.hdf.world:2443/PASSKEY/announce

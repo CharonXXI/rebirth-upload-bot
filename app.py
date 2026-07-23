@@ -5246,13 +5246,18 @@ class API:
                         # ── Fallback : titre embarqué dans le conteneur MKV ─
                         if not hits and mkv_path:
                             try:
+                                import shutil as _sh_mi
+                                mi_bin = (
+                                    _sh_mi.which("mediainfo")
+                                    or next((p for p in (
+                                        r"C:\Program Files\MediaInfo\MediaInfo.exe",
+                                        r"C:\Program Files (x86)\MediaInfo\MediaInfo.exe",
+                                        "/opt/homebrew/bin/mediainfo",
+                                        "/usr/local/bin/mediainfo",
+                                        "/usr/bin/mediainfo",
+                                    ) if Path(p).exists()), None)
+                                )
                                 import subprocess as _sp_mi
-                                mi_bin = None
-                                for _p in ("/opt/homebrew/bin/mediainfo",
-                                           "/usr/local/bin/mediainfo",
-                                           "/usr/bin/mediainfo"):
-                                    if Path(_p).exists():
-                                        mi_bin = _p; break
                                 if mi_bin:
                                     mkv_embed_title = _sp_mi.check_output(
                                         [mi_bin, "--Inform=General;%Title%", mkv_path],
@@ -5393,12 +5398,17 @@ class API:
 
                 # Débit global
                 try:
-                    import subprocess as _sp
-                    mi_bin = None
-                    for p in ("/opt/homebrew/bin/mediainfo",
-                              "/usr/local/bin/mediainfo", "/usr/bin/mediainfo"):
-                        if Path(p).exists():
-                            mi_bin = p; break
+                    import subprocess as _sp, shutil as _sh_mi2
+                    mi_bin = (
+                        _sh_mi2.which("mediainfo")
+                        or next((p for p in (
+                            r"C:\Program Files\MediaInfo\MediaInfo.exe",
+                            r"C:\Program Files (x86)\MediaInfo\MediaInfo.exe",
+                            "/opt/homebrew/bin/mediainfo",
+                            "/usr/local/bin/mediainfo",
+                            "/usr/bin/mediainfo",
+                        ) if Path(p).exists()), None)
+                    )
                     if mi_bin:
                         out = _sp.check_output(
                             [mi_bin, "--Inform=General;%OverallBitRate%", mkv_path],
