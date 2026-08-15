@@ -1,4 +1,4 @@
-# 🪟 Installation Windows — REBiRTH AIO v2.9.8
+# 🪟 Installation Windows — REBiRTH AIO v2.9.9
 
 > **Ce guide s'adresse aux débutants.** Chaque étape est détaillée. Lis attentivement avant de cliquer.
 
@@ -275,6 +275,7 @@ TRACKER_ABN=https://abn.com/announce/PASSKEY
 TRACKER_TOS=https://tos.com/announce/PASSKEY
 TRACKER_C411=https://c411.com/announce/PASSKEY
 TRACKER_TR4KER=https://tk.tr4ker.net/announce/PASSKEY
+TRACKER_SALOON=https://tracker.lesaloonv2-0.lol/PASSKEY/announce
 
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
 TRACKER_HDF=https://tracker.hdf.world:2443/PASSKEY/announce

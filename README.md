@@ -13,7 +13,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=for-the-badge&logo=apple&logoColor=white)](.)
-[![Version](https://img.shields.io/badge/Version-2.9.8-FFA500?style=for-the-badge)](.)
+[![Version](https://img.shields.io/badge/Version-2.9.9-FFA500?style=for-the-badge)](.)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](.)
 
 </div>
@@ -57,7 +57,7 @@
 | 🎨 **PREZ** | Génération de fiche de présentation HTML pour tracker — specs vidéo/audio/subs auto-remplies, screenshots uploadés sur ImgBB (350×197 px), aperçu en temps réel |
 | 💿 **BD Info** | Rapport exact via **BDInfo v0.7.5.6** (Wine/Whisky) — DISC INFO/VIDEO/AUDIO/SUBTITLES, upload ZIP vers Gofile ou BuzzHeavier |
 | 🗂️ **Fichiers SB** | Explorateur de fichiers seedbox — navigation dans les sous-dossiers, suppression via SSH sudo |
-| 🎛️ **Trackers** | Page dédiée pour gérer les announces URL (ABN · TOS · C411 · TR4KER · HDT · HDF · HDO) |
+| 🎛️ **Trackers** | Page dédiée pour gérer les announces URL (ABN · TOS · C411 · TR4KER · LeSaloon · HDT · HDF · HDO) |
 | ☕ **Anti-veille** | caffeinate (macOS) / SetThreadExecutionState (Windows) |
 | 🌙 **Interface** | PyWebView moderne avec mode jour/nuit, animations, toasts |
 
@@ -144,6 +144,7 @@ TRACKER_ABN=https://abn.com/announce/PASSKEY
 TRACKER_TOS=https://tos.com/announce/PASSKEY
 TRACKER_C411=https://c411.com/announce/PASSKEY
 TRACKER_TR4KER=https://tk.tr4ker.net/announce/PASSKEY
+TRACKER_SALOON=https://tracker.lesaloonv2-0.lol/PASSKEY/announce
 
 TRACKER_HDT=https://hdts-announce.ru/announce.php?passkey=PASSKEY
 TRACKER_HDF=https://tracker.hdf.world:2443/PASSKEY/announce
@@ -233,10 +234,10 @@ Sélectionner le .mkv (onglet Upload)
         │
         ▼
 Remplir Source / Note / Autre info
-Cocher les trackers : ABN / TOS / C411 / TR4KER / HDF / HDO
+Cocher les trackers : ABN / TOS / C411 / TR4KER / LeSaloon / HDF / HDO
         │
         ▼
-Choisir type NFO : UTF-8 (C411 · TR4KER · HDF · HDO)
+Choisir type NFO : UTF-8 (C411 · TR4KER · LeSaloon · HDF · HDO)
                    CP437 (TOS · ABN)
 Choisir plateforme : BuzzHeavier / Gofile / Ignorer
         │
@@ -345,7 +346,7 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 - Sections ordonnées : TMDB · Spécifications techniques · Screenshots · Release
 
 ### 📄 Type NFO
-- **UTF-8** → `(UTF8).nom.nfo` pour C411, TR4KER, HDF, HDO
+- **UTF-8** → `(UTF8).nom.nfo` pour C411, TR4KER, LeSaloon, HDF, HDO
 - **CP437** → `(CP437).nom.nfo` pour TOS, ABN
 
 ### ☁️ Gofile
@@ -359,7 +360,7 @@ Onglet BD INFO → SCANNER → BDInfo v0.7.5.6 s'ouvre
 - Upload automatique du dossier FINAL via FTP TLS
 
 ### 💬 Discord
-- **REBiRTH** — 7 trackers (TOS / ABN / C411 / TR4KER / HDF / HDO), webhook REBiRTH
+- **REBiRTH** — 8 trackers (TOS / ABN / C411 / TR4KER / LeSaloon / HDF / HDO), webhook REBiRTH
 - **FULL BD** — HDT + HDF + HDO, webhook séparé
 
 ### 🗂️ Fichiers SB
@@ -405,6 +406,15 @@ rebirth-upload-bot/
 ---
 
 ## 📝 Changelog
+
+### v2.9.9
+- Feat : **tracker LeSaloon** intégré partout — Upload, Torrent SB, Discord, Stats, NFO UTF-8 (`TRACKER_SALOON` dans `V1.env`)
+- Fix : page **Options** (⚙) — contenu de configuration restauré (commentaire HTML mal formé empêchait le rendu de `page-config`) ; section "Renommer les onglets" maintenant uniquement dans Options
+- Fix : **suppression de l'onglet Custom Muxer** — retiré de la nav Encode et de toutes les fonctions associées (`app.py`, CSS, JS)
+- Fix (Windows) : **crash pywebview MSHTML** — forcé `gui='edgechromium'` pour éviter la récursion infinie `GenericSansSerif`
+- Fix (Windows) : **chemins `mediainfo` CLI** — ajout `shutil.which()` + fallback `C:\Program Files\MediaInfo\`
+- Fix (Windows) : **bruit de démarrage pywebview** — filtre stateful `stdout`/`stderr` supprimant les messages `[pywebview] Error while processing window.native` et leurs stack traces
+- Stats : plateformes d'upload limitées à **Gofile** et **BuzzHeavier** (NFO Batch et `—` exclus)
 
 ### v2.9.8
 - Feat (CUSTOM) : **onglet CUSTOM muxer** — détection automatique des pistes depuis les fichiers MKV/SRT du dossier `CUSTOM/`, configuration par piste (langue, nom, forced, default, inclure/exclure), bitrate audio affiché via pymediainfo (`@ XXXX kbps`), classification automatique des sous-titres (FORCED / SDH / FULL / COMMENTARY) portée depuis le moteur remux, détection VF (VFF / VFQ / VFi / VOF) depuis le nom de la piste source
@@ -525,13 +535,13 @@ rebirth-upload-bot/
 - L'onglet **Remux** nécessite : **MakeMKV**, **MKVToolNix**, **MediaInfo**, **ffmpeg** (voir INSTALL_WINDOWS.md)
 - **BD Info** nécessite BDInfo v0.7.5.6 + Whisky (macOS) ou `BDInfo_v0\` (Windows)
 - **Torrent SB** nécessite un accès SSH port 22 et `mktorrent` installé sur la seedbox
-- Trackers supportés : ABN · TOS · C411 · TR4KER · HDT · HDF · HDO
+- Trackers supportés : ABN · TOS · C411 · TR4KER · LeSaloon · HDT · HDF · HDO
 
 ---
 
 <div align="center">
 
-**REBiRTH AIO v2.9.8** — macOS & Windows
+**REBiRTH AIO v2.9.9** — macOS & Windows
 
 *NO RULES ! JUST FILES !*
 
