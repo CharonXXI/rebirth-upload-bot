@@ -501,17 +501,13 @@ def process_file(filepath, tmdb_link_override=None):
     # Vérifier si l'extension du fichier est supportée
     if any(filepath.lower().endswith(ext) for ext in supported_extensions):
         print(f"Traitement du fichier : {filepath}")
-        try:
-            template = generate_template(filepath, tmdb_link_override)
-            nfo_name = os.path.splitext(os.path.basename(filepath))[0] + "_custom.nfo"
-            nfo_path = os.path.join(os.path.dirname(filepath), nfo_name)
+        template = generate_template(filepath, tmdb_link_override)
+        nfo_name = os.path.splitext(os.path.basename(filepath))[0] + "_custom.nfo"
+        nfo_path = os.path.join(os.path.dirname(filepath), nfo_name)
 
-            with open(nfo_path, "w", encoding="utf-8") as nfo_file:
-                nfo_file.write(template)
-            #print(f"Le fichier .nfo a été créé à : {nfo_path}")
-            return nfo_path
-        except Exception as e:
-            print(f"Erreur lors du traitement du fichier {filepath}: {e}")
+        with open(nfo_path, "w", encoding="utf-8") as nfo_file:
+            nfo_file.write(template)
+        return nfo_path
     else:
         print(f"Extension non supportée pour le fichier {filepath}")
 
